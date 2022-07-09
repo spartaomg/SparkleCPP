@@ -7,11 +7,13 @@
 #include <stdio.h>      /* printf, NULL */
 #include <stdlib.h>     /* srand, rand */
 #include <time.h>       /* time */
-//#include <format>
 #include <iomanip>
 #include "Sparkle.h"
+#include <iostream>
+#include <filesystem>
 
 using namespace std;
+using namespace std::filesystem;
 
 string Script = "";
 string ScriptPath = "";
@@ -115,8 +117,8 @@ vector<string> tmpVFileOffsV;
 vector<string> tmpVFileLenV;
 vector<bool> tmpVFileIOV;
 
-unsigned char DirBlocks[511]{};
-unsigned char DirPtr[127];
+unsigned char DirBlocks[512]{};
+unsigned char DirPtr[128]{};
 
 //Hi-Score File variables
 string HSFileName = "";
@@ -222,12 +224,12 @@ inline bool FileExits(const string& FileName)
 
 int ReadBinaryFile(const string& FileName, vector<unsigned char>& prg)
 {
-    
+
     if (!FileExits(FileName))
     {
         return -1;
     }
-    
+
     prg.clear();
 
     ifstream infile(FileName, ios_base::binary);
@@ -442,13 +444,13 @@ bool AddHSFile()
             //        return false;
             //}
         }
-            
+
         //Round UP to nearest $100, at least $100 but not more than $0f00 bytes
         if ((FLN % 0x100 != 0) || (FLN == 0))
         {
             FLN += 0x100;
         }
-            
+
         FLN &= 0xf00;
 
         FL = ConvertIntToHextString(FLN, 4);
@@ -467,7 +469,7 @@ bool AddHSFile()
     else
     {
         //HSFile does not exist, see if we can create a blank HSFile using the provided parameters...
-        if(NumParams == 4)      
+        if(NumParams == 4)
         {
             FA = ScriptEntryArray[1];                                   //Load address from script
             FO = ScriptEntryArray[2];                                   //Offset from script
@@ -736,9 +738,9 @@ bool ResetDiskVariables() {
 
     D64Name = "";
     DiskHeader = ""; //'"demo disk " + Year(Now).ToString
-        DiskID = ""; //'"sprkl"
-        DemoName = ""; //'"demo"
-        DemoStart = "";
+    DiskID = ""; //'"sprkl"
+    DemoName = ""; //'"demo"
+    DemoStart = "";
     DirArtName = "";
     LoaderZP = "02";
 
@@ -1277,38 +1279,27 @@ bool BuildDiskFromScript() {
 
 void SetScriptPath(string sPath, string aPath)
 {
+    if (sPath.find(':') == string::npos)
+    {
+        sPath = aPath + sPath;                      //sPAth is relative - use Sparkle's base folder to make it a full path
+    }
+
     ScriptName = sPath;
 
-    if ((sPath != "") && (sPath.find('\\') != string::npos))
+    ScriptPath = sPath;
+    for (int i = sPath.length() - 1; i >= 0; i--)
     {
-        ScriptPath = sPath;
-        for (int i = sPath.length() - 1; i >= 0; i--)
+        if ((sPath[i] != '\\') && (sPath[i] !=':'))
         {
-            if (sPath[i] != '\\')
-            {
-                ScriptPath.replace(i, 1, "");
-            }
-            else
-            {
-                break;
-            }
+            ScriptPath.replace(i, 1, "");
+        }
+        else
+        {
+            break;
         }
     }
-    else
-    {
-        ScriptPath = aPath;
-        for (int i = aPath.length() - 1; i >= 0; i--)
-        {
-            if (aPath[i] != '\\')
-            {
-                ScriptPath.replace(i, 1, "");
-            }
-            else
-            {
-                break;
-            }
-        }
-    }
+
+    //cout << ScriptPath << "\n";
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1317,7 +1308,7 @@ int main(int argc, char* argv[])
 {
     cout << "Sparkle by Sparta/OMG 2019-2022" << '\n';
 
-    string AppPath(argv[0]);
+    string AppPath{filesystem::current_path().string() + "\\"};
 
     if (argc < 2)
     {
@@ -1340,7 +1331,7 @@ int main(int argc, char* argv[])
 
     if (Script == "")
     {
-        cerr <<"Unable to load script file or file empty error!" << '\n';
+        cerr <<"***CRITICAL***\nUnable to load script file or  the file is empty!\n";
         return 1;
     }
 
