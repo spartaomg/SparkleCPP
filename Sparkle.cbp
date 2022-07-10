@@ -30,6 +30,7 @@
 		</Build>
 		<Compiler>
 			<Add option="-Wall" />
+			<Add option="-std=gnu++17" />
 			<Add option="-fexceptions" />
 		</Compiler>
 		<Unit filename="Sparkle.cpp" />

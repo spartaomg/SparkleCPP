@@ -19,6 +19,7 @@ string Script = "";
 string ScriptPath = "";
 string ScriptName = "";
 string ScriptEntry = "";
+string ScriptLine = "";
 string ScriptEntryType = "";
 string ScriptHeader = "[sparkle loader script]";
 const int MaxNumEntries = 5;
@@ -336,6 +337,35 @@ bool ParameterIsNumeric(int i)
     return IsHexString(ScriptEntryArray[i]);
 }
 
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+void CorrectParameterStringLength(const int& i)
+{
+    int MaxNumChars = 0;
+    if (i == 2)
+    {
+        MaxNumChars = 8;    //File Offset max. $ffff ffff (dword)
+    }
+    else
+    {
+        MaxNumChars = 4;    //File Address, File Length max. $ffff
+    }
+
+    if (ScriptEntryArray[i].size() < MaxNumChars)
+    {
+        for (int j = ScriptEntryArray[i].size(); j < MaxNumChars; j++)
+        {
+            ScriptEntryArray[i] = "0" + ScriptEntryArray[i];
+        }
+    }
+    else if (ScriptEntryArray[i].size() > MaxNumChars)
+    {
+        ScriptEntryArray[i].erase(0, ScriptEntryArray[i].size() - MaxNumChars);
+    }
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
 bool AddHSFile()
 {
     string FN = ScriptEntryArray[0];
@@ -346,7 +376,6 @@ bool AddHSFile()
     int FON = 0;
     int FLN = 0;
     bool FUIO = false;
-    //bool IsSID = false;
 
     vector<unsigned char> P;
 
@@ -367,7 +396,7 @@ bool AddHSFile()
         {
             break;
         }
-        //CorrectParameterStringLength(I)
+        CorrectParameterStringLength(i);
     }
 
     //Get file variables from script, or get default values if there were none in the script entry
@@ -395,11 +424,12 @@ bool AddHSFile()
                 cout << "***CRITICAL***\nFile paramteres are needed for the Hi-Score File: " << FN << "\n";
                 return false;
             }
-
+            break;
         case 2:  //One parameter in script
             FA = ScriptEntryArray[1];                                   //Load address from script
             FO = "00000000";                                            //Offset will be 0, length=prg length
             FL = ConvertIntToHextString(HSFile.size(), 4);
+            break;
 
         case 3:  //Two parameters in script
             FA = ScriptEntryArray[1];                                   //Load address from script
@@ -411,6 +441,7 @@ bool AddHSFile()
                 FO = ConvertIntToHextString(FON, 8);
             }
             FL = ConvertIntToHextString(HSFile.size() - FON, 4);        //Length=prg length-offset
+            break;
 
         case 4:  //Three parameters in script
             FA = ScriptEntryArray[1];                                   //Load address from script
@@ -512,7 +543,7 @@ bool AddHSFile()
         }
         else
         {
-            cout << "***CRITICAL***\nThe Hi-Score File doesn't exist and an empty Hi-Score File could not be created without all 3 parameters.\n";
+            cout << "***CRITICAL***\nThe Hi-Score File " << HSFileName << " doesn't exist and an empty Hi-Score File could not be created without all 3 parameters.\n";
             return false;
         }
     }
@@ -763,6 +794,7 @@ bool ResetDiskVariables() {
     FirstFileOfDisk = true;  //To save Start Address of first file on disk if Demo Start is not specified
 
     //-------------------------------------------------------------
+    
     BundleCnt = -1;        //'WILL BE INCREASED TO 0 IN ResetPartVariables
     LoaderBundles = 1;
     FilesInBuffer = 1;
@@ -865,6 +897,148 @@ bool FindNextScriptEntry() {
     if (S == 13) {
         SE++;
     }
+    SS = SE + 1;
+    SE = SS + 1;
+
+    return true;
+
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+bool InsertScript(string& SubScriptPath)
+{
+    ScriptLine = ScriptEntry;
+
+    string sPath = SubScriptPath;
+
+    //Calculate full path
+
+    if (SubScriptPath.find(":") == string::npos)
+    {
+        SubScriptPath = ScriptPath + SubScriptPath;
+    }
+
+    if (!FileExits(SubScriptPath))
+    {
+        cout << "***CRITICAL***\nThe following script was not found and could not be processed: " << SubScriptPath << "\n";
+        return false;
+    }
+
+    //Find relative path of subscript
+    for (int i = sPath.length() - 1; i > 0; i--)
+    {
+        if (sPath[i] != '\\')
+        {
+            sPath.replace(i, 1, "");
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    //Read subscript file
+    string SubScript = ReadFileToString(SubScriptPath);
+
+    //Count line breakes
+    int NumLines = std::count(SubScript.begin(), SubScript.end(), '\n');
+
+    //Store lines in vector
+    vector<string> Lines;
+
+    while (SubScript.find("\n") != string::npos)
+    {
+        Lines.push_back(SubScript.substr(0, SubScript.find("\n")));
+        SubScript.erase(0, SubScript.find("\n") + 1);   //Erase line from SubScript, including the line break
+    }
+    Lines.push_back(SubScript);                         //Rest of the SubScript, after the last line break
+
+    string S = "";
+    for (int i = 0; i < Lines.size(); i++)
+    {
+        ScriptEntry = (Lines[i]);
+        
+        SplitScriptEntry();                 //This will also convert the script entry to lower case
+
+        //Skip Script Header
+        if (Lines[i] != ScriptHeader)
+        {
+            if (S != "")
+                S += "\n";
+            
+            //Add relative path of subscript to relative path of subscript entries
+            if (ScriptEntryType == "file:")
+            {
+                if (ScriptEntryArray[0].find(":") == string::npos)
+                {
+                    ScriptEntryArray[0] = sPath + ScriptEntryArray[0];
+                }
+                Lines[i] = EntryTypeFile + "\t" + ScriptEntryArray[0];
+                for (int j = 1; j <= NumScriptEntries; j++)
+                {
+                    Lines[i] += "\t" + ScriptEntryArray[j];
+                }
+            }
+            else if (ScriptEntryType == "mem:")
+            {
+                if (ScriptEntryArray[0].find(":") == string::npos)
+                {
+                    ScriptEntryArray[0] = sPath + ScriptEntryArray[0];
+                }
+                Lines[i] = EntryTypeMem + "\t" + ScriptEntryArray[0];
+                for (int j = 1; j <= NumScriptEntries; j++)
+                {
+                    Lines[i] += "\t" + ScriptEntryArray[j];
+                }
+            }
+            else if (ScriptEntryType == "script:")
+            {
+                if (ScriptEntryArray[0].find(":") == string::npos)
+                {
+                    ScriptEntryArray[0] = sPath + ScriptEntryArray[0];
+                }
+                Lines[i] = EntryTypeScript + "\t" + ScriptEntryArray[0];
+            }
+            else if (ScriptEntryType == "path:")
+            {
+                if (ScriptEntryArray[0].find(":") == string::npos)
+                {
+                    ScriptEntryArray[0] = sPath + ScriptEntryArray[0];
+                }
+                Lines[i] = EntryTypePath + "\t" + ScriptEntryArray[0];
+            }
+            else if (ScriptEntryType == "dirart:")
+            {
+                if (ScriptEntryArray[0].find(":") == string::npos)
+                {
+                    ScriptEntryArray[0] = sPath + ScriptEntryArray[0];
+                }
+                Lines[i] = EntryTypeDirArt + "\t" + ScriptEntryArray[0];
+            }
+            else if (ScriptEntryType == "hsfile:")
+            {
+                if (ScriptEntryArray[0].find(":") == string::npos)
+                {
+                    ScriptEntryArray[0] = sPath + ScriptEntryArray[0];
+                }
+                Lines[i] = EntryTypeHSFile + "\t" + ScriptEntryArray[0];
+                for (int j = 1; j <= NumScriptEntries; j++)
+                {
+                    Lines[i] += "\t" + ScriptEntryArray[j];
+                }
+            }
+        }
+        S += Lines[i];
+    }
+
+    string SS1 = Script.substr(0, LastSS - 1);
+    string SS2 = Script.substr(SS, Script.length() - SS);
+    Script = SS1 + S + SS2;
+    
+    SS = LastSS;
+    SE = LastSE;
+
+    Lines.clear();
 
     return true;
 
@@ -893,7 +1067,7 @@ bool BuildDiskFromScript() {
 
     }
 
-    SS = SE;
+    //SS = SE;
 
     bool NewD = true;
     NewBundle = false;
@@ -913,10 +1087,12 @@ bool BuildDiskFromScript() {
                 if (NewD == false)
                 {
                     NewD = true;
-                    if (FinishDisk(false) == false)
+                    if ((!FinishDisk(false)) || (!ResetDiskVariables()))
                         return false;
-                    if (ResetDiskVariables() == false)
-                        return false;
+                    //if (FinishDisk(false) == false)
+                    //   return false;
+                    //if (ResetDiskVariables() == false)
+                    //    return false;
                 }
 
                 if (NumScriptEntries > -1)
@@ -929,10 +1105,12 @@ bool BuildDiskFromScript() {
                 if (NewD == false)
                 {
                     NewD = true;
-                    if (FinishDisk(false) == false)
+                    if ((!FinishDisk(false)) || (!ResetDiskVariables()))
                         return false;
-                    if (ResetDiskVariables() == false)
-                        return false;
+                    //if (FinishDisk(false) == false)
+                    //   return false;
+                    //if (ResetDiskVariables() == false)
+                    //    return false;
                 }
 
                 if (NumScriptEntries > -1)
@@ -945,10 +1123,12 @@ bool BuildDiskFromScript() {
                 if (NewD == false)
                 {
                     NewD = true;
-                    if (FinishDisk(false) == false)
+                    if ((!FinishDisk(false)) || (!ResetDiskVariables()))
                         return false;
-                    if (ResetDiskVariables() == false)
-                        return false;
+                    //if (FinishDisk(false) == false)
+                    //   return false;
+                    //if (ResetDiskVariables() == false)
+                    //    return false;
                 }
 
                 if (NumScriptEntries > -1)
@@ -961,10 +1141,12 @@ bool BuildDiskFromScript() {
                 if (NewD == false)
                 {
                     NewD = true;
-                    if (FinishDisk(false) == false)
+                    if ((!FinishDisk(false)) || (!ResetDiskVariables()))
                         return false;
-                    if (ResetDiskVariables() == false)
-                        return false;
+                    //if (FinishDisk(false) == false)
+                    //   return false;
+                    //if (ResetDiskVariables() == false)
+                    //    return false;
                 }
 
                 if (NumScriptEntries > -1)
@@ -977,10 +1159,12 @@ bool BuildDiskFromScript() {
                 if (NewD == false)
                 {
                     NewD = true;
-                    if (FinishDisk(false) == false)
+                    if ((!FinishDisk(false)) || (!ResetDiskVariables()))
                         return false;
-                    if (ResetDiskVariables() == false)
-                        return false;
+                    //if (FinishDisk(false) == false)
+                    //   return false;
+                    //if (ResetDiskVariables() == false)
+                    //    return false;
                 }
 
                 if (NumScriptEntries > -1)
@@ -993,10 +1177,12 @@ bool BuildDiskFromScript() {
                 if (NewD == false)
                 {
                     NewD = true;
-                    if (FinishDisk(false) == false)
+                    if ((!FinishDisk(false)) || (!ResetDiskVariables()))
                         return false;
-                    if (ResetDiskVariables() == false)
-                        return false;
+                    //if (FinishDisk(false) == false)
+                    //   return false;
+                    //if (ResetDiskVariables() == false)
+                    //    return false;
                 }
                 if (ScriptEntryArray[0].find(":") == string::npos)
                 {
@@ -1020,10 +1206,12 @@ bool BuildDiskFromScript() {
                 if (NewD == false)
                 {
                     NewD = true;
-                    if (FinishDisk(false) == false)
+                    if ((!FinishDisk(false)) || (!ResetDiskVariables()))
                         return false;
-                    if (ResetDiskVariables() == false)
-                        return false;
+                    //if (FinishDisk(false) == false)
+                    //   return false;
+                    //if (ResetDiskVariables() == false)
+                    //    return false;
                 }
 
                 if (DiskCnt == 0)
@@ -1041,10 +1229,12 @@ bool BuildDiskFromScript() {
                 if (NewD == false)
                 {
                     NewD = true;
-                    if (FinishDisk(false) == false)
+                    if ((!FinishDisk(false)) || (!ResetDiskVariables()))
                         return false;
-                    if (ResetDiskVariables() == false)
-                        return false;
+                    //if (FinishDisk(false) == false)
+                    //   return false;
+                    //if (ResetDiskVariables() == false)
+                    //    return false;
                 }
 
                 if (NumScriptEntries > -1)
@@ -1071,10 +1261,12 @@ bool BuildDiskFromScript() {
                 if (NewD == false)
                 {
                     NewD = true;
-                    if (FinishDisk(false) == false)
+                    if ((!FinishDisk(false)) || (!ResetDiskVariables()))
                         return false;
-                    if (ResetDiskVariables() == false)
-                        return false;
+                    //if (FinishDisk(false) == false)
+                    //   return false;
+                    //if (ResetDiskVariables() == false)
+                    //    return false;
                 }
 
                 if (NumScriptEntries > -1)
@@ -1101,10 +1293,12 @@ bool BuildDiskFromScript() {
                 if (NewD == false)
                 {
                     NewD = true;
-                    if (FinishDisk(false) == false)
+                    if ((!FinishDisk(false)) || (!ResetDiskVariables()))
                         return false;
-                    if (ResetDiskVariables() == false)
-                        return false;
+                    //if (FinishDisk(false) == false)
+                    //   return false;
+                    //if (ResetDiskVariables() == false)
+                    //    return false;
                 }
 
                 if (NumScriptEntries > -1)
@@ -1131,10 +1325,12 @@ bool BuildDiskFromScript() {
                 if (NewD == false)
                 {
                     NewD = true;
-                    if (FinishDisk(false) == false)
+                    if ((!FinishDisk(false)) || (!ResetDiskVariables()))
                         return false;
-                    if (ResetDiskVariables() == false)
-                        return false;
+                    //if (FinishDisk(false) == false)
+                    //   return false;
+                    //if (ResetDiskVariables() == false)
+                    //    return false;
                 }
 
                 if (NumScriptEntries > -1)
@@ -1161,10 +1357,12 @@ bool BuildDiskFromScript() {
                 if (NewD == false)
                 {
                     NewD = true;
-                    if (FinishDisk(false) == false)
+                    if ((!FinishDisk(false)) || (!ResetDiskVariables()))
                         return false;
-                    if (ResetDiskVariables() == false)
-                        return false;
+                    //if (FinishDisk(false) == false)
+                    //   return false;
+                    //if (ResetDiskVariables() == false)
+                    //    return false;
                 }
                 if (NumScriptEntries > -1)
                 {
@@ -1185,10 +1383,12 @@ bool BuildDiskFromScript() {
                 if (NewD == false)
                 {
                     NewD = true;
-                    if (FinishDisk(false) == false)
+                    if ((!FinishDisk(false)) || (!ResetDiskVariables()))
                         return false;
-                    if (ResetDiskVariables() == false)
-                        return false;
+                    //if (FinishDisk(false) == false)
+                    //   return false;
+                    //if (ResetDiskVariables() == false)
+                    //    return false;
                 }
 
                 if (NumScriptEntries > -1)
@@ -1197,7 +1397,6 @@ bool BuildDiskFromScript() {
                     {
                         TracksPerDisk = ExtTracksPerDisk;
                         SectorsPerDisk = ExtSectorsPerDisk;
-
                     }
                     else
                     {
@@ -1214,10 +1413,10 @@ bool BuildDiskFromScript() {
                 if (NewD == false)
                 {
                     NewD = true;
-                    if (FinishDisk(false) == false)
+                    if ((!FinishDisk(false)) || (!ResetDiskVariables()))
                         return false;
-                    if (ResetDiskVariables() == false)
-                        return false;
+                    //if (!ResetDiskVariables())
+                    //    return false;
                 }
                 if (NumScriptEntries > -1)
                 {
@@ -1232,8 +1431,10 @@ bool BuildDiskFromScript() {
             }
             else if (ScriptEntryType == EntryTypeScript)
             {
-
-                NewBundle = true;
+            if (!InsertScript(ScriptEntryArray[0]))
+                return false;
+                
+            NewBundle = true;
             }
             else if (ScriptEntryType == EntryTypeFile)
             {
@@ -1268,7 +1469,7 @@ bool BuildDiskFromScript() {
             break;
         }
 
-        SS = SE;
+        //SS = SE;
     }
 
     return true;
@@ -1279,7 +1480,7 @@ bool BuildDiskFromScript() {
 
 void SetScriptPath(string sPath, string aPath)
 {
-    if (sPath.find(':') == string::npos)
+    if (sPath.find(":") == string::npos)
     {
         sPath = aPath + sPath;                      //sPAth is relative - use Sparkle's base folder to make it a full path
     }
@@ -1289,7 +1490,7 @@ void SetScriptPath(string sPath, string aPath)
     ScriptPath = sPath;
     for (int i = sPath.length() - 1; i >= 0; i--)
     {
-        if ((sPath[i] != '\\') && (sPath[i] !=':'))
+        if (sPath[i] != '\\')
         {
             ScriptPath.replace(i, 1, "");
         }
