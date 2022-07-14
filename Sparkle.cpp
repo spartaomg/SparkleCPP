@@ -11,6 +11,7 @@
 #include "Sparkle.h"
 #include <iostream>
 #include <filesystem>
+#include "common.h"
 
 using namespace std;
 using namespace std::filesystem;
@@ -90,33 +91,36 @@ int CurrentScript = -1;
 int BundleNo = -1;
 bool MaxBundleNoExceeded = false;
 
-vector<vector<unsigned char>> Prgs;
-vector<string> FileNameV;
-vector<string> FileAddrV;
-vector<string> FileOffsV;
-vector<string> FileLenV;
-vector<bool> FileIOV;
 
-vector<vector<unsigned char>> tmpPrgs;
-vector<string> tmpFileNameV;
-vector<string> tmpFileAddrV;
-vector<string> tmpFileOffsV;
-vector<string> tmpFileLenV;
-vector<bool> tmpFileIOV;
+struct FileStruct {
+    vector<unsigned char> Prg;
+    string FileName;
+    string FileAddr;
+    string FileOffs;
+    string FileLen;
+    bool FileIO;
+    int iFileAddr;
+    int iFileOffs;
+    int iFileLen;
 
-vector<vector<unsigned char>> VFiles;
-vector<string> VFileNameV;
-vector<string> VFileAddrV;
-vector<string> VFileOffsV;
-vector<string> VFileLenV;
-vector<bool> VFileIOV;
 
-vector<vector<unsigned char>> tmpVFiles;
-vector<string> tmpVFileNameV;
-vector<string> tmpVFileAddrV;
-vector<string> tmpVFileOffsV;
-vector<string> tmpVFileLenV;
-vector<bool> tmpVFileIOV;
+    FileStruct(vector<unsigned char> Prg, string FileName, string FileAddr, string FileOffs, string FileLen, bool FileIO) {
+        this->Prg = Prg;
+        this->FileName = FileName;
+        this->FileAddr = FileAddr;
+        this->FileOffs = FileOffs;
+        this->FileLen = FileLen;
+        this->FileIO = FileIO;
+        iFileAddr = stoul(FileAddr, nullptr, 16);
+        iFileOffs = stoul(FileOffs, nullptr,16);
+        iFileLen = stoul(FileLen, nullptr, 16);
+    };
+};
+
+vector<FileStruct> Prgs;
+vector<FileStruct> tmpPrgs;
+vector<FileStruct> VFiles;
+vector<FileStruct> tmpVFiles;
 
 unsigned char DirBlocks[512]{};
 unsigned char DirPtr[128]{};
@@ -170,18 +174,44 @@ vector<int> BundleSizeV;
 vector<int> BundleOrigSizeV;
 double UncompBundleSize = 0;
 
+int BitsNeededForNextBundle = 0;
+
+//VARIABLES ALSO USED BY PACKER
+
+int BytePtr;
+int BitPtr;
+
+bool LastFileOfBundle = false;
+
+int PartialFileIndex, PartialFileOffset;
+
+int PrgAdd, PrgLen;
+bool FileUnderIO = false;
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 string ConvertIntToHextString(const int& i, const int& hexlen)
 {
-    char hexchar[8];
+    char hexchar[8]{};
     sprintf_s(hexchar, "%X", i);
     string hexstring = "";
     for (int j = 0; j < hexlen; j ++)
     {
-        hexstring = hexchar[7 - j] + hexstring;
+        if (hexchar[j] != 0)
+        {
+            hexstring += hexchar[j]; //+hexstring;
+        }
+        else
+        {
+            break;
+        }
     }
+    int HSL = hexstring.length();
+    for (int j = hexlen; j > HSL; j--)
+    {
+        hexstring = "0" + hexstring;
+    }
+    
     return hexstring;
 }
 
@@ -246,6 +276,7 @@ int ReadBinaryFile(const string& FileName, vector<unsigned char>& prg)
     return length;
 }
 
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
 
 string ReadFileToString(const string& FileName)
 {
@@ -625,20 +656,10 @@ void SetMaxSector() {
 bool ResetBundleVariables() {
 
     FileCnt = -1;
-    tmpFileNameV.clear();
-    tmpFileAddrV.clear();
-    tmpFileOffsV.clear();
-    tmpFileLenV.clear();
-    tmpFileIOV.clear();
 
     tmpPrgs.clear();
 
     VFileCnt = -1;
-    tmpVFileNameV.clear();
-    tmpVFileAddrV.clear();
-    tmpVFileOffsV.clear();
-    tmpVFileLenV.clear();
-    tmpVFileIOV.clear();
 
     tmpVFiles.clear();
 
@@ -734,7 +755,7 @@ void NewDisk() {
 bool ResetDiskVariables() {
 
     if (DiskCnt == 126) {
-        cout << "You have reached the maximum number of disks (127) in this project. " + '\n';
+        cout << "***CRITICAL***\nYou have reached the maximum number of disks (127) in this project. " + '\n';
         return false;
     }
 
@@ -742,12 +763,6 @@ bool ResetDiskVariables() {
 
     //Reset Bundle File variables here, to have an empty array for the first compression on a ReBuild
     Prgs.clear();    //this is the one that is needed for the first CompressPart call during a ReBuild
-
-    FileNameV.clear();
-    FileAddrV.clear();
-    FileOffsV.clear();
-    FileLenV.clear();
-    FileIOV.clear();
 
     //Reset directory arrays
     fill_n(DirBlocks, 512, 0);
@@ -813,18 +828,12 @@ bool ResetDiskVariables() {
 
     //-------------------------------------------------------------
 
-    if (ResetBundleVariables() == false) {            //Also adds first bundle
+    if (!ResetBundleVariables()) {            //Also adds first bundle
 
         return false;
     }
 
     NewBundle = false;
-
-    return true;
-
-}
-
-bool FinishDisk(bool LastDisk) {
 
     return true;
 
@@ -884,6 +893,11 @@ bool FindNextScriptEntry() {
 
     LineStart = LineEnd;
 
+    if (LineStart > 0)
+    {
+        LineStart++;
+    }
+
     ScriptEntry = "";
     char S = Script[LineStart++];
 
@@ -894,13 +908,21 @@ bool FindNextScriptEntry() {
     }
 
     //Find the last non-linebreak character => LineEnd
-    LineEnd = --LineStart;
+    LineEnd = LineStart--;
+
     while ((S != 13) && (S != 10) && (LineEnd <= Script.length() - 1)) {
         ScriptEntry += tolower(S);
             S = Script[LineEnd++];
     }
 
-    LineEnd--;
+    if (LineEnd == Script.length())
+    {
+        ScriptEntry += tolower(S);
+    }
+    else
+    {
+        LineEnd--;
+    }
 
     return true;
 
@@ -994,15 +1016,39 @@ bool InsertScript(string& SubScriptPath)
     }
 
     string SS1 = Script.substr(0, LineStart);
-    string SS2 = Script.substr(LineEnd, Script.length() - (LineEnd));
+    string SS2 = (LineEnd < Script.length())? Script.substr(LineEnd, Script.length() - (LineEnd)) : "";
     Script = SS1 + S + SS2;
     
+/*
+    ofstream out1("C:\\Tmp\\SS1.sls");
+    out1 << SS1;
+    out1.close();
+    ofstream out2("C:\\Tmp\\SS2.sls");
+    out2 << SS2;
+    out2.close();
     WriteTextToFile("C:\\Tmp\\TestScript.sls");
-
+*/
     Lines.clear();
+
+    LineEnd = (LineStart > 0) ? LineStart - 1 : LineStart;
 
     return true;
 
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+int CheckNextIO(int Address, int Length, bool NextFileUnderIO) {
+
+    int LastAddress = Address + Length - 1; //Address of the last byte of a file
+
+    if (LastAddress < 256) {                //On ZP
+        return 1;
+    }
+    else
+    {
+        return ((LastAddress >= 0xd000) && (LastAddress < 0xe000) && (NextFileUnderIO)) ? 1 : 0;    //Last byte under I/O?
+    }
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1013,7 +1059,7 @@ bool CloseBundle(int NextFileIO, bool LastPartOnDisk) {
     //SequenceFits() -> in Packer.cpp
     //EORTransform() -> in Packer.cpp
     //AddBits() -> in Packer.cpp
-    //ClosBuffer()
+    //CloseBuffer()
     //AddLitBits() -> in Packer.cpp
 
     return true;
@@ -1021,290 +1067,229 @@ bool CloseBundle(int NextFileIO, bool LastPartOnDisk) {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool CompressBundle() {
+bool CompressBundle() {             //NEEDS PackFile() and CloseFile()
 
-    //PackFile -> in Packer.cpp
-    //CloseFile() -> here!!!
+    if (Prgs.size() == 0)
+        return true;
 
-/*
-        Dim PreBCnt As Integer = BufferCnt
+    int PreBCnt = BufferCnt;
 
-        If Prgs.Count = 0 Then Exit Function        'GoTo NoComp DOES NOT WORK!!!
+    //DO NOT RESET ByteSt AND BUFFER VARIABLES HERE!!!
 
-        'DO NOT RESET ByteSt AND BUFFER VARIABLES HERE!!!
+    if ((BufferCnt == 0) || (BytePtr == 255))
+    {
+        NewBlock = SetNewBlock;
+        SetNewBlock = false;
+    }
+    else
+    {
+        //----------------------------------------------------------------------------------
+        //"SPRITE BUG"
+        //Compression bug involving the transitional block - FIXED
+        //Fix: include the I/O status of the first file of this bundle in the calculation for
+        //finishing the previous bundle
+        //----------------------------------------------------------------------------------
+        //Before finishing the previous bundle, calculate I/O status of the LAST BYTE of the first file of this bundle
+        //(Files already sorted)
 
-        If (BufferCnt = 0) And (BytePtr = 255) Then
-            NewBlock = SetNewBlock          'SetNewBlock is true at closing the previous bundle, so first it just sets NewBlock2
-            SetNewBlock = False             'And NewBlock will fire at the desired bundle
-        Else
-            If FromEditor = False Then      'Don't finish previous bundle here if we are calculating bundle size from Editor
+        int ThisBundleIO = (Prgs.size() > 0) ? CheckNextIO(Prgs[0].iFileAddr, Prgs[0].iFileLen, Prgs[0].FileIO): 0;
+        if (!CloseBundle(ThisBundleIO, false))
+            return false;
+    }
 
-                '----------------------------------------------------------------------------------
-                '"SPRITE BUG"
-                'Compression bug involving the transitional block - FIXED
-                'Fix: include the I/O status of the first file of this bundle in the calculation for
-                'finishing the previous bundle
-                '----------------------------------------------------------------------------------
+    //-------------------------------------------------------
+    //SAVE CURRENT BIT POINTER AND BUFFER COUNT FOR DIRECTORY
+    //-------------------------------------------------------
 
-                'Before finishing the previous bundle, calculate I/O status of the LAST BYTE of the first file of this bundle
-                '(Files already sorted)
-                Dim ThisBundleIO As Integer = If(FileIOA.Count > 0, CheckNextIO(FileAddrA(0), FileLenA(0), FileIOA(0)), 0)
-                If CloseBundle(ThisBundleIO, False) = False Then GoTo NoComp
-            End If
-        End If
+    if (BundleNo < 128)
+    {
+        DirBlocks[(BundleNo * 4) + 3] = BitPtr;
+        DirPtr[BundleNo] = BufferCnt;
+        BundleNo++;
+    }
+    else
+    {
+        MaxBundleNoExceeded = true;
+    }
 
-        '-------------------------------------------------------
-        'SAVE CURRENT BIT POINTER AND BUFFER COUNT FOR DIRECTORY
-        '-------------------------------------------------------
+    //-------------------------------------------------------
 
-        If FromEditor = False Then
-            'Only if we are NOT in the Editor
-            If BundleNo < 128 Then
-                DirBlocks((BundleNo * 4) + 3) = BitPtr
-                DirPtr(BundleNo) = BufferCnt
-                BundleNo += 1
-            Else
-                MaxBundleNoExceeded = True
-            End If
-        End If
+    NewBundle = true;
+    LastFileOfBundle = false;
 
-        '-------------------------------------------------------
+    PartialFileIndex = -1;
 
-        NewBundle = True
-        LastFileOfBundle = False
+    for (int i = 0; i < Prgs.size(); i++)
+    {
+        //Mark the last file in a bundle for better compression
+        if (i == Prgs.size() - 1)
+            LastFileOfBundle = true;
+        
+        //The only two parameters that are needed are FA and FUIO... FileLenA(i) is not used
 
-        PartialFileIndex = -1
+        if (PartialFileIndex == -1)
+            PartialFileOffset = Prgs[i].Prg.size() - 1;
 
-        For I As Integer = 0 To Prgs.Count - 1
-            'Mark the last file in a bundle for better compression
-            If I = Prgs.Count - 1 Then LastFileOfBundle = True
-            'The only two parameters that are needed are FA and FUIO... FileLenA(i) is not used
+        //PackFile(Prgs[i].Prg, i, Prgs[i].FileAddr, Prgs[i].FileIO);
+        if (i < Prgs.size() - 1)
+        {
+            //WE NEED TO USE THE NEXT FILE'S ADDRESS, LENGTH AND I / O STATUS HERE
+            //FOR I/O BYTE CALCULATION FOR THE NEXT PART - BUG reported by Raistlin/G*P
+            PrgAdd = Prgs[i + 1].iFileAddr;
+            PrgLen = Prgs[i + 1].iFileLen;
+            FileUnderIO = Prgs[i + 1].FileIO;
+            //CloseFile()
+        }
+    }
 
-            If PartialFileIndex = -1 Then PartialFileOffset = Prgs(I).ToArray.Length - 1
+    LastBlockCnt = BlockCnt;
 
-            PackFile(Prgs(I).ToArray, I, FileAddrA(I), FileIOA(I))
-            If I < Prgs.Count - 1 Then
-                'WE NEED TO USE THE NEXT FILE'S ADDRESS, LENGTH AND I/O STATUS HERE
-                'FOR I/O BYTE CALCULATION FOR THE NEXT PART - BUG reported by Raistlin/G*P
-                PrgAdd = Convert.ToInt32(FileAddrA(I + 1), 16)
-                PrgLen = Prgs(I + 1).Length ' Convert.ToInt32(FileLenA(I + 1), 16)
-                FileUnderIO = FileIOA(I + 1)
-                CloseFile()
-            End If
-        Next
+    if (LastBlockCnt > 255)
+    {
+        //Parts cannot be larger than 255 blocks compressed
+        cout << "***CRITICAL***\nBundle exceeds 255-block limit! Bundle " << BundleCnt << " would need " << LastBlockCnt << " blocks on the disk.\n";
+        return false;
+    }
 
-        LastBlockCnt = BlockCnt
+    //IF THE WHOLE Bundle IS LESS THAN 1 BLOCK, THEN "IT DOES NOT COUNT", Bundle Counter WILL NOT BE INCREASED
+    if (PreBCnt == BufferCnt)
+        BundleCnt--;
 
-        If LastBlockCnt > 255 Then
-            'Parts cannot be larger than 255 blocks compressed
-            'There is some confusion here how PartCnt is used in the Editor and during Disk building...
-            MsgBox("Bundle " + If(CompressBundleFromEditor = True, BundleCnt + 1, BundleCnt).ToString + " would need " + LastBlockCnt.ToString + " blocks on the disk." + vbNewLine + vbNewLine + "Bundles cannot be larger than 255 blocks compressed!", vbOKOnly + vbCritical, "Bundle exceeds 255-block limit!")
-            If CompressBundleFromEditor = False Then GoTo NoComp
-        End If
-
-        'IF THE WHOLE Bundle IS LESS THAN 1 BLOCK, THEN "IT DOES NOT COUNT", Bundle Counter WILL NOT BE INCREASED
-        If PreBCnt = BufferCnt Then
-            BundleCnt -= 1
-        End If
-*/
     return true;
+
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-int CheckNextIO(string sAddress, string sLength, bool NextFileUnderIO) {
+bool CompareFileAddress(FileStruct F1, FileStruct F2) {
 
-    int pAddress = ConvertStringToInt(sAddress);
+    return (F1.iFileAddr > F2.iFileAddr);
 
-    if (pAddress < 256) {
-        return 1;
-    }
-    else
-    {
-        if ((pAddress >= 0xd000) && (pAddress < 0xe000) && (NextFileUnderIO))
-        {
-            return 1;
-        }
-        else
-        {
-            return 0;
-        }
-    }
 }
-
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
 bool SortBundle() {
 
-/*
-        If tmpPrgs.Count = 0 Then Exit Function
-        If tmpPrgs.Count = 1 Then GoTo SortDone
+    if (tmpPrgs.size() > 0)
+    {
+        if (tmpPrgs.size() > 1)
+        {
+            int FSO{}, FEO{}, FSI{}, FEI{};
 
-        Dim Change As Boolean
-        Dim FSO, FEO, FSI, FEI As Integer   'File Start and File End Outer loop/Inner loop
-        Dim PO(), PI() As Byte
-        Dim S As String
-        Dim bIO As Boolean
+            //Check for overlaps
+            for (int o = 0; o < tmpPrgs.size() - 1;o++)
+            {
+                FSO = tmpPrgs[o].iFileAddr;               //Outer loop file start
+                FEO = FSO + tmpPrgs[o].iFileLen - 1;     //Outer loop file end
+                for (int i = o + 1; i < tmpPrgs.size(); i++)
+                {
+                    FSI = tmpPrgs[i].iFileAddr;           //Inner loop file start
+                    FEI = FSI + tmpPrgs[i].iFileLen - 1; //Inner loop file end
 
-        '--------------------------------------------------------------------------------
-        'Check files for overlap
+                //--|------+------|----OR----|------+------|----OR----|------+------|----OR-----|------+------|--
+                //  FSO    FSI    FEO        FSO    FEI    FEO        FSI    FSO    FEI        FSI    FEO    FEI
 
-        For O As Integer = 0 To tmpPrgs.Count - 2
-            FSO = Convert.ToInt32(tmpFileAddrA(O), 16)              'Outer loop File Start
-            FEO = FSO + Convert.ToInt32(tmpFileLenA(O), 16) - 1     'Outer loop File End
-            For I As Integer = O + 1 To tmpPrgs.Count - 1
-                FSI = Convert.ToInt32(tmpFileAddrA(I), 16)          'Inner loop File Start
-                FEI = FSI + Convert.ToInt32(tmpFileLenA(I), 16) - 1 'Inner loop File End
-                '--|------+------|----OR----|------+------|----OR----|------+------|----OR-----|------+------|--
-                '  FSO    FSI    FEO        FSO    FEI    FEO        FSI    FSO    FEI        FSI    FEO    FEI
-                If ((FSI >= FSO) And (FSI <= FEO)) Or ((FEI >= FSO) And (FEI <= FEO)) Or ((FSO >= FSI) And (FSO <= FEI)) Or ((FEO >= FSI) And (FEO <= FEI)) Then
-                    Dim OLS As Integer = If(FSO >= FSI, FSO, FSI)  'Overlap Start address
-                    Dim OLE As Integer = If(FEO <= FEI, FEO, FEI)  'Overlap End address
+                    if(((FSI >= FSO) && (FSI <= FEO)) || ((FEI >= FSO) && (FEI <= FEO)) || ((FSO >= FSI) && (FSO <= FEI)) || ((FEO >= FSI) && (FEO <= FEI))) {
+                        int OLS = (FSO >= FSI) ? FSO : FSI;
+                        int OLE = (FEO <= FEI) ? FEO : FEI;
 
-                    If (OLS >= &HD000) And (OLE <= &HDFFF) And (tmpFileIOA(O) <> tmpFileIOA(I)) Then
-                        'Overlap is IO memory only and different IO status - NO OVERLAP
-                    Else
-                        MsgBox("The following two files overlap in Bundle " + (BundleCnt - 1).ToString + ":" _
-                           + vbNewLine + vbNewLine + tmpFileNameA(I) + " ($" + Hex(FSI) + " - $" + Hex(FEI) + ")" + vbNewLine + vbNewLine _
-                           + tmpFileNameA(O) + " ($" + Hex(FSO) + " - $" + Hex(FEO) + ")", vbOKOnly + vbExclamation)
-                    End If
-                End If
-            Next
-        Next
+                        if ((OLS >= 0xD000) && (OLE <= 0xDFFF) && (tmpPrgs[o].FileIO != tmpPrgs[i].FileIO)) 
+                        {
+                            //Overlap is IO memory only and different IO status - NO OVERLAP
+                        }
+                        else
+                        {
+                            cout << "***CRITICAL***\nThe following two files overlap in Bundle " << dec << (BundleCnt - 1) + ":\n";
+                            cout << tmpPrgs[i].FileName << " ($" << tmpPrgs[i].FileAddr << " - $" << hex << FEI << ")\n";
+                            cout << tmpPrgs[o].FileName << " ($" << tmpPrgs[o].FileAddr << " - $" << hex << FEO << ")\n";
+                            return false;
+                        }
+                    }
+                }
+            }
 
-        '--------------------------------------------------------------------------------
-        'Append adjacent files
-Restart:
-        Change = False
+            //Append adjacent files
+            bool Change=true;
 
-        For O As Integer = 0 To tmpPrgs.Count - 2
-            FSO = Convert.ToInt32(tmpFileAddrA(O), 16)
-            FEO = Convert.ToInt32(tmpFileLenA(O), 16)
-            For I As Integer = O + 1 To tmpPrgs.Count - 1
-                FSI = Convert.ToInt32(tmpFileAddrA(I), 16)
-                FEI = Convert.ToInt32(tmpFileLenA(I), 16)
+            while (Change)
+            {
+                Change = false;
+                for (int o = 0; o < tmpPrgs.size() - 1; o++)
+                {
+                    FSO = tmpPrgs[o].iFileAddr;
+                    FEO = tmpPrgs[o].iFileLen;
 
-                If FSO + FEO = FSI Then
-                    'Inner file follows outer file immediately
-                    If (FSI <= &HD000) Or (FSI > &HDFFF) Then
-                        'Append files as they meet outside IO memory
-Append:                 PO = tmpPrgs(O)
-                        PI = tmpPrgs(I)
-                        ReDim Preserve PO(FEO + FEI - 1)
+                    for (int i = o + 1; i < tmpPrgs.size(); i++)
+                    {
+                        FSI = tmpPrgs[i].iFileAddr;
+                        FEI = tmpPrgs[i].iFileLen;
 
-                        For J As Integer = 0 To FEI - 1
-                            PO(FEO + J) = PI(J)
-                        Next
+                        if (FSO + FEO == FSI)
+                        {
+                            if ((FSI <= 0xd000) || (FSI > 0xdfff) || (tmpPrgs[o].FileIO == tmpPrgs[i].FileIO))
+                            {
+                                tmpPrgs[o].Prg.insert(tmpPrgs[o].Prg.end(), tmpPrgs[i].Prg.begin(), tmpPrgs[i].Prg.end());
 
-                        tmpPrgs(O) = PO
+                                Change = true;
+                            }
+                        }
+                        else if (FSI + FEI == FSO)
+                        {
+                            if ((FSO <= 0xd000) || (FSO > 0xdfff) || (tmpPrgs[o].FileIO == tmpPrgs[i].FileIO))
+                            {
+                                tmpPrgs[i].Prg.insert(tmpPrgs[i].Prg.end(), tmpPrgs[o].Prg.begin(), tmpPrgs[o].Prg.end());
 
-                        Change = True
-                    Else
-                        If tmpFileIOA(O) = tmpFileIOA(I) Then
-                            'Files meet inside IO memory, append only if their IO status is the same
-                            GoTo Append
-                        End If
-                    End If
-                ElseIf FSI + FEI = FSO Then
-                    'Outer file follows inner file immediately
-                    If (FSO <= &HD000) Or (FSO > &HDFFF) Then
-                        'Prepend files as they meet outside IO memory
-Prepend:                PO = tmpPrgs(O)
-                        PI = tmpPrgs(I)
-                        ReDim Preserve PI(FEI + FEO - 1)
+                                tmpPrgs[o].Prg = tmpPrgs[i].Prg;
 
-                        For J As Integer = 0 To FEO - 1
-                            PI(FEI + J) = PO(J)
-                        Next
+                                tmpPrgs[o].FileAddr = tmpPrgs[i].FileAddr;
+                                tmpPrgs[o].FileOffs = tmpPrgs[i].FileOffs;
 
-                        tmpPrgs(O) = PI
+                                Change = true;
+                            }
+                        }
 
-                        tmpFileAddrA(O) = tmpFileAddrA(I)
+                        if (Change)
+                        {
+                            //Update merged file's IO status
+                            tmpPrgs[o].FileIO = (tmpPrgs[o].FileIO || tmpPrgs[i].FileIO);
 
-                        Change = True
-                    Else
-                        If tmpFileIOA(O) = tmpFileIOA(I) Then
-                            'Files meet inside IO memory, prepend only if their IO status is the same
-                            GoTo Prepend
-                        End If
-                    End If
-                End If
+                            //New file's length is the length of the two merged files
+                            FEO += FEI;
+                            tmpPrgs[o].FileLen = ConvertIntToHextString(FEO, 4);
 
-                If Change = True Then
-                    'Update merged file's IO status
-                    tmpFileIOA(O) = tmpFileIOA(O) Or tmpFileIOA(I)   'BUG FIX - REPORTED BY RAISTLIN/G*P
-                    'New file's length is the length of the two merged files
-                    FEO += FEI
+                            //Remove File(I) and all its parameters
+                            vector<FileStruct>::iterator iter = tmpPrgs.begin() + i;
+                            tmpPrgs.erase(iter);
 
-                    tmpFileLenA(O) = ConvertIntToHex(FEO, 4)
-                    'Remove File(I) and all its parameters
-                    For J As Integer = I To tmpPrgs.Count - 2
-                        tmpFileNameA(J) = tmpFileNameA(J + 1)
-                        tmpFileAddrA(J) = tmpFileAddrA(J + 1)
-                        tmpFileOffsA(J) = tmpFileOffsA(J + 1)     'this may not be needed later
-                        tmpFileLenA(J) = tmpFileLenA(J + 1)
-                        tmpFileIOA(J) = tmpFileIOA(J + 1)
-                    Next
-                    'One less file left
-                    FileCnt -= 1
-                    ReDim Preserve tmpFileNameA(tmpPrgs.Count - 2), tmpFileAddrA(tmpPrgs.Count - 2), tmpFileOffsA(tmpPrgs.Count - 2), tmpFileLenA(tmpPrgs.Count - 2)
-                    ReDim Preserve tmpFileIOA(tmpPrgs.Count - 2)
-                    tmpPrgs.Remove(tmpPrgs(I))
-                    GoTo Restart
-                End If
-            Next
-        Next
+                            //One less file left
+                            FileCnt--;
+                        }
+                    }
+                }
+            }
+            //Sort files by length (short files first, thus, last block will more likely contain 1 file only = faster depacking)
+            sort(tmpPrgs.begin(), tmpPrgs.end(), CompareFileAddress);
+            //for (auto x : tmpPrgs)
+            //    cout << x.FileName << "\t" << x.FileAddr << "\n";
+       }
+        //Once Bundle is sorted, calculate the I/O status of the last byte of the first file and the number of bits that will be needed
+        //to finish the last block of the previous bundle (when the I/O status of the just sorted bundle needs to be known)
+        //This is used in CloseBuffer
 
-        '--------------------------------------------------------------------------------
-        'Sort files by length (short files first, thus, last block will more likely contain 1 file only = faster depacking)
-ReSort:
-        Change = False
-        For I As Integer = 0 To tmpPrgs.Count - 2
-            'Sort except if file length < 4, to allow for ZP relocation script hack
-            If Convert.ToInt32(tmpFileAddrA(I), 16) < Convert.ToInt32(tmpFileAddrA(I + 1), 16) Then
-                PI = tmpPrgs(I)
-                tmpPrgs(I) = tmpPrgs(I + 1)
-                tmpPrgs(I + 1) = PI
+        //Bytes needed: (1)LongMatch Tag, (2)NextBundle Tag, (3)AdLo, (4)AdHi, (5)First Lit, (6)1 Bit Stream Byte (for 1 Lit Bit), (7)+/- I/O
+        //+/- 1 Match Bit (if the last sequence of the last bundle is a match sequence, no Match Bit after a Literal sequence)
+        //Match Bit will be determened by MLen in SequenceFits() function, NOT ADDED TO BitsNeededForNextBundle here!!!
 
-                S = tmpFileNameA(I)
-                tmpFileNameA(I) = tmpFileNameA(I + 1)
-                tmpFileNameA(I + 1) = S
+        //We may be overcalculating here but that is safer than undercalculating which would result in buggy decompression
+        //If the last block is not the actual last block of the bundle...
+        //With overcalculation, worst case scenario is a little bit worse compression ratio of the last block
+       
+       BitsNeededForNextBundle = (6 + CheckNextIO(tmpPrgs[0].iFileAddr, tmpPrgs[0].iFileLen, tmpPrgs[0].FileIO)) * 8;
+       
+       // +/- 1 Match Bit which will be added later in CloseBuffer if needed
 
-                S = tmpFileAddrA(I)
-                tmpFileAddrA(I) = tmpFileAddrA(I + 1)
-                tmpFileAddrA(I + 1) = S
+    }
 
-                S = tmpFileOffsA(I)
-                tmpFileOffsA(I) = tmpFileOffsA(I + 1)
-                tmpFileOffsA(I + 1) = S
-
-                S = tmpFileLenA(I)
-                tmpFileLenA(I) = tmpFileLenA(I + 1)
-                tmpFileLenA(I + 1) = S
-
-                bIO = tmpFileIOA(I)
-                tmpFileIOA(I) = tmpFileIOA(I + 1)
-                tmpFileIOA(I + 1) = bIO
-                Change = True
-            End If
-        Next
-        If Change = True Then GoTo ReSort
-
-SortDone:
-        'Once Bundle is sorted, calculate the I/O status of the last byte of the first file and the number of bits that will be needed
-        'to finish the last block of the previous bundle (when the I/O status of the just sorted bundle needs to be known)
-        'This is used in CloseBuffer
-
-        'Bytes needed: (1)LongMatch Tag, (2)NextBundle Tag, (3)AdLo, (4)AdHi, (5)First Lit, (6)1 Bit Stream Byte (for 1 Lit Bit), (7)+/- I/O
-        '+/- 1 Match Bit (if the last sequence of the last bundle is a match sequence, no Match Bit after a Literal sequence)
-        'Match Bit will be determened by MLen in SequenceFits() function, NOT ADDED TO BitsNeededForNextBundle here!!!
-
-        'We may be overcalculating here but that is safer than undercalculating which would result in buggy decompression
-        'If the last block is not the actual last block of the bundle...
-        'With overcalculation, worst case scenario is a little bit worse compression ratio of the last block
-        BitsNeededForNextBundle = (6 + CheckNextIO(tmpFileAddrA(0), tmpFileLenA(0), tmpFileIOA(0))) * 8
-        ' +/- 1 Match Bit which will be added later in CloseBuffer if needed
-*/
     return true;
 }
 
@@ -1325,20 +1310,11 @@ bool BundleDone() {
             return false;     //THIS WILL RESET NewPart TO FALSE
 
         Prgs = tmpPrgs;
-        FileNameV = tmpFileNameV;
-        FileAddrV = tmpFileAddrV;
-        FileOffsV = tmpFileOffsV;
-        FileLenV = tmpFileLenV;
-        FileIOV = tmpFileIOV;
+
         SetNewBlock = TmpSetNewBlock;
         TmpSetNewBlock = false;
 
         VFiles = tmpVFiles;
-        VFileNameV = tmpVFileNameV;
-        VFileAddrV = tmpVFileAddrV;
-        VFileOffsV = tmpVFileOffsV;
-        VFileLenV = tmpVFileLenV;
-        VFileIOV = tmpVFileIOV;
 
         //Then reset bundle variables (file vectors, prg vector, block cnt), increase bundle counter
         ResetBundleVariables();
@@ -1403,8 +1379,8 @@ bool AddFileToBundle() {
         {
         case 1:  //No parameters in script
             
-            if ((FN[FN.length() - 4] = '.') && (FN[FN.length() - 3] = 's')&& (FN[FN.length() - 2] = 'i')&& (FN[FN.length() - 1] = 'd'))
-            {
+            if ((FN[FN.length() - 4] == '.') && (FN[FN.length() - 3] == 's')&& (FN[FN.length() - 2] == 'i')&& (FN[FN.length() - 1] == 'd'))
+            {   //SID file
                 FA = ConvertIntToHextString(P[P[7]] + (P[P[7] + 1] * 256), 4);
                 FO = ConvertIntToHextString(P[7] + 2, 8);
                 FL = ConvertIntToHextString(P.size() - P[7] - 2, 4);
@@ -1470,21 +1446,26 @@ bool AddFileToBundle() {
         }
 
         //Trim file to the specified chunk (FLN number of bytes starting at FON, to Address of FAN)
-        vector<unsigned char>::iterator First = P.begin();
-        P.erase(First + FON + FLN, First + P.size() - 1);   //Trim P from end of file (Offset+Length-1) to end of vector
-        P.erase(First, First + FON - 1);                    //Trim P from beginning of file to Offset
+        if (FON + FLN < P.size())
+        {
+            //Trim P from end of file (Offset+Length-1) to end of vector
+            vector<unsigned char>::iterator First = P.begin() + FON + FLN;
+            vector<unsigned char>::iterator Last = P.end();
+            P.erase(First, Last);
+        }
+        if (FON > 0)
+        {
+            //Trim P from beginning of file to Offset
+            vector<unsigned char>::iterator First = P.begin();
+            vector<unsigned char>::iterator Last = P.begin() + FON;
+            P.erase(First, Last);
+        }
     }
     else
     {
         cout << "***CRITICAL***\The following file does not exist: " << FN << "\n";
         return false;
     }
-
-    tmpFileNameV.push_back(FN);
-    tmpFileAddrV.push_back(FA);
-    tmpFileOffsV.push_back(FO);         //This may not be needed later
-    tmpFileLenV.push_back(FL);
-    tmpFileIOV.push_back(FUIO);
 
     UncompBundleSize += FLN / 256;
     if (FLN % 256 != 0)
@@ -1498,7 +1479,7 @@ bool AddFileToBundle() {
         FirstFileOfDisk = false;
     }
     
-    tmpPrgs.push_back(P);
+    tmpPrgs.push_back(FileStruct(P, FN, FA, FO, FL, FUIO));
 
     return true;
 }
@@ -1509,19 +1490,120 @@ bool AddFile() {
 
     if (NewBundle)
     {
-        if (!BundleDone)
+        if (!BundleDone())
         {
             return false;
         }
     }
 
     //Then add file to bundle
-    if (!AddFileToBundle)
+    if (!AddFileToBundle())
     {
         return false;
     }
 
     return true;
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+void UpdateBlocksFree() {
+
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+void AddDirArt() {
+
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+void AddDemoNameToDisk() {
+
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+void AddHeaderAndID() {
+
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+bool InjectDriveCode() {
+
+    return true;
+
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+bool InjectLoader() {
+
+    return true;
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+bool AddCompressedBundlesToDisk() {
+
+    return true;
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+bool CloseBuffer() {
+    
+    return true;
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+bool FinishDisk(bool LastDisk) {
+
+    if ((BundleCnt == 0) && (FileCnt == -1))
+    {
+        cout << "***CRITICAL***\nThis disk does not contain any files!\n";
+        return false;
+    }
+
+    if (!BundleDone())
+        return false;
+    if (!CompressBundle())
+        return false;
+    if (!CloseBundle(0, true))
+        return false;
+    if (!CloseBuffer())
+        return false;
+
+    if (MaxBundleNoExceeded)
+    {
+        cout << "***INFO***\nThe number of file bundles is greater than 128 on this disk!\n";
+        cout << "You can only access bundles 0-127 by bundle index. The rest can only be loaded using the LoadNext function.";
+    }
+    
+    //Now add compressed parts to disk
+    if (!AddCompressedBundlesToDisk())
+        return false;
+    if (!InjectLoader())        //If InjectLoader(-1, 18, 7, 1) = False Then GoTo NoDisk
+        return false;
+    if (!InjectDriveCode)       //If InjectDriveCode(DiskCnt, LoaderBundles, If(LastDisk = False, DiskCnt + 1, &H80)) = False Then GoTo NoDisk
+        return false;
+
+    AddHeaderAndID();
+    AddDemoNameToDisk();        //AddDemoNameToDisk(-1, 18, 7)
+    AddDirArt();
+    
+    //BytesSaved += Int(BitsSaved / 8)
+    //BitsSaved = BitsSaved Mod 8
+
+    UpdateBlocksFree();
+
+    WriteDiskImage(D64Name);
+
+    return true;
+
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1541,7 +1623,7 @@ bool BuildDiskFromScript() {
 
     if (ScriptEntry != ScriptHeader)
     {
-        cout << "Invalid script file!" + '\n';
+        cout << "***CRITICAL***\nInvalid script file!" + '\n';
 
         return false;
 
@@ -1553,7 +1635,7 @@ bool BuildDiskFromScript() {
 
     while (LineEnd <= Script.length() - 1) {
 
-        if (FindNextScriptEntry() == true)
+        if (FindNextScriptEntry())
         {
             SplitScriptEntry();
 
@@ -1647,7 +1729,7 @@ bool BuildDiskFromScript() {
                 }
                 else
                 {
-                    cout << "The following DirArt file does not exist: " << ScriptEntryArray[0] << "\nThe disk will be built without DirArt.\n";
+                    cout << "***INFO***\nThe following DirArt file does not exist: " << ScriptEntryArray[0] << "\nThe disk will be built without DirArt.\n";
                 }
 
                 NewBundle = true;
@@ -1799,7 +1881,7 @@ bool BuildDiskFromScript() {
                     }
                     else
                     {
-                        cout << "The Product ID must be a maximum 6-digit long hexadecimal number!\nSparkle will use the following pseudorandom Product ID: " << hex << ProductID <<"\n";
+                        cout << "***INFO***\nThe Product ID must be a maximum 6-digit long hexadecimal number!\nSparkle will use the following pseudorandom Product ID: " << hex << ProductID <<"\n";
                     }
                 }
 
@@ -1862,7 +1944,7 @@ bool BuildDiskFromScript() {
             else if (ScriptEntryType == EntryTypeFile)
             {
                 //Add files to bundle array, if new bundle=true, we will first sort, compress and add previous bundle to disk
-                if (!AddFile)
+                if (!AddFile())
                     return false;
 
                 NewD = false;       //We have added at least one file to this disk, so next disk info entry will be a new disk
@@ -1895,10 +1977,10 @@ bool BuildDiskFromScript() {
                 }
             }
         }
-        else
-        {
-            break;
-        }
+        //else
+        //{
+        //    break;
+        //}
     }
 
     if (!FinishDisk(true))
@@ -1945,10 +2027,10 @@ int main(int argc, char* argv[])
 
     if (argc < 2)
     {
-        ///cerr << "Usage: Sparkle script.sls" << '\n';
+        ///cerr << "***INFO***\nUsage: Sparkle script.sls\nFor details please read the user manual!";
 
 		//return 1;
-        string ScriptFileName = "C:\\Tmp\\SpaceXDemo.sls";
+        string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\GP\\GPSpaceXDemo\\6502\\SpaceXDemo.sls";
         Script = ReadFileToString(ScriptFileName);
 
         SetScriptPath(ScriptFileName, AppPath);
