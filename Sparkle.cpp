@@ -8,7 +8,6 @@
 #include <stdlib.h>     /* srand, rand */
 #include <time.h>       /* time */
 #include <iomanip>
-#include "Sparkle.h"
 #include <iostream>
 #include <filesystem>
 #include "common.h"
