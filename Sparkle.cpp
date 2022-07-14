@@ -73,7 +73,7 @@ string EntryTypeMem = "mem:";
 string EntryTypeAlign = "align";
 
 int ProductID = 0;
-unsigned int SS, SE, LastSS, LastSE;
+unsigned int LineStart, LineEnd;    //LastSS, LastSE;
 bool NewBundle;
 
 const int MaxNumDisks = 127;
@@ -90,28 +90,28 @@ int CurrentScript = -1;
 int BundleNo = -1;
 bool MaxBundleNoExceeded = false;
 
-vector<string> Prgs;
+vector<vector<unsigned char>> Prgs;
 vector<string> FileNameV;
 vector<string> FileAddrV;
 vector<string> FileOffsV;
 vector<string> FileLenV;
 vector<bool> FileIOV;
 
-vector<string> tmpPrgs;
+vector<vector<unsigned char>> tmpPrgs;
 vector<string> tmpFileNameV;
 vector<string> tmpFileAddrV;
 vector<string> tmpFileOffsV;
 vector<string> tmpFileLenV;
 vector<bool> tmpFileIOV;
 
-vector<string> VFiles;
+vector<vector<unsigned char>> VFiles;
 vector<string> VFileNameV;
 vector<string> VFileAddrV;
 vector<string> VFileOffsV;
-vector<string> VFileLenA;
+vector<string> VFileLenV;
 vector<bool> VFileIOV;
 
-vector<string> tmpVFiles;
+vector<vector<unsigned char>> tmpVFiles;
 vector<string> tmpVFileNameV;
 vector<string> tmpVFileAddrV;
 vector<string> tmpVFileOffsV;
@@ -270,6 +270,15 @@ string ReadFileToString(const string& FileName)
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
+void WriteTextToFile(const string& DiskName)
+{
+    ofstream out(DiskName);
+    out << Script;
+    out.close();
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
 void WriteDiskImage(const string& DiskName)
 {
     int BytesPerDisk;
@@ -377,7 +386,7 @@ bool AddHSFile()
     int FLN = 0;
     bool FUIO = false;
 
-    vector<unsigned char> P;
+    //vector<unsigned char> P;
 
     if (FN.find(":") == string::npos)
     {
@@ -405,6 +414,7 @@ bool AddHSFile()
         FUIO = true;
         FN.replace(FN.length() - 1, 1, "");
     }
+
     if (FileExits(FN))
     {
         HSFile.clear();
@@ -872,33 +882,25 @@ bool SplitScriptEntry() {
 
 bool FindNextScriptEntry() {
 
+    LineStart = LineEnd;
+
     ScriptEntry = "";
-    unsigned char S = Script[SS];
+    char S = Script[LineStart++];
 
-    while((S == 13) || (S == 10)) {
+    //Find the first non-linebreak character => LineStart
+    while ((S == 13) || (S == 10)) {
         NewBundle = true;
-        if (S == 13) {
-            SS++;
-        }
-        SS++;
-        S = Script[SS];
+        S = Script[LineStart++];
     }
 
-    SE = SS;
-
-    while ((S != 13) && (S != 10) && (SE <= Script.length() - 1)) {
+    //Find the last non-linebreak character => LineEnd
+    LineEnd = --LineStart;
+    while ((S != 13) && (S != 10) && (LineEnd <= Script.length() - 1)) {
         ScriptEntry += tolower(S);
-        SE++;
-        if (SE <= Script.length() - 1) {
-            S = Script[SE];
-        }
+            S = Script[LineEnd++];
     }
 
-    if (S == 13) {
-        SE++;
-    }
-    SS = SE + 1;
-    SE = SS + 1;
+    LineEnd--;
 
     return true;
 
@@ -909,14 +911,14 @@ bool InsertScript(string& SubScriptPath)
 {
     ScriptLine = ScriptEntry;
 
-    string sPath = SubScriptPath;
-
     //Calculate full path
 
     if (SubScriptPath.find(":") == string::npos)
     {
         SubScriptPath = ScriptPath + SubScriptPath;
     }
+
+    string sPath = SubScriptPath;
 
     if (!FileExits(SubScriptPath))
     {
@@ -941,7 +943,7 @@ bool InsertScript(string& SubScriptPath)
     string SubScript = ReadFileToString(SubScriptPath);
 
     //Count line breakes
-    int NumLines = std::count(SubScript.begin(), SubScript.end(), '\n');
+    int NumLines = std::count(SubScript.begin(), SubScript.end(), '\n') + 1;
 
     //Store lines in vector
     vector<string> Lines;
@@ -954,7 +956,7 @@ bool InsertScript(string& SubScriptPath)
     Lines.push_back(SubScript);                         //Rest of the SubScript, after the last line break
 
     string S = "";
-    for (int i = 0; i < Lines.size(); i++)
+    for (vector <string>::size_type i = 0; i != Lines.size(); i++)
     {
         ScriptEntry = (Lines[i]);
         
@@ -967,81 +969,559 @@ bool InsertScript(string& SubScriptPath)
                 S += "\n";
             
             //Add relative path of subscript to relative path of subscript entries
-            if (ScriptEntryType == "file:")
+            if ((ScriptEntryType == EntryTypeFile) || (ScriptEntryType == EntryTypeMem) || (ScriptEntryType == EntryTypeHSFile))
             {
                 if (ScriptEntryArray[0].find(":") == string::npos)
                 {
                     ScriptEntryArray[0] = sPath + ScriptEntryArray[0];
                 }
-                Lines[i] = EntryTypeFile + "\t" + ScriptEntryArray[0];
+                Lines[i] = ScriptEntryType + "\t" + ScriptEntryArray[0];
                 for (int j = 1; j <= NumScriptEntries; j++)
                 {
                     Lines[i] += "\t" + ScriptEntryArray[j];
                 }
             }
-            else if (ScriptEntryType == "mem:")
+            else if ((ScriptEntryType == EntryTypeScript) || (ScriptEntryType == EntryTypePath) || (ScriptEntryType == EntryTypeDirArt))
             {
                 if (ScriptEntryArray[0].find(":") == string::npos)
                 {
                     ScriptEntryArray[0] = sPath + ScriptEntryArray[0];
                 }
-                Lines[i] = EntryTypeMem + "\t" + ScriptEntryArray[0];
-                for (int j = 1; j <= NumScriptEntries; j++)
-                {
-                    Lines[i] += "\t" + ScriptEntryArray[j];
-                }
-            }
-            else if (ScriptEntryType == "script:")
-            {
-                if (ScriptEntryArray[0].find(":") == string::npos)
-                {
-                    ScriptEntryArray[0] = sPath + ScriptEntryArray[0];
-                }
-                Lines[i] = EntryTypeScript + "\t" + ScriptEntryArray[0];
-            }
-            else if (ScriptEntryType == "path:")
-            {
-                if (ScriptEntryArray[0].find(":") == string::npos)
-                {
-                    ScriptEntryArray[0] = sPath + ScriptEntryArray[0];
-                }
-                Lines[i] = EntryTypePath + "\t" + ScriptEntryArray[0];
-            }
-            else if (ScriptEntryType == "dirart:")
-            {
-                if (ScriptEntryArray[0].find(":") == string::npos)
-                {
-                    ScriptEntryArray[0] = sPath + ScriptEntryArray[0];
-                }
-                Lines[i] = EntryTypeDirArt + "\t" + ScriptEntryArray[0];
-            }
-            else if (ScriptEntryType == "hsfile:")
-            {
-                if (ScriptEntryArray[0].find(":") == string::npos)
-                {
-                    ScriptEntryArray[0] = sPath + ScriptEntryArray[0];
-                }
-                Lines[i] = EntryTypeHSFile + "\t" + ScriptEntryArray[0];
-                for (int j = 1; j <= NumScriptEntries; j++)
-                {
-                    Lines[i] += "\t" + ScriptEntryArray[j];
-                }
+                Lines[i] = ScriptEntryType + "\t" + ScriptEntryArray[0];
             }
         }
         S += Lines[i];
     }
 
-    string SS1 = Script.substr(0, LastSS - 1);
-    string SS2 = Script.substr(SS, Script.length() - SS);
+    string SS1 = Script.substr(0, LineStart);
+    string SS2 = Script.substr(LineEnd, Script.length() - (LineEnd));
     Script = SS1 + S + SS2;
     
-    SS = LastSS;
-    SE = LastSE;
+    WriteTextToFile("C:\\Tmp\\TestScript.sls");
 
     Lines.clear();
 
     return true;
 
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+bool CloseBundle(int NextFileIO, bool LastPartOnDisk) {
+
+
+    //SequenceFits() -> in Packer.cpp
+    //EORTransform() -> in Packer.cpp
+    //AddBits() -> in Packer.cpp
+    //ClosBuffer()
+    //AddLitBits() -> in Packer.cpp
+
+    return true;
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+bool CompressBundle() {
+
+    //PackFile -> in Packer.cpp
+    //CloseFile() -> here!!!
+
+/*
+        Dim PreBCnt As Integer = BufferCnt
+
+        If Prgs.Count = 0 Then Exit Function        'GoTo NoComp DOES NOT WORK!!!
+
+        'DO NOT RESET ByteSt AND BUFFER VARIABLES HERE!!!
+
+        If (BufferCnt = 0) And (BytePtr = 255) Then
+            NewBlock = SetNewBlock          'SetNewBlock is true at closing the previous bundle, so first it just sets NewBlock2
+            SetNewBlock = False             'And NewBlock will fire at the desired bundle
+        Else
+            If FromEditor = False Then      'Don't finish previous bundle here if we are calculating bundle size from Editor
+
+                '----------------------------------------------------------------------------------
+                '"SPRITE BUG"
+                'Compression bug involving the transitional block - FIXED
+                'Fix: include the I/O status of the first file of this bundle in the calculation for
+                'finishing the previous bundle
+                '----------------------------------------------------------------------------------
+
+                'Before finishing the previous bundle, calculate I/O status of the LAST BYTE of the first file of this bundle
+                '(Files already sorted)
+                Dim ThisBundleIO As Integer = If(FileIOA.Count > 0, CheckNextIO(FileAddrA(0), FileLenA(0), FileIOA(0)), 0)
+                If CloseBundle(ThisBundleIO, False) = False Then GoTo NoComp
+            End If
+        End If
+
+        '-------------------------------------------------------
+        'SAVE CURRENT BIT POINTER AND BUFFER COUNT FOR DIRECTORY
+        '-------------------------------------------------------
+
+        If FromEditor = False Then
+            'Only if we are NOT in the Editor
+            If BundleNo < 128 Then
+                DirBlocks((BundleNo * 4) + 3) = BitPtr
+                DirPtr(BundleNo) = BufferCnt
+                BundleNo += 1
+            Else
+                MaxBundleNoExceeded = True
+            End If
+        End If
+
+        '-------------------------------------------------------
+
+        NewBundle = True
+        LastFileOfBundle = False
+
+        PartialFileIndex = -1
+
+        For I As Integer = 0 To Prgs.Count - 1
+            'Mark the last file in a bundle for better compression
+            If I = Prgs.Count - 1 Then LastFileOfBundle = True
+            'The only two parameters that are needed are FA and FUIO... FileLenA(i) is not used
+
+            If PartialFileIndex = -1 Then PartialFileOffset = Prgs(I).ToArray.Length - 1
+
+            PackFile(Prgs(I).ToArray, I, FileAddrA(I), FileIOA(I))
+            If I < Prgs.Count - 1 Then
+                'WE NEED TO USE THE NEXT FILE'S ADDRESS, LENGTH AND I/O STATUS HERE
+                'FOR I/O BYTE CALCULATION FOR THE NEXT PART - BUG reported by Raistlin/G*P
+                PrgAdd = Convert.ToInt32(FileAddrA(I + 1), 16)
+                PrgLen = Prgs(I + 1).Length ' Convert.ToInt32(FileLenA(I + 1), 16)
+                FileUnderIO = FileIOA(I + 1)
+                CloseFile()
+            End If
+        Next
+
+        LastBlockCnt = BlockCnt
+
+        If LastBlockCnt > 255 Then
+            'Parts cannot be larger than 255 blocks compressed
+            'There is some confusion here how PartCnt is used in the Editor and during Disk building...
+            MsgBox("Bundle " + If(CompressBundleFromEditor = True, BundleCnt + 1, BundleCnt).ToString + " would need " + LastBlockCnt.ToString + " blocks on the disk." + vbNewLine + vbNewLine + "Bundles cannot be larger than 255 blocks compressed!", vbOKOnly + vbCritical, "Bundle exceeds 255-block limit!")
+            If CompressBundleFromEditor = False Then GoTo NoComp
+        End If
+
+        'IF THE WHOLE Bundle IS LESS THAN 1 BLOCK, THEN "IT DOES NOT COUNT", Bundle Counter WILL NOT BE INCREASED
+        If PreBCnt = BufferCnt Then
+            BundleCnt -= 1
+        End If
+*/
+    return true;
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+int CheckNextIO(string sAddress, string sLength, bool NextFileUnderIO) {
+
+    int pAddress = ConvertStringToInt(sAddress);
+
+    if (pAddress < 256) {
+        return 1;
+    }
+    else
+    {
+        if ((pAddress >= 0xd000) && (pAddress < 0xe000) && (NextFileUnderIO))
+        {
+            return 1;
+        }
+        else
+        {
+            return 0;
+        }
+    }
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+bool SortBundle() {
+
+/*
+        If tmpPrgs.Count = 0 Then Exit Function
+        If tmpPrgs.Count = 1 Then GoTo SortDone
+
+        Dim Change As Boolean
+        Dim FSO, FEO, FSI, FEI As Integer   'File Start and File End Outer loop/Inner loop
+        Dim PO(), PI() As Byte
+        Dim S As String
+        Dim bIO As Boolean
+
+        '--------------------------------------------------------------------------------
+        'Check files for overlap
+
+        For O As Integer = 0 To tmpPrgs.Count - 2
+            FSO = Convert.ToInt32(tmpFileAddrA(O), 16)              'Outer loop File Start
+            FEO = FSO + Convert.ToInt32(tmpFileLenA(O), 16) - 1     'Outer loop File End
+            For I As Integer = O + 1 To tmpPrgs.Count - 1
+                FSI = Convert.ToInt32(tmpFileAddrA(I), 16)          'Inner loop File Start
+                FEI = FSI + Convert.ToInt32(tmpFileLenA(I), 16) - 1 'Inner loop File End
+                '--|------+------|----OR----|------+------|----OR----|------+------|----OR-----|------+------|--
+                '  FSO    FSI    FEO        FSO    FEI    FEO        FSI    FSO    FEI        FSI    FEO    FEI
+                If ((FSI >= FSO) And (FSI <= FEO)) Or ((FEI >= FSO) And (FEI <= FEO)) Or ((FSO >= FSI) And (FSO <= FEI)) Or ((FEO >= FSI) And (FEO <= FEI)) Then
+                    Dim OLS As Integer = If(FSO >= FSI, FSO, FSI)  'Overlap Start address
+                    Dim OLE As Integer = If(FEO <= FEI, FEO, FEI)  'Overlap End address
+
+                    If (OLS >= &HD000) And (OLE <= &HDFFF) And (tmpFileIOA(O) <> tmpFileIOA(I)) Then
+                        'Overlap is IO memory only and different IO status - NO OVERLAP
+                    Else
+                        MsgBox("The following two files overlap in Bundle " + (BundleCnt - 1).ToString + ":" _
+                           + vbNewLine + vbNewLine + tmpFileNameA(I) + " ($" + Hex(FSI) + " - $" + Hex(FEI) + ")" + vbNewLine + vbNewLine _
+                           + tmpFileNameA(O) + " ($" + Hex(FSO) + " - $" + Hex(FEO) + ")", vbOKOnly + vbExclamation)
+                    End If
+                End If
+            Next
+        Next
+
+        '--------------------------------------------------------------------------------
+        'Append adjacent files
+Restart:
+        Change = False
+
+        For O As Integer = 0 To tmpPrgs.Count - 2
+            FSO = Convert.ToInt32(tmpFileAddrA(O), 16)
+            FEO = Convert.ToInt32(tmpFileLenA(O), 16)
+            For I As Integer = O + 1 To tmpPrgs.Count - 1
+                FSI = Convert.ToInt32(tmpFileAddrA(I), 16)
+                FEI = Convert.ToInt32(tmpFileLenA(I), 16)
+
+                If FSO + FEO = FSI Then
+                    'Inner file follows outer file immediately
+                    If (FSI <= &HD000) Or (FSI > &HDFFF) Then
+                        'Append files as they meet outside IO memory
+Append:                 PO = tmpPrgs(O)
+                        PI = tmpPrgs(I)
+                        ReDim Preserve PO(FEO + FEI - 1)
+
+                        For J As Integer = 0 To FEI - 1
+                            PO(FEO + J) = PI(J)
+                        Next
+
+                        tmpPrgs(O) = PO
+
+                        Change = True
+                    Else
+                        If tmpFileIOA(O) = tmpFileIOA(I) Then
+                            'Files meet inside IO memory, append only if their IO status is the same
+                            GoTo Append
+                        End If
+                    End If
+                ElseIf FSI + FEI = FSO Then
+                    'Outer file follows inner file immediately
+                    If (FSO <= &HD000) Or (FSO > &HDFFF) Then
+                        'Prepend files as they meet outside IO memory
+Prepend:                PO = tmpPrgs(O)
+                        PI = tmpPrgs(I)
+                        ReDim Preserve PI(FEI + FEO - 1)
+
+                        For J As Integer = 0 To FEO - 1
+                            PI(FEI + J) = PO(J)
+                        Next
+
+                        tmpPrgs(O) = PI
+
+                        tmpFileAddrA(O) = tmpFileAddrA(I)
+
+                        Change = True
+                    Else
+                        If tmpFileIOA(O) = tmpFileIOA(I) Then
+                            'Files meet inside IO memory, prepend only if their IO status is the same
+                            GoTo Prepend
+                        End If
+                    End If
+                End If
+
+                If Change = True Then
+                    'Update merged file's IO status
+                    tmpFileIOA(O) = tmpFileIOA(O) Or tmpFileIOA(I)   'BUG FIX - REPORTED BY RAISTLIN/G*P
+                    'New file's length is the length of the two merged files
+                    FEO += FEI
+
+                    tmpFileLenA(O) = ConvertIntToHex(FEO, 4)
+                    'Remove File(I) and all its parameters
+                    For J As Integer = I To tmpPrgs.Count - 2
+                        tmpFileNameA(J) = tmpFileNameA(J + 1)
+                        tmpFileAddrA(J) = tmpFileAddrA(J + 1)
+                        tmpFileOffsA(J) = tmpFileOffsA(J + 1)     'this may not be needed later
+                        tmpFileLenA(J) = tmpFileLenA(J + 1)
+                        tmpFileIOA(J) = tmpFileIOA(J + 1)
+                    Next
+                    'One less file left
+                    FileCnt -= 1
+                    ReDim Preserve tmpFileNameA(tmpPrgs.Count - 2), tmpFileAddrA(tmpPrgs.Count - 2), tmpFileOffsA(tmpPrgs.Count - 2), tmpFileLenA(tmpPrgs.Count - 2)
+                    ReDim Preserve tmpFileIOA(tmpPrgs.Count - 2)
+                    tmpPrgs.Remove(tmpPrgs(I))
+                    GoTo Restart
+                End If
+            Next
+        Next
+
+        '--------------------------------------------------------------------------------
+        'Sort files by length (short files first, thus, last block will more likely contain 1 file only = faster depacking)
+ReSort:
+        Change = False
+        For I As Integer = 0 To tmpPrgs.Count - 2
+            'Sort except if file length < 4, to allow for ZP relocation script hack
+            If Convert.ToInt32(tmpFileAddrA(I), 16) < Convert.ToInt32(tmpFileAddrA(I + 1), 16) Then
+                PI = tmpPrgs(I)
+                tmpPrgs(I) = tmpPrgs(I + 1)
+                tmpPrgs(I + 1) = PI
+
+                S = tmpFileNameA(I)
+                tmpFileNameA(I) = tmpFileNameA(I + 1)
+                tmpFileNameA(I + 1) = S
+
+                S = tmpFileAddrA(I)
+                tmpFileAddrA(I) = tmpFileAddrA(I + 1)
+                tmpFileAddrA(I + 1) = S
+
+                S = tmpFileOffsA(I)
+                tmpFileOffsA(I) = tmpFileOffsA(I + 1)
+                tmpFileOffsA(I + 1) = S
+
+                S = tmpFileLenA(I)
+                tmpFileLenA(I) = tmpFileLenA(I + 1)
+                tmpFileLenA(I + 1) = S
+
+                bIO = tmpFileIOA(I)
+                tmpFileIOA(I) = tmpFileIOA(I + 1)
+                tmpFileIOA(I + 1) = bIO
+                Change = True
+            End If
+        Next
+        If Change = True Then GoTo ReSort
+
+SortDone:
+        'Once Bundle is sorted, calculate the I/O status of the last byte of the first file and the number of bits that will be needed
+        'to finish the last block of the previous bundle (when the I/O status of the just sorted bundle needs to be known)
+        'This is used in CloseBuffer
+
+        'Bytes needed: (1)LongMatch Tag, (2)NextBundle Tag, (3)AdLo, (4)AdHi, (5)First Lit, (6)1 Bit Stream Byte (for 1 Lit Bit), (7)+/- I/O
+        '+/- 1 Match Bit (if the last sequence of the last bundle is a match sequence, no Match Bit after a Literal sequence)
+        'Match Bit will be determened by MLen in SequenceFits() function, NOT ADDED TO BitsNeededForNextBundle here!!!
+
+        'We may be overcalculating here but that is safer than undercalculating which would result in buggy decompression
+        'If the last block is not the actual last block of the bundle...
+        'With overcalculation, worst case scenario is a little bit worse compression ratio of the last block
+        BitsNeededForNextBundle = (6 + CheckNextIO(tmpFileAddrA(0), tmpFileLenA(0), tmpFileIOA(0))) * 8
+        ' +/- 1 Match Bit which will be added later in CloseBuffer if needed
+*/
+    return true;
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+bool BundleDone() {
+
+    //First finish last bundle, if it exists
+    if (tmpPrgs.size() > 0)
+    {
+        CurrentBundle++;
+
+        //Sort files in bundle
+        if (!SortBundle())
+            return false;
+        //Then compress files and add them to bundle
+        if (!CompressBundle())
+            return false;     //THIS WILL RESET NewPart TO FALSE
+
+        Prgs = tmpPrgs;
+        FileNameV = tmpFileNameV;
+        FileAddrV = tmpFileAddrV;
+        FileOffsV = tmpFileOffsV;
+        FileLenV = tmpFileLenV;
+        FileIOV = tmpFileIOV;
+        SetNewBlock = TmpSetNewBlock;
+        TmpSetNewBlock = false;
+
+        VFiles = tmpVFiles;
+        VFileNameV = tmpVFileNameV;
+        VFileAddrV = tmpVFileAddrV;
+        VFileOffsV = tmpVFileOffsV;
+        VFileLenV = tmpVFileLenV;
+        VFileIOV = tmpVFileIOV;
+
+        //Then reset bundle variables (file vectors, prg vector, block cnt), increase bundle counter
+        ResetBundleVariables();
+    }
+    
+    return true;
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+bool AddFileToBundle() {
+
+    string FN = ScriptEntryArray[0];
+    string FA = "";
+    string FO = "";
+    string FL = "";
+    int FAN = 0;
+    int FON = 0;
+    int FLN = 0;
+    bool FUIO = false;
+
+    vector<unsigned char> P;
+
+    if (FN.find(":") == string::npos)
+    {
+        FN = ScriptPath + FN;
+    }
+
+    int NumParams = 1;
+
+    for (int i = 1; i <= NumScriptEntries; i++)
+    {
+        if (ParameterIsNumeric(i))
+        {
+            NumParams++;
+        }
+        else
+        {
+            break;
+        }
+        CorrectParameterStringLength(i);
+    }
+
+    //Get file variables from script, or get default values if there were none in the script entry
+    if (FN.find("*") == FN.length() - 1)
+    {
+        FUIO = true;
+        FN.replace(FN.length() - 1, 1, "");
+    }
+
+    //Convert string to lowercase
+    for (int i = 0; i < FN.length(); i++)
+        FN[i] = tolower(FN[i]);
+
+    //Get file variables from script, or get default values if there were none in the script entry
+    if (FileExits(FN))
+    {
+        //P.clear();
+        ReadBinaryFile(FN, P);
+
+        switch (NumParams)
+        {
+        case 1:  //No parameters in script
+            
+            if ((FN[FN.length() - 4] = '.') && (FN[FN.length() - 3] = 's')&& (FN[FN.length() - 2] = 'i')&& (FN[FN.length() - 1] = 'd'))
+            {
+                FA = ConvertIntToHextString(P[P[7]] + (P[P[7] + 1] * 256), 4);
+                FO = ConvertIntToHextString(P[7] + 2, 8);
+                FL = ConvertIntToHextString(P.size() - P[7] - 2, 4);
+            }
+            else if (P.size() > 2)                                      //We have at least 3 bytes in the file
+            {
+                FA = ConvertIntToHextString(P[0] + (P[1] * 256), 4);    //First 2 bytes define load address
+                FO = "00000002";                                        //Offset=2, Length=prg length-2
+                FL = ConvertIntToHextString(P.size() - 2, 4);
+            }
+            else                                                        //Short file without paramters -> HARD STOP
+            {
+                cout << "***CRITICAL***\nFile parameteres are needed for the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                return false;
+            }
+            break;
+        case 2:  //One parameter in script
+            FA = ScriptEntryArray[1];                                   //Load address from script
+            FO = "00000000";                                            //Offset will be 0, length=prg length
+            FL = ConvertIntToHextString(P.size(), 4);
+            break;
+
+        case 3:  //Two parameters in script
+            FA = ScriptEntryArray[1];                                   //Load address from script
+            FO = ScriptEntryArray[2];                                   //Offset from script
+            FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
+            if (FON > P.size() - 1)
+            {
+                cout << "***CRITICAL***\nInvalid file offset detected in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                return false;
+            }
+            FL = ConvertIntToHextString(P.size() - FON, 4);             //Length=prg length-offset
+            break;
+
+        case 4:  //Three parameters in script
+            FA = ScriptEntryArray[1];                                   //Load address from script
+            FO = ScriptEntryArray[2];                                   //Offset from script
+            FL = ScriptEntryArray[3];                                   //Length from script
+            FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
+            if (FON > P.size() - 1)
+            {
+                cout << "***CRITICAL***\nInvalid file offset detected in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                return false;
+            }
+        }
+
+        FAN = ConvertHexStringToInt(FA);
+        FON = ConvertHexStringToInt(FO);
+        FLN = ConvertHexStringToInt(FL);
+
+        //Make sure file length is not longer than actual file
+        if(FON + FLN > P.size())
+        {
+            cout << "***CRITICAL***\nInvalid file length detected in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+            return false;
+        }
+
+        //Make sure file address+length<=&H10000
+        if (FAN + FLN > 0x10000)
+        {
+            cout << "***CRITICAL***\nInvalid file address and/or length detected in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+            return false;
+        }
+
+        //Trim file to the specified chunk (FLN number of bytes starting at FON, to Address of FAN)
+        vector<unsigned char>::iterator First = P.begin();
+        P.erase(First + FON + FLN, First + P.size() - 1);   //Trim P from end of file (Offset+Length-1) to end of vector
+        P.erase(First, First + FON - 1);                    //Trim P from beginning of file to Offset
+    }
+    else
+    {
+        cout << "***CRITICAL***\The following file does not exist: " << FN << "\n";
+        return false;
+    }
+
+    tmpFileNameV.push_back(FN);
+    tmpFileAddrV.push_back(FA);
+    tmpFileOffsV.push_back(FO);         //This may not be needed later
+    tmpFileLenV.push_back(FL);
+    tmpFileIOV.push_back(FUIO);
+
+    UncompBundleSize += FLN / 256;
+    if (FLN % 256 != 0)
+    {
+        UncompBundleSize++;
+    }
+    
+    if(FirstFileOfDisk)                     //If Demo Start is not specified, we will use the start address of the first file
+    {
+        FirstFileStart = FA;
+        FirstFileOfDisk = false;
+    }
+    
+    tmpPrgs.push_back(P);
+
+    return true;
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+bool AddFile() {
+
+    if (NewBundle)
+    {
+        if (!BundleDone)
+        {
+            return false;
+        }
+    }
+
+    //Then add file to bundle
+    if (!AddFileToBundle)
+    {
+        return false;
+    }
+
+    return true;
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1053,8 +1533,8 @@ bool BuildDiskFromScript() {
     /* generate a random number between 0 and 0Xffffff: */
     ProductID = rand() % 0xffffff;
 
-    SS = 0;
-    SE = 0;
+    LineStart = 0;
+    LineEnd = 0;
 
     FindNextScriptEntry();
 
@@ -1067,16 +1547,11 @@ bool BuildDiskFromScript() {
 
     }
 
-    //SS = SE;
-
     bool NewD = true;
     NewBundle = false;
     TmpSetNewBlock = false;
 
-    while (SE <= Script.length() - 1) {
-
-        LastSS = SS;
-        LastSE = SE;
+    while (LineEnd <= Script.length() - 1) {
 
         if (FindNextScriptEntry() == true)
         {
@@ -1084,15 +1559,11 @@ bool BuildDiskFromScript() {
 
             if (ScriptEntryType == EntryTypePath)
             {
-                if (NewD == false)
+                if (!NewD)
                 {
                     NewD = true;
                     if ((!FinishDisk(false)) || (!ResetDiskVariables()))
                         return false;
-                    //if (FinishDisk(false) == false)
-                    //   return false;
-                    //if (ResetDiskVariables() == false)
-                    //    return false;
                 }
 
                 if (NumScriptEntries > -1)
@@ -1102,15 +1573,11 @@ bool BuildDiskFromScript() {
             }
             else if (ScriptEntryType == EntryTypeHeader)
             {
-                if (NewD == false)
+                if (!NewD)
                 {
                     NewD = true;
                     if ((!FinishDisk(false)) || (!ResetDiskVariables()))
                         return false;
-                    //if (FinishDisk(false) == false)
-                    //   return false;
-                    //if (ResetDiskVariables() == false)
-                    //    return false;
                 }
 
                 if (NumScriptEntries > -1)
@@ -1120,15 +1587,11 @@ bool BuildDiskFromScript() {
             }
             else if (ScriptEntryType == EntryTypeID)
             {
-                if (NewD == false)
+                if (!NewD)
                 {
                     NewD = true;
                     if ((!FinishDisk(false)) || (!ResetDiskVariables()))
                         return false;
-                    //if (FinishDisk(false) == false)
-                    //   return false;
-                    //if (ResetDiskVariables() == false)
-                    //    return false;
                 }
 
                 if (NumScriptEntries > -1)
@@ -1138,15 +1601,11 @@ bool BuildDiskFromScript() {
             }
             else if (ScriptEntryType == EntryTypeName)
             {
-                if (NewD == false)
+                if (!NewD)
                 {
                     NewD = true;
                     if ((!FinishDisk(false)) || (!ResetDiskVariables()))
                         return false;
-                    //if (FinishDisk(false) == false)
-                    //   return false;
-                    //if (ResetDiskVariables() == false)
-                    //    return false;
                 }
 
                 if (NumScriptEntries > -1)
@@ -1156,15 +1615,11 @@ bool BuildDiskFromScript() {
             }
             else if (ScriptEntryType == EntryTypeStart)
             {
-                if (NewD == false)
+                if (!NewD)
                 {
                     NewD = true;
                     if ((!FinishDisk(false)) || (!ResetDiskVariables()))
                         return false;
-                    //if (FinishDisk(false) == false)
-                    //   return false;
-                    //if (ResetDiskVariables() == false)
-                    //    return false;
                 }
 
                 if (NumScriptEntries > -1)
@@ -1174,15 +1629,11 @@ bool BuildDiskFromScript() {
             }
             else if (ScriptEntryType == EntryTypeDirArt)
             {
-                if (NewD == false)
+                if (!NewD)
                 {
                     NewD = true;
                     if ((!FinishDisk(false)) || (!ResetDiskVariables()))
                         return false;
-                    //if (FinishDisk(false) == false)
-                    //   return false;
-                    //if (ResetDiskVariables() == false)
-                    //    return false;
                 }
                 if (ScriptEntryArray[0].find(":") == string::npos)
                 {
@@ -1196,22 +1647,18 @@ bool BuildDiskFromScript() {
                 }
                 else
                 {
-                    cout << "The following DirArt file does not exist: " << ScriptEntryArray[0] << "\nThe disk will be built without the DirArt file.\n";
+                    cout << "The following DirArt file does not exist: " << ScriptEntryArray[0] << "\nThe disk will be built without DirArt.\n";
                 }
 
                 NewBundle = true;
             }
             else if (ScriptEntryType == EntryTypeZP)
             {
-                if (NewD == false)
+                if (!NewD)
                 {
                     NewD = true;
                     if ((!FinishDisk(false)) || (!ResetDiskVariables()))
                         return false;
-                    //if (FinishDisk(false) == false)
-                    //   return false;
-                    //if (ResetDiskVariables() == false)
-                    //    return false;
                 }
 
                 if (DiskCnt == 0)
@@ -1226,15 +1673,11 @@ bool BuildDiskFromScript() {
             }
             else if (ScriptEntryType == EntryTypeIL0)
             {
-                if (NewD == false)
+                if (!NewD)
                 {
                     NewD = true;
                     if ((!FinishDisk(false)) || (!ResetDiskVariables()))
                         return false;
-                    //if (FinishDisk(false) == false)
-                    //   return false;
-                    //if (ResetDiskVariables() == false)
-                    //    return false;
                 }
 
                 if (NumScriptEntries > -1)
@@ -1258,15 +1701,11 @@ bool BuildDiskFromScript() {
             }
             else if (ScriptEntryType == EntryTypeIL1)
             {
-                if (NewD == false)
+                if (!NewD)
                 {
                     NewD = true;
                     if ((!FinishDisk(false)) || (!ResetDiskVariables()))
                         return false;
-                    //if (FinishDisk(false) == false)
-                    //   return false;
-                    //if (ResetDiskVariables() == false)
-                    //    return false;
                 }
 
                 if (NumScriptEntries > -1)
@@ -1290,15 +1729,11 @@ bool BuildDiskFromScript() {
             }
             else if (ScriptEntryType == EntryTypeIL2)
             {
-                if (NewD == false)
+                if (!NewD)
                 {
                     NewD = true;
                     if ((!FinishDisk(false)) || (!ResetDiskVariables()))
                         return false;
-                    //if (FinishDisk(false) == false)
-                    //   return false;
-                    //if (ResetDiskVariables() == false)
-                    //    return false;
                 }
 
                 if (NumScriptEntries > -1)
@@ -1322,15 +1757,11 @@ bool BuildDiskFromScript() {
             }
             else if (ScriptEntryType == EntryTypeIL3)
             {
-                if (NewD == false)
+                if (!NewD)
                 {
                     NewD = true;
                     if ((!FinishDisk(false)) || (!ResetDiskVariables()))
                         return false;
-                    //if (FinishDisk(false) == false)
-                    //   return false;
-                    //if (ResetDiskVariables() == false)
-                    //    return false;
                 }
 
                 if (NumScriptEntries > -1)
@@ -1354,15 +1785,11 @@ bool BuildDiskFromScript() {
             }
             else if (ScriptEntryType == EntryTypeProdID)
             {
-                if (NewD == false)
+                if (!NewD)
                 {
                     NewD = true;
                     if ((!FinishDisk(false)) || (!ResetDiskVariables()))
                         return false;
-                    //if (FinishDisk(false) == false)
-                    //   return false;
-                    //if (ResetDiskVariables() == false)
-                    //    return false;
                 }
                 if (NumScriptEntries > -1)
                 {
@@ -1380,15 +1807,11 @@ bool BuildDiskFromScript() {
             }
             else if (ScriptEntryType == EntryTypeTracks)
             {
-                if (NewD == false)
+                if (!NewD)
                 {
                     NewD = true;
                     if ((!FinishDisk(false)) || (!ResetDiskVariables()))
                         return false;
-                    //if (FinishDisk(false) == false)
-                    //   return false;
-                    //if (ResetDiskVariables() == false)
-                    //    return false;
                 }
 
                 if (NumScriptEntries > -1)
@@ -1410,13 +1833,11 @@ bool BuildDiskFromScript() {
             }
             else if (ScriptEntryType == EntryTypeHSFile)
             {
-                if (NewD == false)
+                if (!NewD)
                 {
                     NewD = true;
                     if ((!FinishDisk(false)) || (!ResetDiskVariables()))
                         return false;
-                    //if (!ResetDiskVariables())
-                    //    return false;
                 }
                 if (NumScriptEntries > -1)
                 {
@@ -1432,34 +1853,44 @@ bool BuildDiskFromScript() {
             else if (ScriptEntryType == EntryTypeScript)
             {
             if (!InsertScript(ScriptEntryArray[0]))
+            {
                 return false;
+            }
                 
-            NewBundle = true;
+                NewBundle = true;   //Files in the embedded script will ALWAYS be in a new bundle (i.e. scripts cannot be embedded in a bundle)!!!
             }
             else if (ScriptEntryType == EntryTypeFile)
             {
+                //Add files to bundle array, if new bundle=true, we will first sort, compress and add previous bundle to disk
+                if (!AddFile)
+                    return false;
 
-                NewD = false;
+                NewD = false;       //We have added at least one file to this disk, so next disk info entry will be a new disk
                 NewBundle = false;
             }
             else if (ScriptEntryType == EntryTypeMem)
             {
 
+                //if(!AddVirtualFile)
+                //  return false;
+
                 NewBundle = false;
+                //NewD - false;     //IS THIS NEEDED???
             }
             else if (ScriptEntryType == EntryTypeAlign)
             {
-                if (NewD == false)
+                if (!NewD)
                 {
                     TmpSetNewBlock = true;
                 }
             }
             else
             {
-                if (NewBundle == true)
+                if (NewBundle)
                 {
-                    //if (BundleDone() == false)
-                    //  return false;
+                    if (!BundleDone())
+                        return false;
+                    
                     NewBundle = false;
                 }
             }
@@ -1468,9 +1899,10 @@ bool BuildDiskFromScript() {
         {
             break;
         }
-
-        //SS = SE;
     }
+
+    if (!FinishDisk(true))
+        return false;
 
     return true;
 
@@ -1482,7 +1914,7 @@ void SetScriptPath(string sPath, string aPath)
 {
     if (sPath.find(":") == string::npos)
     {
-        sPath = aPath + sPath;                      //sPAth is relative - use Sparkle's base folder to make it a full path
+        sPath = aPath + sPath;                      //sPath is relative - use Sparkle's base folder to make it a full path
     }
 
     ScriptName = sPath;
@@ -1516,7 +1948,7 @@ int main(int argc, char* argv[])
         ///cerr << "Usage: Sparkle script.sls" << '\n';
 
 		//return 1;
-        string ScriptFileName = "Test.sls";
+        string ScriptFileName = "C:\\Tmp\\SpaceXDemo.sls";
         Script = ReadFileToString(ScriptFileName);
 
         SetScriptPath(ScriptFileName, AppPath);
@@ -1561,7 +1993,8 @@ int main(int argc, char* argv[])
 
     //WriteDiskImage("C:\\Tmp\\Disk.d64");
 
-    BuildDiskFromScript();
+    if (!BuildDiskFromScript())
+        return -1;
 
     return 0;
 }
