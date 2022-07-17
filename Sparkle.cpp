@@ -28,7 +28,7 @@ int NumScriptEntries = -1;
 
 const int StdSectorsPerDisk = 664;                                          //Standard disk
 const int StdTracksPerDisk = 35;
-const int StdBytesPerDisk = 174848;                                         //including track 18
+const int StdBytesPerDisk = (StdSectorsPerDisk + 19) * 256;                 //including track 18
 
 const int ExtSectorsPerDisk = StdSectorsPerDisk + 85;                       //Exnteded disk
 const int ExtTracksPerDisk = 40;
@@ -39,7 +39,7 @@ int TracksPerDisk = StdTracksPerDisk;
 
 int BlocksFree = SectorsPerDisk;
 
-unsigned char TabT[ExtSectorsPerDisk], TabS[ExtSectorsPerDisk], TabSCnt[ExtSectorsPerDisk], TabStartS[ExtTracksPerDisk+1];  //TabStartS is 1 based
+char TabT[ExtSectorsPerDisk]{}, TabS[ExtSectorsPerDisk]{}, TabSCnt[ExtSectorsPerDisk]{}, TabStartS[ExtTracksPerDisk + 1]{};  //TabStartS is 1 based
 
 char Disk[ExtBytesPerDisk];
 unsigned char NextTrack;
@@ -161,7 +161,8 @@ unsigned char LastBlockCnt = 0;
 int LoaderBundles = 1;
 unsigned char FilesInBuffer = 1;
 
-int Track[41]{}, CT, CS, BlockCnt;
+int Track[41]{};
+int CT, CS, BlockCnt;
 unsigned char StartTrack = 1;
 unsigned char StartSector = 0;
 
@@ -210,7 +211,7 @@ string ConvertIntToHextString(const int& i, const int& hexlen)
     {
         hexstring = "0" + hexstring;
     }
-    
+
     return hexstring;
 }
 
@@ -323,6 +324,193 @@ void WriteDiskImage(const string& DiskName)
 
     ofstream myFile(DiskName, ios::out | ios::binary);
     myFile.write(Disk, BytesPerDisk);
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+void WriteBinaryFile(const string& FileName, char* Buffer, streamsize Size) {
+
+    ofstream myFile(FileName, ios::out | ios::binary);
+    myFile.write(Buffer, Size);
+
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+bool SectorOK(unsigned char T, unsigned char S) {
+
+    int BAMPos = Track[18] + (T * 4) + 1 + (S / 8) + ((T > 35) ? (7 * 4) : 0);
+    int BAMBit = 1 << (S & 8);
+
+    return (Disk[BAMPos] & BAMBit) != 0;
+
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+bool FindNextFreeSector() {
+
+    int Counter = 0;
+    int MaxS = (CT < 18) ? 21 : (CT < 25) ? 19 : (CT < 31) ? 18 : 17;
+
+    while (Counter < MaxS)
+    {
+        if (SectorOK(CT, CS))
+            return true;
+
+        Counter++;
+        (CS < MaxS) ? CS++ : CS = 0;
+    }
+
+    return false;
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+void(DeleteBit(unsigned char T, unsigned char S, bool UpdateFreeBlocks)) {
+
+    int BAMPos = Track[18] + (T * 4) + 1 + (S / 8) + ((T > 35) ? (7 * 4) : 0);
+    int BAMBit = 255 - (1 << (S & 8));
+
+    Disk[BAMPos] &= BAMBit;
+
+    BAMPos = Track[18] + (T * 4) + (S / 8) + ((T > 35) ? (7 * 4) : 0);
+
+    Disk[BAMPos]--;
+
+    if (UpdateFreeBlocks)
+        BlocksFree--;
+
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+bool TrackIsFull(unsigned char T) {
+
+    return (Disk[Track[18] + (T * 4) + ((T > 35) ? (7 * 4) : 0)] == 0);
+
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+void CalcNextSector(unsigned char IL) {
+
+    int MaxS = (CT < 18) ? 21 : (CT < 25) ? 19 : (CT < 31) ? 18 : 17;
+
+    if (CS >= MaxS)
+    {
+        CS -= MaxS;
+        CS -= ((CT < 18) && (CS > 0)) ? 1 : 0;
+    }
+
+    CS += IL;
+
+    if (CS >= MaxS)
+    {
+        CS -= MaxS;
+        CS -= ((CT < 18) && (CS > 0)) ? 1 : 0;
+    }
+
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+bool AddInterleave(unsigned char IL) {
+
+    //THIS IS ONLY USED BY InjectLoader()!!!
+
+    if (TrackIsFull(CT))
+    {
+        if ((CT == 35) || (CT == 18))
+            return false;
+
+        CalcNextSector(IL);
+
+        CT++;
+
+        if (CT == 18)
+        {
+            CT++;
+            CS = 3;
+        }
+        //First sector in new track will be #1 and NOT #0!!!
+        //CS = StartSector
+    }
+    else
+    {
+        CalcNextSector(IL);
+    }
+
+    return FindNextFreeSector();
+
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+unsigned char EORtransform(unsigned char Input) {
+
+    switch (Input & 0x09){
+    case 0:
+        return (Input ^ 0x7f);
+    case 1:
+        return (Input ^ 0x76);
+    case 8:
+        return (Input ^ 0x76);
+    case 9:
+        return (Input ^ 0x7f);
+    }
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+void InjectDirBlocks() {
+
+    //DirBlocks(0) = EORtransform(Track)
+    //DirBlocks(1) = EORtransform(Sector)
+    //DirBlocks(2) = EORtransform(Remaining sectors on track)
+    //DirBlocks(3) = BitPtr
+
+    if (BundleNo > 0)
+    {
+        for (int i = BundleNo + 1; i < 128; i++)
+        {
+            DirBlocks[(i * 4) + 3] = DirBlocks[(BundleNo * 4) + 3];
+            DirPtr[i] = DirPtr[BundleNo];
+        }
+    }
+
+    for (int i = 0; i < 128; i++)
+    {
+        DirBlocks[i * 4] = EORtransform(TabT[DirPtr[i]]);
+        DirBlocks[(i * 4) + 1] = EORtransform(TabStartS[TabT[DirPtr[i]]]);
+        DirBlocks[(i * 4) + 2] = EORtransform(TabSCnt[DirPtr[i]]);
+    }
+
+    //Resort directory sectors to allow simple copy from $0100 to $0700
+    //Dir Block: $00,$ff,$fe,$fd,$fc,...,$01
+    //Buffer:    $00,$01,$02,$03,$04,...,$ff
+
+    unsigned char DB0[256]{}, DB1[256]{};
+    int B = 0;
+
+    for (int i = 0; i < 256; i++)
+    {
+        DB0[B] = DirBlocks[i];
+        DB1[B] = DirBlocks[i + 256];
+        B--;
+        if (B < 0)
+            B += 256;
+    }
+    for (int i = 0; i < 256; i++)
+    {
+        DirBlocks[i] = DB0[i];
+        DirBlocks[i + 256] = DB1[i];
+    }
+
+    for (int i = 0; i < 512; i++)
+    {
+        Disk[Track[18] + (17 * 256) + i] = DirBlocks[i];
+    }
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -783,7 +971,6 @@ bool ResetDiskVariables() {
     IL2 = DefaultIL2;
     IL3 = DefaultIL3;
 
-
     BufferCnt = 0;
     BundleNo = 0;
     MaxBundleNoExceeded = false;
@@ -818,7 +1005,7 @@ bool ResetDiskVariables() {
     FirstFileOfDisk = true;  //To save Start Address of first file on disk if Demo Start is not specified
 
     //-------------------------------------------------------------
-    
+
     BundleCnt = -1;        //'WILL BE INCREASED TO 0 IN ResetPartVariables
     LoaderBundles = 1;
     FilesInBuffer = 1;
@@ -980,7 +1167,7 @@ bool InsertScript(string& SubScriptPath)
     for (vector <string>::size_type i = 0; i != Lines.size(); i++)
     {
         ScriptEntry = (Lines[i]);
-        
+
         SplitScriptEntry();                 //This will also convert the script entry to lower case
 
         //Skip Script Header
@@ -988,7 +1175,7 @@ bool InsertScript(string& SubScriptPath)
         {
             if (S != "")
                 S += "\n";
-            
+
             //Add relative path of subscript to relative path of subscript entries
             if ((ScriptEntryType == EntryTypeFile) || (ScriptEntryType == EntryTypeMem) || (ScriptEntryType == EntryTypeHSFile))
             {
@@ -1017,7 +1204,7 @@ bool InsertScript(string& SubScriptPath)
     string SS1 = Script.substr(0, LineStart);
     string SS2 = (LineEnd < Script.length())? Script.substr(LineEnd, Script.length() - (LineEnd)) : "";
     Script = SS1 + S + SS2;
-    
+
 /*
     ofstream out1("C:\\Tmp\\SS1.sls");
     out1 << SS1;
@@ -1123,7 +1310,7 @@ bool CompressBundle() {             //NEEDS PackFile() and CloseFile()
         //Mark the last file in a bundle for better compression
         if (i == Prgs.size() - 1)
             LastFileOfBundle = true;
-        
+
         //The only two parameters that are needed are FA and FUIO... FileLenA(i) is not used
 
         if (PartialFileIndex == -1)
@@ -1192,7 +1379,7 @@ bool SortBundle() {
                         int OLS = (FSO >= FSI) ? FSO : FSI;
                         int OLE = (FEO <= FEI) ? FEO : FEI;
 
-                        if ((OLS >= 0xD000) && (OLE <= 0xDFFF) && (tmpPrgs[o].FileIO != tmpPrgs[i].FileIO)) 
+                        if ((OLS >= 0xD000) && (OLE <= 0xDFFF) && (tmpPrgs[o].FileIO != tmpPrgs[i].FileIO))
                         {
                             //Overlap is IO memory only and different IO status - NO OVERLAP
                         }
@@ -1282,9 +1469,9 @@ bool SortBundle() {
         //We may be overcalculating here but that is safer than undercalculating which would result in buggy decompression
         //If the last block is not the actual last block of the bundle...
         //With overcalculation, worst case scenario is a little bit worse compression ratio of the last block
-       
+
        BitsNeededForNextBundle = (6 + CheckNextIO(tmpPrgs[0].iFileAddr, tmpPrgs[0].iFileLen, tmpPrgs[0].FileIO)) * 8;
-       
+
        // +/- 1 Match Bit which will be added later in CloseBuffer if needed
 
     }
@@ -1318,7 +1505,7 @@ bool BundleDone() {
         //Then reset bundle variables (file vectors, prg vector, block cnt), increase bundle counter
         ResetBundleVariables();
     }
-    
+
     return true;
 }
 
@@ -1377,7 +1564,7 @@ bool AddFileToBundle() {
         switch (NumParams)
         {
         case 1:  //No parameters in script
-            
+
             if ((FN[FN.length() - 4] == '.') && (FN[FN.length() - 3] == 's')&& (FN[FN.length() - 2] == 'i')&& (FN[FN.length() - 1] == 'd'))
             {   //SID file
                 FA = ConvertIntToHextString(P[P[7]] + (P[P[7] + 1] * 256), 4);
@@ -1471,13 +1658,13 @@ bool AddFileToBundle() {
     {
         UncompBundleSize++;
     }
-    
+
     if(FirstFileOfDisk)                     //If Demo Start is not specified, we will use the start address of the first file
     {
         FirstFileStart = FA;
         FirstFileOfDisk = false;
     }
-    
+
     tmpPrgs.push_back(FileStruct(P, FN, FA, FO, FL, FUIO));
 
     return true;
@@ -1518,7 +1705,61 @@ void AddDirArt() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void AddDemoNameToDisk() {
+void AddDemoNameToDisk(unsigned char T, unsigned char S) {
+
+    int B;
+    string DN = DemoName;
+    unsigned char A{};
+
+    if ((DN == "") && (DirArtName != ""))
+    {
+        //No DemoName defined, check if we have a DirArt file attached
+        //Dirart attached, we will add first dir entry there
+        return;
+    }
+
+    CT = 18;
+    CS = 1;
+
+    int Cnt = Track[CT] + (CS * 256);
+
+    while (Disk[Cnt] != 0)
+    {
+        Cnt = Track[Disk[Cnt]] + (Disk[Cnt + 1] * 256);
+    }
+
+    B = 2;
+
+    while (Disk[Cnt + B] != 0x00)
+    {
+        B += 32;
+        if (B > 256)
+        {
+            B -= 256;
+            CS += 4;
+            Disk[Cnt] = CT;
+            Disk[Cnt + 1] = CS;
+            Cnt = Track[CT] + (CS * 256);
+            Disk[Cnt] = 0;
+            Disk[Cnt + 1] = 255;
+        }
+    }
+
+    Disk[Cnt + B] = 0x82;
+    Disk[Cnt + B + 1] = T;
+    Disk[Cnt + B + 2] = S;
+
+    for (int W = 0; W < 16; W++)
+    {
+        Disk[Cnt + B + 3 + W] = 0xa0;
+    }
+
+    for (int W = 0; W < DN.length(); W++)
+    {
+        A = Ascii2DirArt[DN[W]];
+        Disk[Cnt + B + 3 + W] = A;
+    }
+    //Disk[Cnt + B + 0x1c] = LoaderBlockCount;    //Length of boot loader in blocks
 
 }
 
@@ -1553,7 +1794,7 @@ bool AddCompressedBundlesToDisk() {
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
 bool CloseBuffer() {
-    
+
     return true;
 }
 
@@ -1581,7 +1822,7 @@ bool FinishDisk(bool LastDisk) {
         cout << "***INFO***\nThe number of file bundles is greater than 128 on this disk!\n";
         cout << "You can only access bundles 0-127 by bundle index. The rest can only be loaded using the LoadNext function.";
     }
-    
+
     //Now add compressed parts to disk
     if (!AddCompressedBundlesToDisk())
         return false;
@@ -1591,9 +1832,9 @@ bool FinishDisk(bool LastDisk) {
         return false;
 
     AddHeaderAndID();
-    AddDemoNameToDisk();        //AddDemoNameToDisk(-1, 18, 7)
+    AddDemoNameToDisk(18,7);        //AddDemoNameToDisk(-1, 18, 7)
     AddDirArt();
-    
+
     //BytesSaved += Int(BitsSaved / 8)
     //BitsSaved = BitsSaved Mod 8
 
@@ -1937,7 +2178,7 @@ bool BuildDiskFromScript() {
             {
                 return false;
             }
-                
+
                 NewBundle = true;   //Files in the embedded script will ALWAYS be in a new bundle (i.e. scripts cannot be embedded in a bundle)!!!
             }
             else if (ScriptEntryType == EntryTypeFile)
@@ -1971,7 +2212,7 @@ bool BuildDiskFromScript() {
                 {
                     if (!BundleDone())
                         return false;
-                    
+
                     NewBundle = false;
                 }
             }
@@ -2018,17 +2259,129 @@ void SetScriptPath(string sPath, string aPath)
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
+void CalcTabs(){
+
+    int SMax{}, IL{};
+    char Sectors[ExtSectorsPerDisk + 19]{};
+    int Tr[41]{};       //0-40
+    int S = 0;
+    int LastS = 0;
+    int i = 0;
+
+    for (int T = 1; T < ExtTracksPerDisk; T++)
+    {
+        if (T < 18)
+        {
+            Tr[T + 1] = Tr[T] + 21;
+            Track[T + 1] = Track[T] + (21 * 256);
+        }
+        else if (T < 25)
+        {
+            Tr[T + 1] = Tr[T] + 19;
+            Track[T + 1] = Track[T] + (19 * 256);
+        }
+        else if (T < 31)
+        {
+            Tr[T + 1] = Tr[T] + 18;
+            Track[T + 1] = Track[T] + (18 * 256);
+        }
+        else
+        {
+            Tr[T + 1] = Tr[T] + 17;
+            Track[T + 1] = Track[T] + (17 * 256);
+        }
+    }
+
+    for (int T = 1; T <= ExtTracksPerDisk; T++)
+    {
+        if (T == 18)
+        {
+            TabStartS[T] = -1;
+            T++;
+            S += 2;
+        }
+
+        int SCnt = 0;
+
+        if (T < 18)
+        {
+            SMax = 21;
+            IL = IL0 % SMax;
+        }
+        else if (T < 25)
+        {
+            SMax = 19;
+            IL = IL1 % SMax;
+        }
+        else if (T < 31)
+        {
+            SMax = 18;
+            IL = IL2 % SMax;
+        }
+        else
+        {
+            SMax = 17;
+            IL = IL3 % SMax;
+        }
+
+        if (S >= SMax)
+        {
+            S -= SMax;
+            if ((T < 18) && (S > 0))    //Wrap around: Subtract 1 if S>0 for tracks 1-17
+                S--;
+        }
+        TabStartS[T] = S;
+
+        while (SCnt < SMax)
+        {
+        NextSector:
+            if (Sectors[Tr[T] + S] == 0)
+            {
+                Sectors[Tr[T] + S] = 1;
+                TabT[i] = T;
+                TabS[i] = S;
+                LastS = S;
+                TabSCnt[i] = SMax - SCnt;
+                i++;
+                SCnt++;
+                S += IL;
+
+                if (S >= SMax)
+                {
+                    S -= SMax;
+                    if ((T < 18) && (S > 0))    //Wrap around: Subtract 1 if S>0 for tracks 1-17
+                        S--;
+                }
+            }
+            else
+            {
+                S++;
+                if (S >= SMax)
+                    S = 0;
+            }
+        }
+    }
+
+    //WriteBinaryFile("C:\\Tmp\\TabT.bin", TabT, sizeof(TabT));
+    //WriteBinaryFile("C:\\Tmp\\TabS.bin", TabS, sizeof(TabS));
+    //WriteBinaryFile("C:\\Tmp\\TabSCnt.bin", TabSCnt, sizeof(TabSCnt));
+    //WriteBinaryFile("C:\\Tmp\\TabStartS.bin", TabStartS, sizeof(TabStartS));
+
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
 int main(int argc, char* argv[])
 {
-    cout << "Sparkle by Sparta/OMG 2019-2022" << '\n';
+    cout << "Sparkle by Sparta/OMG 2019-2022\n";
 
     string AppPath{filesystem::current_path().string() + "\\"};
 
     if (argc < 2)
     {
-        ///cerr << "***INFO***\nUsage: Sparkle script.sls\nFor details please read the user manual!";
-
+        //cerr << "***INFO***\nUsage: Sparkle script.sls\nFor details please read the user manual!\n";
 		//return 1;
+        
         string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\GP\\GPSpaceXDemo\\6502\\SpaceXDemo.sls";
         Script = ReadFileToString(ScriptFileName);
 
@@ -2049,26 +2402,7 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    Track[1] = 0;
-    for (int T = 1; T < ExtTracksPerDisk - 1; T++)
-    {
-        if (T < 18)
-        {
-            Track[T + 1] = Track[T] + (21 * 256);
-        }
-        else if (T < 25)
-        {
-            Track[T + 1] = Track[T] + (19 * 256);
-        }
-        else if (T < 31)
-        {
-            Track[T + 1] = Track[T] + (18 * 256);
-        }
-        else
-        {
-            Track[T + 1] = Track[T] + (17 * 256);
-        }
-    }
+    CalcTabs();
 
     //NewDisk();
 

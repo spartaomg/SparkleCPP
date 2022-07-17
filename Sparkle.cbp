@@ -36,6 +36,13 @@
 		<Linker>
 			<Add library="stdc++fs" />
 		</Linker>
+		<Unit filename="Ascii2DirArt.cpp" />
+		<Unit filename="Common.h" />
+		<Unit filename="Petscii2DirArt.cpp" />
+		<Unit filename="SD.cpp" />
+		<Unit filename="SL.cpp" />
+		<Unit filename="SS.cpp" />
+		<Unit filename="SSIO.cpp" />
 		<Unit filename="Sparkle.cpp" />
 		<Extensions />
 	</Project>

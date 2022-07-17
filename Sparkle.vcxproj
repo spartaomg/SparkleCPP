@@ -107,7 +107,8 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpp20</LanguageStandard>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <Optimization>Custom</Optimization>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -132,7 +133,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Ascii2DirArt.cpp" />
+    <ClCompile Include="Petscii2DirArt.cpp" />
+    <ClCompile Include="SD.cpp" />
+    <ClCompile Include="SL.cpp" />
     <ClCompile Include="Sparkle.cpp" />
+    <ClCompile Include="SS.cpp" />
+    <ClCompile Include="SSIO.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Common.h" />
