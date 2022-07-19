@@ -15,6 +15,12 @@
 using namespace std;
 using namespace std::filesystem;
 
+unsigned char VersionMajor = 2;
+unsigned char VersionMinor = 3;
+unsigned long int VersionBuild = 0x220718;
+
+unsigned char LoaderBlockCount = 0;
+
 string Script = "";
 string ScriptPath = "";
 string ScriptName = "";
@@ -72,14 +78,14 @@ string EntryTypeFile = "file:";
 string EntryTypeMem = "mem:";
 string EntryTypeAlign = "align";
 
-int ProductID = 0;
+unsigned long int ProductID = 0;
 unsigned int LineStart, LineEnd;    //LastSS, LastSE;
 bool NewBundle;
 
 const int MaxNumDisks = 127;
 int DiskSizeA(MaxNumDisks);
 
-int DiskCnt = -1;
+char DiskCnt = -1;
 int BundleCnt = -1;
 int FileCnt = -1;
 int VFileCnt = -1;
@@ -158,11 +164,11 @@ string DirEntry = "";
 
 int BlockPtr;
 unsigned char LastBlockCnt = 0;
-int LoaderBundles = 1;
+char LoaderBundles = 1;
 unsigned char FilesInBuffer = 1;
 
 int Track[41]{};
-int CT, CS, BlockCnt;
+int CT, CS, CP, BlockCnt;
 unsigned char StartTrack = 1;
 unsigned char StartSector = 0;
 
@@ -175,6 +181,7 @@ vector<int> BundleOrigSizeV;
 double UncompBundleSize = 0;
 
 int BitsNeededForNextBundle = 0;
+int BlocksUsedBySaver = 0;
 
 //VARIABLES ALSO USED BY PACKER
 
@@ -187,6 +194,8 @@ int PartialFileIndex, PartialFileOffset;
 
 int PrgAdd, PrgLen;
 bool FileUnderIO = false;
+
+bool SaverSupportsIO = false;
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -718,7 +727,7 @@ bool AddHSFile()
         HSFile.erase(First + FON + FLN, First + HSFile.size() - 1); //Trim HSFile from end of file (Offset+Length-1) to end of vector
         HSFile.erase(First, First + FON - 1);                       //Trim HSFile from beginning of file to Offset
 
-        HSFileName = FN + ((FUIO) ? "*" : "");
+        HSFileName = FN + (FUIO ? "*" : "");
         HSAddress = FAN;
         HSOffset = FON;
         HSLength = FLN;
@@ -762,7 +771,7 @@ bool AddHSFile()
             HSFile.reserve(FLN);
             HSFile.resize(FLN, 0);
 
-            HSFileName = FN + ((FUIO) ? "*" : "");
+            HSFileName = FN + (FUIO ? "*" : "");
             HSAddress = FAN;
             HSOffset = FON;
             HSLength = FLN;
@@ -1511,8 +1520,165 @@ bool BundleDone() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool AddFileToBundle() {
+bool AddVirtualFile()
+{
 
+    if (NewBundle) {
+        NewBundle = false;
+        if (!BundleDone())
+            return false;
+    }
+
+    string FN = ScriptEntryArray[0];
+    string FA = "";
+    string FO = "";
+    string FL = "";
+    int FAN = 0;
+    int FON = 0;
+    int FLN = 0;
+    bool FUIO = false;
+
+    vector<unsigned char> P;
+
+    if (FN.find(":") == string::npos)
+    {
+        FN = ScriptPath + FN;
+    }
+
+    int NumParams = 1;
+
+    //Correct file parameter lengths to 4-8 characters
+    for (int i = 1; i <= NumScriptEntries; i++)
+    {
+        if (ParameterIsNumeric(i))
+        {
+            NumParams++;
+        }
+        else
+        {
+            break;
+        }
+        CorrectParameterStringLength(i);
+    }
+
+    if (FN.find("*") == FN.length() - 1)
+    {
+        FUIO = true;
+        FN.replace(FN.length() - 1, 1, "");
+    }
+
+    //Convert string to lowercase
+    for (int i = 0; i < FN.length(); i++)
+        FN[i] = tolower(FN[i]);
+
+    //Get file variables from script, or get default values if there were none in the script entry
+    if (FileExits(FN))
+    {
+        ReadBinaryFile(FN, P);
+
+        switch (NumParams)
+        {
+        case 1:  //No parameters in script
+
+            if ((FN[FN.length() - 4] == '.') && (FN[FN.length() - 3] == 's') && (FN[FN.length() - 2] == 'i') && (FN[FN.length() - 1] == 'd'))
+            {   //SID file
+                FA = ConvertIntToHextString(P[P[7]] + (P[P[7] + 1] * 256), 4);
+                FO = ConvertIntToHextString(P[7] + 2, 8);
+                FL = ConvertIntToHextString(P.size() - P[7] - 2, 4);
+            }
+            else if (P.size() > 2)                                      //We have at least 3 bytes in the file
+            {
+                FA = ConvertIntToHextString(P[0] + (P[1] * 256), 4);    //First 2 bytes define load address
+                FO = "00000002";                                        //Offset=2, Length=prg length-2
+                FL = ConvertIntToHextString(P.size() - 2, 4);
+            }
+            else                                                        //Short file without paramters -> HARD STOP
+            {
+                cout << "***CRITICAL***\nFile parameteres are needed for the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                return false;
+            }
+            break;
+        case 2:  //One parameter in script
+            FA = ScriptEntryArray[1];                                   //Load address from script
+            FO = "00000000";                                            //Offset will be 0, length=prg length
+            FL = ConvertIntToHextString(P.size(), 4);
+            break;
+
+        case 3:  //Two parameters in script
+            FA = ScriptEntryArray[1];                                   //Load address from script
+            FO = ScriptEntryArray[2];                                   //Offset from script
+            FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
+            if (FON > P.size() - 1)
+            {
+                cout << "***CRITICAL***\nInvalid file offset detected in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                return false;
+            }
+            FL = ConvertIntToHextString(P.size() - FON, 4);             //Length=prg length-offset
+            break;
+
+        case 4:  //Three parameters in script
+            FA = ScriptEntryArray[1];                                   //Load address from script
+            FO = ScriptEntryArray[2];                                   //Offset from script
+            FL = ScriptEntryArray[3];                                   //Length from script
+            FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
+            if (FON > P.size() - 1)
+            {
+                cout << "***CRITICAL***\nInvalid file offset detected in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                return false;
+            }
+        }
+
+        FAN = ConvertHexStringToInt(FA);
+        FON = ConvertHexStringToInt(FO);
+        FLN = ConvertHexStringToInt(FL);
+
+        //Make sure file length is not longer than actual file
+        if (FON + FLN > P.size())
+        {
+            cout << "***CRITICAL***\nInvalid file length detected in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+            return false;
+        }
+
+        //Make sure file address+length<=&H10000
+        if (FAN + FLN > 0x10000)
+        {
+            cout << "***CRITICAL***\nInvalid file address and/or length detected in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+            return false;
+        }
+
+        //Trim file to the specified chunk (FLN number of bytes starting at FON, to Address of FAN)
+        if (FON + FLN < P.size())
+        {
+            //Trim P from end of file (Offset+Length-1) to end of vector
+            vector<unsigned char>::iterator First = P.begin() + FON + FLN;
+            vector<unsigned char>::iterator Last = P.end();
+            P.erase(First, Last);
+        }
+        if (FON > 0)
+        {
+            //Trim P from beginning of file to Offset
+            vector<unsigned char>::iterator First = P.begin();
+            vector<unsigned char>::iterator Last = P.begin() + FON;
+            P.erase(First, Last);
+        }
+    }
+    else
+    {
+        cout << "***CRITICAL***\The following Mem file does not exist: " << FN << "\n";
+        return false;
+    }
+
+    VFileCnt += 1;
+
+    tmpVFiles.push_back(FileStruct(P, FN, FA, FO, FL, FUIO));
+
+    return true;
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+bool AddFileToBundle() {
+    
     string FN = ScriptEntryArray[0];
     string FA = "";
     string FO = "";
@@ -1699,8 +1865,181 @@ void UpdateBlocksFree() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
+void FindNextDirSector() {
+
+    int LastDirSector = DirSector;
+
+    if (DirSector < 6)
+    {
+        DirSector++;
+    }
+    else
+    {
+        DirSector = 0;
+    }
+
+    Disk[Track[DirTrack] + (LastDirSector * 256)] = DirTrack;
+    Disk[Track[DirTrack] + (LastDirSector * 256) + 1] = DirSector;
+
+
+    if (DirSector != 0)
+    {
+        Disk[Track[DirTrack] + (DirSector * 256)] = 0;
+        Disk[Track[DirTrack] + (DirSector * 256) + 1] = 255;
+    }
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+void FindNextDirPos() {
+
+    DirPos = 0;
+
+    while (DirSector != 0)
+    {
+        for (int i = 2; i < 256; i += 32)
+        {
+            if (Disk[Track[DirTrack] + (DirSector * 256) + i] == 0)
+            {
+                DirPos = i;
+                return;
+            }
+        }  
+        FindNextDirSector();
+    }
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+void ConvertCArrayToDirArt() {
+
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+void ConvertBintoDirArt(string DirArtType) {
+
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+void ConvertTxtToDirArt() {
+
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+void ConvertD64ToDirArt() {
+    
+    vector<unsigned char> DA;
+    
+    ReadBinaryFile(DirArtName, DA);
+    int T = 18;
+    int S = 1;
+
+    DirTrack = 18;
+    DirSector = 1;
+
+    bool DirFull = false;
+    int DAPtr = Track[T] + (S * 256);
+
+    DA[DAPtr] = T;
+    DA[DAPtr + 1] = S;
+
+    while ((!DirFull) && (DA[DAPtr] != 0))
+    {
+        DAPtr = Track[T] + (S * 256);
+        for (int b = 2; b < 256; b += 32)
+        {
+            //FindNextDirPos();
+            if (DirPos != 0)
+            {
+                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0] = 0x82;      //"PRG" -  all dir entries will point at first file in dir
+                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 1] = 18;        //Track 18 (track pointer of boot loader)
+                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 2] = 7;         //Sector 7 (sector pointer of boot loader)
+
+                for (int i = 0; i < 16; i++)
+                {
+                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = DA[DAPtr + b + 3 + i];
+                }
+
+                if ((DirTrack == 18) && (DirSector == 1) && (DirPos == 2))
+                {
+                    //Very first dir entry, also add loader block count
+                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0x1c] = LoaderBlockCount;
+                }
+            }
+            else
+            {
+                DirFull = true;
+                break;
+            }
+        }
+        T = DA[DAPtr];
+        S = DA[DAPtr + 1];
+    }
+
+
+    if(DiskHeader == "")
+    {
+        for (int i = 0; i < 16; i++)
+        {
+            Disk[Track[18] + 0x90 + i] = DA[Track[18] + 0x90 + i];
+        }
+    }
+
+    if (DiskID == "")
+    {
+        for (int i = 0; i < 5; i++)
+        {
+            Disk[Track[18] + 0xa2 + i] = DA[Track[18] + 0xa2 + i];
+        }
+    }
+
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
 void AddDirArt() {
 
+    if (DirArtName == "")
+        cout << "***INFO***\nInvalid DirArt file name.\n";
+        cout << "The disk will be build without DirArt. \n";
+        return;
+        
+    if (!FileExits(DirArtName))
+    {
+        cout << "***INFO***\nThe following DirArt file does not exist: " << DirArtName << "\n";
+        cout << "The disk will be build without DirArt. \n";
+        return;
+    }
+
+    string DirArtType = "";
+    if (DirArtName.find(".") != string::npos)
+    {
+        for (int i = DirArtName.find(".") + 1; i < DirArtName.length(); i++)
+        {
+            DirArtType += tolower(DirArtName[i]);
+        }
+    }
+
+    if (DirArtType == "d64")
+    {
+        ConvertD64ToDirArt();
+    }
+    else if (DirArtType == "txt")
+    {
+        ConvertTxtToDirArt();
+    }
+    else if (DirArtType == "prg")
+    {
+        ConvertBintoDirArt(DirArtType);
+    }
+    else if (DirArtType == "c")
+    {
+        ConvertCArrayToDirArt();
+    }
+    else
+    {
+        ConvertBintoDirArt("");
+    }
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1759,7 +2098,7 @@ void AddDemoNameToDisk(unsigned char T, unsigned char S) {
         A = Ascii2DirArt[DN[W]];
         Disk[Cnt + B + 3 + W] = A;
     }
-    //Disk[Cnt + B + 0x1c] = LoaderBlockCount;    //Length of boot loader in blocks
+    Disk[Cnt + B + 0x1c] = LoaderBlockCount;    //Length of boot loader in blocks
 
 }
 
@@ -1767,20 +2106,543 @@ void AddDemoNameToDisk(unsigned char T, unsigned char S) {
 
 void AddHeaderAndID() {
 
+    unsigned char B;
+    int BAM = Track[18];
+
+    for (int i = 0x90; i <= 0xaa; i++)
+    {
+        Disk[BAM + i] = 0xa0;
+    }
+
+    if (DiskHeader == "")
+    {
+        for (int i = 0; i < 16; i++)
+        {
+            Disk[BAM + 0x90 + i] = 0x20;
+        }
+    }
+    else
+    {
+        for (int i = 0; i < ((DiskHeader.size() <= 16) ? DiskHeader.size() : 16); i++)
+        {
+            Disk[BAM + 0x90 + i] = Ascii2DirArt[DiskHeader[i]];
+        }
+    }
+
+    if (DiskID == "")
+    {
+        for (int i = 0; i < 5; i++)
+        {
+            Disk[BAM + 0xa2 + i] = 0x20;
+        }
+    }
+    else
+    {
+        for (int i = 0; i < ((DiskID.size() <= 5) ? DiskID.size() : 5); i++)
+        {
+            Disk[BAM + 0xa2 + i] = Ascii2DirArt[DiskID[i]];         //Overwrites Disk ID and DOS type (5 characters max.)
+        }
+    }
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool InjectDriveCode() {
+bool InjectSaverPlugin() {
 
+    if (HSFile.size() == 0)
+    {
+        cout << "***CRITICAL***\nThe Hi-Score File's size must be multiples of $100 bytes, but not greater than $f00 bytes.\n";
+        return false;
+    }
+    if (HSFileName == "")
+    {
+        cout << "***CRITICAL***\nThe Hi-Score File's name is not defined.\n";
+        return false;
+    }
+    if (BundleNo > 125)
+    {
+        cout << "***CRITICAL***\nThe Hi-Score File Saver Plugin cannot be added to the disk because the number of file bundles exceeds 126!\n";
+        cout << "The Plugin and the Hi-Score File would use bundle indices $7e and $7f, respectively.\n";
+        return false;
+    }
+    //-----------------
+    //  Add SaveCode
+    //-----------------
+
+    BlocksUsedBySaver = (HSLength / 0x100) + 1 + 2;
+
+    if (BlocksFree < BlocksUsedBySaver)
+    {
+        cout << "***CRITICAL***\nThe Hi-Score File and the Saver Plugin cannot be added because there is not enough free space on the disk!\n";
+        return false;
+    }
+
+    unsigned char SaveCode[512]{};
+
+    if (HSFileName.find("*") == HSFileName.length() - 1)
+    {
+        SaverSupportsIO = true;
+        HSFileName.replace(HSFileName.length() - 1, 1, "");
+
+        for(int i = 0; i < SSIO_size; i++)
+        {
+            SaveCode[i] = SSIO[i];
+        }
+    }
+    else
+    {
+        SaverSupportsIO = false;
+
+        for (int i = 0; i < SS_size; i++)
+        {
+            SaveCode[i] = SS[i];
+        }
+    }
+
+    //UpdateZP BUG REPORTED BY Rico/Pretzel Logic
+    //WE ALSO NEED TO UPDATE ZP OFFSET IN THE SAVER CODE!!!
+    
+    //Convert LoaderZP to byte - it has already been validated in UpdateZP
+    unsigned char ZP = ConvertStringToInt(LoaderZP);
+
+    if (ZP != 2)
+    {
+        unsigned char OPC_STAZP = 0x85;     //ZP, ZP+1, Bits
+        unsigned char OPC_LDAZPY = 0xb1;    //ZP
+
+        unsigned char ZPBase = 0x02;
+
+        for (int i = 0; i <= 249; i++)
+        {
+            if ((SaveCode[i] == OPC_STAZP) || (SaveCode[i] == OPC_LDAZPY))
+            {
+                if (SaveCode[i + 1] == ZPBase)
+                {
+                    SaveCode[i + 1] = ZP;
+                    i++;
+                }
+            }
+        }
+
+        for (int i = 0; i <= 249; i++)
+        {
+            if ((SaveCode[i] == OPC_STAZP) || (SaveCode[i + 1] == ZPBase + 1))
+            {
+                SaveCode[i + 1] = ZP + 1;
+                i++;
+            }
+        }
+
+        for (int i = 0; i <= 249; i++)
+        {
+            if ((SaveCode[i] == OPC_STAZP) || (SaveCode[i + 1] == ZPBase + 2))
+            {
+                SaveCode[i + 1] = ZP + 2;
+                i++;
+            }
+        }
+    }
+
+    SaveCode[3] = (HSLength / 256) + 1;
+    SaveCode[0x13] = (HSAddress - 1) & 0xff;
+    SaveCode[0x1a] = (HSAddress - 1) / 0x100;
+
+    //Calculate sector pointer on disk
+    int SctPtr = SectorsPerDisk - 2 - ((HSLength / 256) + 1);
+
+    //Identify first T/S of the saver plugin
+    CT = TabT[SctPtr];
+    CS = TabS[SctPtr];
+
+    //Copy first block of saver plugin to disk
+    for (int i = 0; i < 256; i++)
+    {
+        Disk[Track[CT] + (CS * 256) + i] = SaveCode[i];
+    }
+
+    //Mark sector off in BAM
+    DeleteBit(CT, CS, true);
+
+    //Add plugin to directory
+    Disk[Track[18] + (18 * 256) + 8] = EORtransform(CT);               //DirBlocks(0) = EORtransform(Track) = 35
+    Disk[Track[18] + (18 * 256) + 7] = EORtransform(TabStartS[CT]);    //DirBlocks(1) = EORtransform(Sector) = First sector of Track(35) (not first sector of file!!!)
+    Disk[Track[18] + (18 * 256) + 6] = EORtransform(TabSCnt[SctPtr]);  //DirBlocks(2) = EORtransform(Remaining sectors on track)
+    Disk[Track[18] + (18 * 256) + 5] = 0xfe;                                //DirBlocks(3) = BitPtr
+
+    //Next Sector
+    SctPtr++;
+
+    //Second T/S of saver plugin
+    CT = TabT[SctPtr];
+    CS = TabS[SctPtr];
+
+    //Copy second block of saver plugin to disk
+    for (int i = 0; i < 256; i++)
+    {
+        int j = 0 - i;
+        if (j < 0)
+            j + 256;
+        Disk[Track[CT] + (CS * 256) + j] = EORtransform(SaveCode[256 + i]);
+    }
+
+    //Mark sector off in BAM
+    DeleteBit(CT, CS, true);
+
+    //-----------------
+    //  Add SaveFile
+    //-----------------
+
+    SctPtr++;
+
+    CT = TabT[SctPtr];
+    CS = TabS[SctPtr];
+
+    Disk[Track[18] + (18 * 256) + 4] = EORtransform(CT);                //DirBlocks(0) = EORtransform(Track) = 35
+    Disk[Track[18] + (18 * 256) + 3] = EORtransform(TabStartS[CT]);     //DirBlocks(1) = EORtransform(Sector) = First sector of Track(35) (not first sector of file!!!)
+    Disk[Track[18] + (18 * 256) + 2] = EORtransform(TabSCnt[SctPtr]);   //DirBlocks(2) = EORtransform(Remaining sectors on track)
+    Disk[Track[18] + (18 * 256) + 1] = 0xfe;                                 //DirBlocks(3) = BitPtr
+
+    DeleteBit(CT, CS, true);
+
+    unsigned char Buffer[256]{};
+    int HSStartAdd = HSAddress + HSLength - 1;
+    unsigned char BlockCnt = HSLength / 256;
+    
+
+    //First block
+    Buffer[0] = 0;
+    Buffer[1] = EORtransform((HSLength / 256));                //Remaining block count (EOR transformed)
+    Buffer[255] = 0xfe;                                             //First byte of block
+    Buffer[254] = 0x81;                                             //Bit stream
+    Buffer[253] = HSStartAdd % 256;                                 //Last byte's address(Lo)
+    if (SaverSupportsIO)
+    {
+        Buffer[252] = 0;                                            //I/O flag
+        Buffer[251] = HSStartAdd / 256;                             //Last byte's address(Hi)
+        Buffer[250] = 0;                                            //LongLit flag
+        Buffer[249] = 0xf6;                                         //Number of literals - 1
+    }
+    else
+    {
+        Buffer[252] = HSStartAdd / 256;                             //Last byte's address(Hi)
+        Buffer[251] = 0;                                            //LongLit flag
+        Buffer[250] = 0xf7;                                         //Number of literals - 1
+    }
+
+    for (int i = 2; i <= (SaverSupportsIO ? 248 : 249); i++)
+    {
+        Buffer[i] = HSFile[HSLength - 1 - (SaverSupportsIO ? 248 : 249) + i];
+    }
+
+    for (int i = 0; i < 256; i++)
+    {
+        Disk[Track[CT] + (CS * 256) + i] = Buffer[i];
+    }
+
+    if (SaverSupportsIO)
+    {
+        HSStartAdd -= 0xf7;
+        HSLength -= 0xf7;
+    }
+    else
+    {
+        HSStartAdd -= 0xf8;
+        HSLength -= 0xf8;
+    }
+
+    //Blocks 1 to BlockCnt-1
+    for (int i = 1; i < BlockCnt; i++)
+    {
+        SctPtr++;
+
+
+        CT = TabT[SctPtr];
+        CS = TabS[SctPtr];
+
+        DeleteBit(CT, CS, true);
+
+        memset(Buffer, 0, sizeof(Buffer));
+
+
+        Buffer[0] = 0x81;                                   //Bit stream
+        Buffer[255] = HSStartAdd % 256;                     //Last byte's address(Lo)
+        if (SaverSupportsIO)
+        {
+            Buffer[254] = 0;                                //I/O flag
+            Buffer[253] = HSStartAdd / 256;                 //Last byte's address(hi)
+            Buffer[252] = 0;                                //LongLit flag
+            Buffer[251] = 0xf9;                             //Number of literals - 1
+        }
+        else
+        {
+            Buffer[254] = HSStartAdd / 256;                 //Last byte's address(hi)
+            Buffer[253] = 0;                                //LongLit flag
+            Buffer[252] = 0xfa;                             //Number of literals - 1
+
+        }
+
+        for (int j = 1; j <= (SaverSupportsIO ? 250 : 251); j++)
+        {
+            Buffer[j] = HSFile[HSLength - 1 - (SaverSupportsIO ? 250 : 251) + j];
+        }
+
+        for (int j = 0; j < 256; j++)
+        {
+            Disk[Track[CT] + (CS * 256) + j] = Buffer[j];
+        }
+
+        if (SaverSupportsIO)
+        {
+            HSStartAdd -= 0xfa;
+            HSLength -= 0xfa;
+        }
+        else
+        {
+            HSStartAdd -= 0xfb;
+            HSLength -= 0xfb;
+        }
+    }
+    
+    //Last block of Hi-Score File
+
+    SctPtr++;
+
+    CT = TabT[SctPtr];
+    CS = TabS[SctPtr];
+
+    DeleteBit(CT, CS, true);
+
+    memset(Buffer, 0, sizeof(Buffer));
+
+
+    Buffer[0] = 0x81;                                           //Bit stream
+    Buffer[1] = EORtransform(0);                           //New block count = 0 (eor transformed)
+    Buffer[255] = HSStartAdd % 256;                             //Last byte's address(Lo)
+    if (SaverSupportsIO)
+    {
+        Buffer[254] = 0;                                        //I/O flag
+        Buffer[253] = HSStartAdd / 256;                         //Last byte's address(Hi)
+        Buffer[252] = 0;                                        //LongLit flag
+        Buffer[251] = HSLength - 1;                             //Number of remaining literals - 1
+
+    }
+    else
+    {
+        Buffer[254] = HSStartAdd / 256;                         //Last byte's address(Hi)
+        Buffer[253] = 0;                                        //LongLit flag
+        Buffer[252] = HSLength - 1;                             //Number of remaining literals - 1
+
+    }
+
+    for (int i = 0; i < HSLength; i++)
+    {
+        Buffer[(SaverSupportsIO ? 251 : 252) - HSLength + i] = HSFile[i];
+    }
+
+    Buffer[(SaverSupportsIO ? 251 : 252) - HSLength - 1] = 0xf8;    //End of File Bundle flag
+
+
+    for (int i = 0; i < 256; i++)
+    {
+        Disk[Track[CT] + (CS * 256) + i] = Buffer[i];
+    }
+
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+bool InjectDriveCode(char& idcDiskID, char& idcFileCnt, char& idcNextID) {
+
+    int BAM = Track[18];
+
+    unsigned char Drive[6 * 256]{};
+
+    for (int i = 0; i < SD_size; i++)
+    {
+        Drive[i] = SD[i];
+    }
+
+    unsigned char B3[256]{};
+    int B = 0;
+
+    //Resort and EOR transform Block 3
+    for (int i = 0; i < 256; i++)
+    {
+        B3[B] = EORtransform(Drive[(256 * 3) + i]);
+        B--;
+        if (B < 0)
+            B += 256;
+    }
+
+    //-------------------
+    //   VersionInfo
+    //-------------------
+    //Add version info: YY MM DD VV
+    int VI = 0x5b;
+    Drive[VI + 0] = VersionBuild >> 32;
+    Drive[VI + 1] = (VersionBuild & 0xff00) >> 16;
+    Drive[VI + 2] = VersionBuild & 0xff;
+    Drive[VI + 4] = (VersionMajor << 4) + VersionMinor;
+
+    //-------------------
+    //   ProductID
+    //-------------------
+    //Add Product ID
+    int PID = 0x1b;
+    Drive[PID + 0] = ProductID >> 32;
+    Drive[PID + 1] = (ProductID & 0xff00) >> 16;
+    Drive[PID + 2] = ProductID & 0xff;
+
+    //Resort blocks in drive code:
+    for (int i = 0; i < 256; i++)
+    {
+        Drive[(3 * 256) + i] = Drive[(4 * 256) + i];    //Copy ZP GCR Tab and GCR loop to block 3 for loading
+        Drive[(4 * 256) + i] = Drive[(5 * 256) + i];    //Copy Init code to block 4 for loading
+        Drive[(5 * 256) + i] = B3[i];                   //Copy original block 3 EOR transformed to block 5 to be loaded by init code
+        
+    }
+
+    //Add NextID and IL0-IL3 to ZP
+    int ZPILTabLoc = 0x60;
+
+    Drive[(3 * 256) + ZPILTabLoc + 0] = 256 - IL3;
+    Drive[(3 * 256) + ZPILTabLoc + 1] = 256 - IL2;
+    Drive[(3 * 256) + ZPILTabLoc + 2] = 256 - IL1;
+    Drive[(3 * 256) + ZPILTabLoc + 3] = idcNextID;
+    Drive[(3 * 256) + ZPILTabLoc + 4] = 256 - IL0;
+
+    CT = 18;
+    CS = 11;
+
+    for (int c = 0; c <= 5; c++)        //6 blocks to be saved: 18:11, 18:12, 18:13, 18:14, 18:15, (18:16 - block 5)
+    {
+        for (int i = 0; i < 256; i++)
+        {
+            Disk[Track[CT] + (CS * 256) + i] = Drive[(c * 256) + i];
+        }
+        DeleteBit(CT, CS, false);
+        CS++;
+    }
+
+    //Add DiskID
+    Disk[BAM + 255] = EORtransform(idcDiskID);
+
+    //Add Custom Interleave Info and Next Side ID
+    Disk[BAM + 254] = EORtransform(256 - IL3);
+    Disk[BAM + 253] = EORtransform(256 - IL2);
+    Disk[BAM + 252] = EORtransform(256 - IL1);
+    Disk[BAM + 251] = EORtransform(idcNextID);
+    Disk[BAM + 250] = EORtransform(256 - IL0);
+
+    //Add IncludeSaveCode flag and Saver plugin if required
+    BlocksUsedBySaver = 0;
+    if (bSaverPlugin)
+    {
+        Disk[BAM + 249] = EORtransform(2);
+        if(!InjectSaverPlugin())
+            return false;
+    }
+    else
+    {
+        Disk[BAM + 249] = EORtransform(0);
+    }
+
+    //Also add Product ID to BAM, EOR-transformed
+    Disk[BAM + 248] = EORtransform((ProductID / 0x10000) & 0xff);
+    Disk[BAM + 247] = EORtransform((ProductID / 0x100) & 0xff);
+    Disk[BAM + 246] = EORtransform(ProductID & 0xff);
+    
     return true;
 
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool InjectLoader() {
+bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL) {
 
+    int B{}, I{}, Cnt{}, W{};
+    unsigned char ST{}, SS{}, A{}, AdLo{}, AdHi{};
+
+    
+    if (DemoStart != "")                            //Check if we have a Demo Start Address
+    {
+        B = ConvertHexStringToInt(DemoStart);
+    }
+    else if (FirstFileStart != "")                  //No Demo Start Address, check if we have the first file's start address
+    {
+        B = ConvertHexStringToInt(FirstFileStart);
+    }
+    else
+    {
+        cout << "***CRITICAL***\nStart address is missing!\n";
+        return false;
+    }
+    
+    AdLo = (B - 1) % 256;
+    AdHi = (B - 1) / 256;
+
+    //unsigned char* Loader = new unsigned char [SL_size];
+
+    //for (int i = 0; i < SL_size; i++)
+    //{
+        //Loader[i] = SL[i];
+    //}
+
+    for (int i = 0; i < SL_size - 6; i++)   //Find JMP Sparkle_LoadFetched instruction
+    {
+        if ((SL[i] == 0x10) && (SL[i + 3] == 0xad) && (SL[i + 5] == 0x4c))
+        {
+            SL[i] = AdHi;                   //Hi Byte return address at the end of Loader
+            SL[i + 3] = AdLo;               //Lo Byte return address at the end of Loader
+        }
+    }
+
+    //Number of blocks in Loader
+    LoaderBlockCount = SL_size / 254;
+    if (SL_size % 254 != 0)
+    {
+        LoaderBlockCount += 1;
+    }
+
+    CT = T;
+    CS = S;
+
+    for (int i = 0; i < LoaderBlockCount; i++)
+    {
+        ST = CT;
+        SS = CS;
+        for (int c = 0; c < 254; c++)
+        {
+            if ((i * 254) + c < SL_size)
+            {
+                Disk[Track[CT] + (CS * 256) + 2 + c] = SL[(i * 254) + c];
+            }
+        }
+        DeleteBit(CT, CS, false);
+
+        AddInterleave(IL);      //Go to next free sector with Interleave IL
+
+        if (i < LoaderBlockCount - 1)
+        {
+            Disk[Track[ST] + (SS * 256) + 0] = CT;
+            Disk[Track[ST] + (SS * 256) + 1] = CS;
+        }
+        else
+        {
+            Disk[Track[ST] + (SS * 256) + 0] = 0;
+            if (SL_size % 254 == 0)
+            {
+                Disk[Track[ST] + (SS * 256) + 1] = 254 + 1;
+            }
+            else
+            {
+                Disk[Track[ST] + (SS * 256) + 1] = ((SL_size) % 254) + 1;
+            }
+        }
+    }
+    
+    //delete[] Loader;
+    
     return true;
 }
 
@@ -1826,13 +2688,16 @@ bool FinishDisk(bool LastDisk) {
     //Now add compressed parts to disk
     if (!AddCompressedBundlesToDisk())
         return false;
-    if (!InjectLoader())        //If InjectLoader(-1, 18, 7, 1) = False Then GoTo NoDisk
+    if (!InjectLoader(18,7,1))        //If InjectLoader(-1, 18, 7, 1) = False Then GoTo NoDisk
         return false;
-    if (!InjectDriveCode)       //If InjectDriveCode(DiskCnt, LoaderBundles, If(LastDisk = False, DiskCnt + 1, &H80)) = False Then GoTo NoDisk
+
+    char NextID = LastDisk ? 0x80 : DiskCnt + 1;     //Negative value means no more disk, otherwise 0x00-0x7f
+   
+    if (!InjectDriveCode(DiskCnt,LoaderBundles,NextID))
         return false;
 
     AddHeaderAndID();
-    AddDemoNameToDisk(18,7);        //AddDemoNameToDisk(-1, 18, 7)
+    AddDemoNameToDisk(18,7);
     AddDirArt();
 
     //BytesSaved += Int(BitsSaved / 8)
@@ -1848,12 +2713,12 @@ bool FinishDisk(bool LastDisk) {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool BuildDiskFromScript() {
+bool Build() {
     /* initialize random seed: */
     srand(time(NULL));
 
     /* generate a random number between 0 and 0Xffffff: */
-    ProductID = rand() % 0xffffff;
+    ProductID = ((rand() & 0xff0) << 12) + (rand() & 0xffff);
 
     LineStart = 0;
     LineEnd = 0;
@@ -2193,8 +3058,8 @@ bool BuildDiskFromScript() {
             else if (ScriptEntryType == EntryTypeMem)
             {
 
-                //if(!AddVirtualFile)
-                //  return false;
+                if(!AddVirtualFile)
+                  return false;
 
                 NewBundle = false;
                 //NewD - false;     //IS THIS NEEDED???
@@ -2408,7 +3273,7 @@ int main(int argc, char* argv[])
 
     //WriteDiskImage("C:\\Tmp\\Disk.d64");
 
-    if (!BuildDiskFromScript())
+    if (!Build())
         return -1;
 
     return 0;

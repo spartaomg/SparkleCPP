@@ -145,6 +145,10 @@
     <ClInclude Include="Common.h" />
     <ClInclude Include="Sparkle.h" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="Resources\Ascii2DirArt.bin" />
+    <None Include="Resources\Petscii2DirArt.bin" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

@@ -41,5 +41,16 @@
     <ClInclude Include="Common.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Sparkle.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Resources\Ascii2DirArt.bin">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Resources\Petscii2DirArt.bin">
+      <Filter>Resource Files</Filter>
+    </None>
   </ItemGroup>
 </Project>
