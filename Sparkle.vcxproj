@@ -134,6 +134,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Ascii2DirArt.cpp" />
+    <ClCompile Include="Packer.cpp" />
     <ClCompile Include="Petscii2DirArt.cpp" />
     <ClCompile Include="SD.cpp" />
     <ClCompile Include="SL.cpp" />
@@ -143,6 +144,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Common.h" />
+    <ClInclude Include="Packer.h" />
     <ClInclude Include="Sparkle.h" />
   </ItemGroup>
   <ItemGroup>

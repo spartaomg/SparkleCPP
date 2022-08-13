@@ -1,19 +1,4 @@
-#include <algorithm>
-#include <iostream>
-#include <string>
-#include <vector>
-#include <fstream>
-#include <sys/stat.h>
-#include <stdio.h>      /* printf, NULL */
-#include <stdlib.h>     /* srand, rand */
-#include <time.h>       /* time */
-#include <iomanip>
-#include <iostream>
-#include <filesystem>
 #include "common.h"
-
-using namespace std;
-using namespace std::filesystem;
 
 unsigned char VersionMajor = 2;
 unsigned char VersionMinor = 3;
@@ -45,9 +30,11 @@ int TracksPerDisk = StdTracksPerDisk;
 
 int BlocksFree = SectorsPerDisk;
 
-char TabT[ExtSectorsPerDisk]{}, TabS[ExtSectorsPerDisk]{}, TabSCnt[ExtSectorsPerDisk]{}, TabStartS[ExtTracksPerDisk + 1]{};  //TabStartS is 1 based
+unsigned char ByteSt[ExtBytesPerDisk];
 
-char Disk[ExtBytesPerDisk];
+unsigned char TabT[ExtSectorsPerDisk]{}, TabS[ExtSectorsPerDisk]{}, TabSCnt[ExtSectorsPerDisk]{}, TabStartS[ExtTracksPerDisk + 1]{};  //TabStartS is 1 based
+
+unsigned char Disk[ExtBytesPerDisk];
 unsigned char NextTrack;
 unsigned char NextSector;                                                   //Next Empty Track and Sector
 unsigned char MaxSector = 18;
@@ -83,9 +70,9 @@ unsigned int LineStart, LineEnd;    //LastSS, LastSE;
 bool NewBundle;
 
 const int MaxNumDisks = 127;
-int DiskSizeA(MaxNumDisks);
+int DiskSizeA[MaxNumDisks]{};
 
-char DiskCnt = -1;
+unsigned char DiskCnt = -1;
 int BundleCnt = -1;
 int FileCnt = -1;
 int VFileCnt = -1;
@@ -95,32 +82,6 @@ int CurrentFile = -1;
 int CurrentScript = -1;
 int BundleNo = -1;
 bool MaxBundleNoExceeded = false;
-
-
-struct FileStruct {
-    vector<unsigned char> Prg;
-    string FileName;
-    string FileAddr;
-    string FileOffs;
-    string FileLen;
-    bool FileIO;
-    int iFileAddr;
-    int iFileOffs;
-    int iFileLen;
-
-
-    FileStruct(vector<unsigned char> Prg, string FileName, string FileAddr, string FileOffs, string FileLen, bool FileIO) {
-        this->Prg = Prg;
-        this->FileName = FileName;
-        this->FileAddr = FileAddr;
-        this->FileOffs = FileOffs;
-        this->FileLen = FileLen;
-        this->FileIO = FileIO;
-        iFileAddr = stoul(FileAddr, nullptr, 16);
-        iFileOffs = stoul(FileOffs, nullptr,16);
-        iFileLen = stoul(FileLen, nullptr, 16);
-    };
-};
 
 vector<FileStruct> Prgs;
 vector<FileStruct> tmpPrgs;
@@ -168,7 +129,7 @@ char LoaderBundles = 1;
 unsigned char FilesInBuffer = 1;
 
 int Track[41]{};
-int CT, CS, CP, BlockCnt;
+unsigned char CT, CS, CP, BlockCnt;
 unsigned char StartTrack = 1;
 unsigned char StartSector = 0;
 
@@ -332,15 +293,15 @@ void WriteDiskImage(const string& DiskName)
     }
 
     ofstream myFile(DiskName, ios::out | ios::binary);
-    myFile.write(Disk, BytesPerDisk);
+    myFile.write((char*)&Disk[0], BytesPerDisk);
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void WriteBinaryFile(const string& FileName, char* Buffer, streamsize Size) {
+void WriteBinaryFile(const string& FileName, unsigned char* Buffer, streamsize Size) {
 
     ofstream myFile(FileName, ios::out | ios::binary);
-    myFile.write(Buffer, Size);
+    myFile.write((char*)&Buffer[0], Size);
 
 }
 
@@ -376,7 +337,7 @@ bool FindNextFreeSector() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void(DeleteBit(unsigned char T, unsigned char S, bool UpdateFreeBlocks)) {
+void DeleteBit(unsigned char T, unsigned char S, bool UpdateFreeBlocks) {
 
     int BAMPos = Track[18] + (T * 4) + 1 + (S / 8) + ((T > 35) ? (7 * 4) : 0);
     int BAMBit = 255 - (1 << (S & 8));
@@ -389,7 +350,6 @@ void(DeleteBit(unsigned char T, unsigned char S, bool UpdateFreeBlocks)) {
 
     if (UpdateFreeBlocks)
         BlocksFree--;
-
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1325,7 +1285,7 @@ bool CompressBundle() {             //NEEDS PackFile() and CloseFile()
         if (PartialFileIndex == -1)
             PartialFileOffset = Prgs[i].Prg.size() - 1;
 
-        //PackFile(Prgs[i].Prg, i, Prgs[i].FileAddr, Prgs[i].FileIO);
+        PackFile(i);
         if (i < Prgs.size() - 1)
         {
             //WE NEED TO USE THE NEXT FILE'S ADDRESS, LENGTH AND I / O STATUS HERE
@@ -1333,7 +1293,7 @@ bool CompressBundle() {             //NEEDS PackFile() and CloseFile()
             PrgAdd = Prgs[i + 1].iFileAddr;
             PrgLen = Prgs[i + 1].iFileLen;
             FileUnderIO = Prgs[i + 1].FileIO;
-            //CloseFile()
+            CloseFile();
         }
     }
 
@@ -1347,7 +1307,7 @@ bool CompressBundle() {             //NEEDS PackFile() and CloseFile()
     }
 
     //IF THE WHOLE Bundle IS LESS THAN 1 BLOCK, THEN "IT DOES NOT COUNT", Bundle Counter WILL NOT BE INCREASED
-    if (PreBCnt == BufferCnt)
+    if ((PreBCnt == BufferCnt) && (BundleCnt != 0))
         BundleCnt--;
 
     return true;
@@ -1859,12 +1819,6 @@ bool AddFile() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void UpdateBlocksFree() {
-
-}
-
-//----------------------------------------------------------------------------------------------------------------------------------------------------------
-
 void FindNextDirSector() {
 
     int LastDirSector = DirSector;
@@ -1913,16 +1867,186 @@ void FindNextDirPos() {
 
 void ConvertCArrayToDirArt() {
 
+    string DA = ReadFileToString(DirArtName);
+
+    unsigned char* BinFile = new unsigned char[6*256];
+    int First = DA.find("{");
+    int Last = DA.find("}");
+    int CharPos = 0;
+    int CharRow = 0;
+    unsigned char CharCode = 0;
+    bool NewChar = true;
+    for (int i = First + 1; i <= Last; i++)
+    {
+        if ((DA[i] >= '0') && (DA[i] <= '9'))
+        {
+            CharCode = (CharCode * 10) + (DA[i] - 0x30);
+            NewChar = false;
+        }
+        else
+        {
+            if (!NewChar)
+            {
+                if (CharCode == 96)
+                    CharCode = 32;
+
+                BinFile[(CharRow * 16) + CharPos] = CharCode;
+                CharPos++;
+                if (CharPos == 16)
+                {
+                    CharRow++;
+                    CharPos = 0;
+
+                }
+                NewChar = true;
+                CharCode = 0;
+            }
+        }
+    }
+
+    int BinFileLength = (CharRow * 16) + CharPos;
+
+    DirTrack = 18;
+    DirSector = 1;
+    unsigned char NB = 0;
+
+    for (int b = 0; b < BinFileLength; b += 16)
+    {
+        FindNextDirPos();
+
+        if (DirPos != 0)
+        {
+            Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0] = 0x82;      //"PRG" -  all dir entries will point at first file in dir
+            Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 1] = 18;        //Track 18 (track pointer of boot loader)
+            Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 2] = 7;         //Sector 7 (sector pointer of boot loader)
+
+            for (int i = 0; i < 16; i++)
+            {
+                if (b + i < BinFileLength)
+                {
+                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Petscii2DirArt[DA[b + i]];
+                }
+                else
+                {
+                    break;
+                }
+            }
+            if ((DirTrack == 18) && (DirSector == 1) && (DirPos == 2))
+            {
+                //Very first dir entry, also add loader block count
+                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0x1c] = LoaderBlockCount;
+            }
+        }
+        else
+        {
+            break;
+        }
+    }
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
+
 void ConvertBintoDirArt(string DirArtType) {
 
+    vector<unsigned char> DA;
+
+    ReadBinaryFile(DirArtName, DA);
+
+    DirTrack = 18;
+    DirSector = 1;
+    unsigned char NB = 0;
+    int DAPtr = (DirArtType == "prg") ? 2 : 0;
+
+    for (int b = DAPtr; b < DA.size(); b += 40)
+    {
+        FindNextDirPos();
+        if (DirPos != 0)
+        {
+            Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0] = 0x82;      //"PRG" -  all dir entries will point at first file in dir
+            Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 1] = 18;        //Track 18 (track pointer of boot loader)
+            Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 2] = 7;         //Sector 7 (sector pointer of boot loader)
+
+            for (int i = 0; i < 16; i++)
+            {
+                if (b + i < DA.size())
+                {
+                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Petscii2DirArt[DA[b + i]];
+                }
+                else
+                {
+                    break;
+                }
+            }
+            if ((DirTrack == 18) && (DirSector == 1) && (DirPos == 2))
+            {
+                //Very first dir entry, also add loader block count
+                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0x1c] = LoaderBlockCount;
+            }
+        }
+        else
+        {
+            break;
+        }
+    }
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+void AddDirEntry(string DirEntry){
+
+    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0] = 0x82;      //"PRG" -  all dir entries will point at first file in dir
+    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 1] = 18;        //Track 18 (track pointer of boot loader)
+    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 2] = 7;         //Sector 7 (sector pointer of boot loader)
+
+    //Remove vbNewLine characters and add 16 SHIFT+SPACE tail characters
+    for (int i = 0; i < 16; i++)
+    {
+        DirEntry += 0xa0;
+    }
+
+    //Copy only the first 16 characters of the edited DirEntry to the Disk Directory
+    for (int i = 0; i < 16; i++)
+    {
+        Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 2 + i] = toupper(DirEntry[i]);
+    }
+
+
+    if ((DirTrack == 18) && (DirSector == 1) && (DirPos == 2))
+    {
+        //Very first dir entry, also add loader block count
+        Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0x1c] = LoaderBlockCount;
+    }
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
 void ConvertTxtToDirArt() {
 
+    DirArt = ReadFileToString(DirArtName);
+    string delimiter = "\n";
+    DirTrack = 18;
+    DirSector = 1;
+    
+    while (DirArt.find(delimiter) != string::npos) 
+    {
+        string DirEntry = DirArt.substr(0, DirArt.find(delimiter));
+        DirArt.erase(0, DirArt.find(delimiter) + delimiter.length());
+        FindNextDirPos();
+        if (DirPos != 0)
+        {
+            AddDirEntry(DirEntry);
+        }
+        else
+        {
+            break;
+        }
+    }
+    
+    FindNextDirPos();
+    if (DirPos != 0)
+    {
+        AddDirEntry(DirArt);
+    }
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -2451,7 +2575,7 @@ bool InjectSaverPlugin() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool InjectDriveCode(char& idcDiskID, char& idcFileCnt, char& idcNextID) {
+bool InjectDriveCode(unsigned char& idcDiskID, char& idcFileCnt, char& idcNextID) {
 
     int BAM = Track[18];
 
@@ -2558,6 +2682,119 @@ bool InjectDriveCode(char& idcDiskID, char& idcFileCnt, char& idcNextID) {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
+bool UpdateZP() {
+
+    if (LoaderZP.size() < 2)    //00 - need 2, 01 - need 1
+    {
+        string DefaultZP = "02";
+        for (int i = 0; i < LoaderZP.size(); i++)
+        {
+            LoaderZP = DefaultZP[i] + LoaderZP;
+        }
+    }
+    else if (LoaderZP.size() > 2)
+    {
+        string DefaultZP = LoaderZP;
+        LoaderZP = "";
+        for (int i = LoaderZP.size()-2; i < LoaderZP.size(); i++)
+        {
+            LoaderZP += DefaultZP[i];
+        }
+    }
+
+    //Convert LoaderZP to byte
+    unsigned char ZP = ConvertStringToInt(LoaderZP) % 256;
+
+    //ZP cannot be $00, $01, or $ff
+    if (ZP < 2)
+    {
+        cout << "***CRITICAL***\nZeropage value cannot be less than $02.\n";
+        return false;
+    }
+    else if (ZP > 0xfd)
+    {
+        cout << "***CRITICAL***\nZeropage value cannot be greater than $fd.\n";
+        return false;
+    }
+    
+    //ZP=02 is the default, no need to update
+    if (ZP == 2)
+    {
+        return true;
+    }
+
+    //ZPUpdate BUG REPORTED BY Rico/Pretzel Logic
+
+    //Find the JMP $0700 sequence in the code to identify the beginning of loader
+    int LoaderBase = 0xffff;
+    for (int i = 0; i < SL_size - 1 - 2; i++)
+    {
+        if ((SL[i] == 0x4c) && (SL[i + 1] == 0x00) && (SL[i + 2] == 0x07))
+        {
+            LoaderBase = i + 3;
+            break;
+        }
+    }
+
+    if (LoaderBase == 0xffff)
+    {
+        cout << "***CRITICAL***\nZeropage offset could not updated.\n";
+        return false;
+    }
+
+    unsigned char OPC_STAZP = 0x85;
+    unsigned char OPC_ADCZP = 0x65;
+    unsigned char OPC_STAZPY = 0x91;
+    unsigned char OPC_DECZP = 0xC6;
+    unsigned char OPC_LDAZP = 0xA5;
+    unsigned char OPC_RORZP = 0x66;
+    unsigned char OPC_ASLZP = 0x06;
+    unsigned char OPC_EORIMM = 0x49;
+    //unsigned char OPC_LDAZPY = 0xB1;
+
+    unsigned char ZPBase = 0x02;
+
+    for (int i = LoaderBase; i < SL_size - 2; i++)
+    {
+        if ((SL[i] == OPC_STAZP) || (SL[i] == OPC_ADCZP) || (SL[i] == OPC_STAZPY))
+        {
+            if ((SL[i + 1] == ZPBase) && (SL[i + 2] != OPC_EORIMM))   //Skip STA $0265 EOR #$FF
+            {
+                SL[i + 1] = ZP;
+                i++;
+            }
+        }
+    }
+
+    for (int i = LoaderBase; i < SL_size - 1; i++)
+    {
+        if ((SL[i] == OPC_STAZP) || (SL[i] == OPC_DECZP) || (SL[i] == OPC_LDAZP))
+        {
+            if (SL[i + 1] == (ZPBase + 1))
+            {
+                SL[i + 1] = ZP + 1;
+                i++;
+            }
+        }
+    }
+
+    for (int i = LoaderBase; i < SL_size - 1; i++)
+    {
+        if ((SL[i] == OPC_STAZP) || (SL[i] == OPC_RORZP) || (SL[i] == OPC_ASLZP))
+        {
+            if (SL[i + 1] == (ZPBase + 2))
+            {
+                SL[i + 1] = ZP + 2;
+                i++;
+            }
+        }
+    }
+
+    return true;
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
 bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL) {
 
     int B{}, I{}, Cnt{}, W{};
@@ -2587,6 +2824,9 @@ bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL) {
     //{
         //Loader[i] = SL[i];
     //}
+
+    if (!UpdateZP())
+        return false;
 
     for (int i = 0; i < SL_size - 6; i++)   //Find JMP Sparkle_LoadFetched instruction
     {
@@ -2632,7 +2872,7 @@ bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL) {
             Disk[Track[ST] + (SS * 256) + 0] = 0;
             if (SL_size % 254 == 0)
             {
-                Disk[Track[ST] + (SS * 256) + 1] = 254 + 1;
+                Disk[Track[ST] + (SS * 256) + 1] = 255;     //254+1
             }
             else
             {
@@ -2648,16 +2888,168 @@ bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL) {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
+void CalcTabs() {
+
+    int SMax{}, IL{};
+    char Sectors[ExtSectorsPerDisk + 19]{};
+    int Tr[41]{};       //0-40
+    int S = 0;
+    int LastS = 0;
+    int i = 0;
+
+    for (int T = 1; T < ExtTracksPerDisk; T++)
+    {
+        if (T < 18)
+        {
+            Tr[T + 1] = Tr[T] + 21;
+            Track[T + 1] = Track[T] + (21 * 256);
+        }
+        else if (T < 25)
+        {
+            Tr[T + 1] = Tr[T] + 19;
+            Track[T + 1] = Track[T] + (19 * 256);
+        }
+        else if (T < 31)
+        {
+            Tr[T + 1] = Tr[T] + 18;
+            Track[T + 1] = Track[T] + (18 * 256);
+        }
+        else
+        {
+            Tr[T + 1] = Tr[T] + 17;
+            Track[T + 1] = Track[T] + (17 * 256);
+        }
+    }
+
+    for (int T = 1; T <= ExtTracksPerDisk; T++)
+    {
+        if (T == 18)
+        {
+            TabStartS[T] = -1;
+            T++;
+            S += 2;
+        }
+
+        int SCnt = 0;
+
+        if (T < 18)
+        {
+            SMax = 21;
+            IL = IL0 % SMax;
+        }
+        else if (T < 25)
+        {
+            SMax = 19;
+            IL = IL1 % SMax;
+        }
+        else if (T < 31)
+        {
+            SMax = 18;
+            IL = IL2 % SMax;
+        }
+        else
+        {
+            SMax = 17;
+            IL = IL3 % SMax;
+        }
+
+        if (S >= SMax)
+        {
+            S -= SMax;
+            if ((T < 18) && (S > 0))    //Wrap around: Subtract 1 if S>0 for tracks 1-17
+                S--;
+        }
+        TabStartS[T] = S;
+
+        while (SCnt < SMax)
+        {
+        NextSector:
+            if (Sectors[Tr[T] + S] == 0)
+            {
+                Sectors[Tr[T] + S] = 1;
+                TabT[i] = T;
+                TabS[i] = S;
+                LastS = S;
+                TabSCnt[i] = SMax - SCnt;
+                i++;
+                SCnt++;
+                S += IL;
+
+                if (S >= SMax)
+                {
+                    S -= SMax;
+                    if ((T < 18) && (S > 0))    //Wrap around: Subtract 1 if S>0 for tracks 1-17
+                        S--;
+                }
+            }
+            else
+            {
+                S++;
+                if (S >= SMax)
+                    S = 0;
+            }
+        }
+    }
+
+    //WriteBinaryFile("C:\\Tmp\\TabT.bin", TabT, sizeof(TabT));
+    //WriteBinaryFile("C:\\Tmp\\TabS.bin", TabS, sizeof(TabS));
+    //WriteBinaryFile("C:\\Tmp\\TabSCnt.bin", TabSCnt, sizeof(TabSCnt));
+    //WriteBinaryFile("C:\\Tmp\\TabStartS.bin", TabStartS, sizeof(TabStartS));
+
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
 bool AddCompressedBundlesToDisk() {
 
+    if (BlocksFree < BufferCnt)
+    {
+        cout << "***CRITICAL***\n" << D64Name << " cannot be built because it would require " << BufferCnt << " blocks.\n";
+        cout << "This disk only has " << SectorsPerDisk << " blocks.";
+        return false;
+    }
+
+    CalcTabs();
+
+    InjectDirBlocks();
+
+    for (int i = 0; i < BufferCnt; i++)
+    {
+        CT = TabT[i];
+        CS = TabS[i];
+        for (int j = 0; i < 256; j++)
+        {
+            Disk[Track[CT] + (256 * CS) + j] = ByteSt[(i * 256) + j];
+        }
+
+        DeleteBit(CT, CS, true);
+    }
+
+    if (BufferCnt < SectorsPerDisk)
+    {
+        NextTrack = TabT[BufferCnt];
+        NextSector = TabS[BufferCnt];
+    }
+    else
+    {
+        NextTrack = 18;
+        NextSector = 0;
+    }
+
+    
     return true;
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool CloseBuffer() {
+void UpdateBlocksFree() {
 
-    return true;
+    if (TracksPerDisk == ExtTracksPerDisk)
+    {
+        unsigned char ExtBlocksFree = (BlocksFree > ExtSectorsPerDisk - StdSectorsPerDisk) ? ExtSectorsPerDisk - StdSectorsPerDisk - BlocksUsedBySaver : BlocksFree;
+        Disk[Track[18] + 4] += ExtBlocksFree;
+    }
+
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -2688,10 +3080,10 @@ bool FinishDisk(bool LastDisk) {
     //Now add compressed parts to disk
     if (!AddCompressedBundlesToDisk())
         return false;
-    if (!InjectLoader(18,7,1))        //If InjectLoader(-1, 18, 7, 1) = False Then GoTo NoDisk
+    if (!InjectLoader(18,7,1))                    //If InjectLoader(-1, 18, 7, 1) = False Then GoTo NoDisk
         return false;
 
-    char NextID = LastDisk ? 0x80 : DiskCnt + 1;     //Negative value means no more disk, otherwise 0x00-0x7f
+    char NextID = LastDisk ? 0x80 : DiskCnt + 1;        //Negative value means no more disk, otherwise 0x00-0x7f
    
     if (!InjectDriveCode(DiskCnt,LoaderBundles,NextID))
         return false;
@@ -2699,9 +3091,6 @@ bool FinishDisk(bool LastDisk) {
     AddHeaderAndID();
     AddDemoNameToDisk(18,7);
     AddDirArt();
-
-    //BytesSaved += Int(BitsSaved / 8)
-    //BitsSaved = BitsSaved Mod 8
 
     UpdateBlocksFree();
 
@@ -2729,9 +3118,7 @@ bool Build() {
     if (ScriptEntry != ScriptHeader)
     {
         cout << "***CRITICAL***\nInvalid script file!" + '\n';
-
         return false;
-
     }
 
     bool NewD = true;
@@ -3120,118 +3507,6 @@ void SetScriptPath(string sPath, string aPath)
     }
 
     //cout << ScriptPath << "\n";
-}
-
-//----------------------------------------------------------------------------------------------------------------------------------------------------------
-
-void CalcTabs(){
-
-    int SMax{}, IL{};
-    char Sectors[ExtSectorsPerDisk + 19]{};
-    int Tr[41]{};       //0-40
-    int S = 0;
-    int LastS = 0;
-    int i = 0;
-
-    for (int T = 1; T < ExtTracksPerDisk; T++)
-    {
-        if (T < 18)
-        {
-            Tr[T + 1] = Tr[T] + 21;
-            Track[T + 1] = Track[T] + (21 * 256);
-        }
-        else if (T < 25)
-        {
-            Tr[T + 1] = Tr[T] + 19;
-            Track[T + 1] = Track[T] + (19 * 256);
-        }
-        else if (T < 31)
-        {
-            Tr[T + 1] = Tr[T] + 18;
-            Track[T + 1] = Track[T] + (18 * 256);
-        }
-        else
-        {
-            Tr[T + 1] = Tr[T] + 17;
-            Track[T + 1] = Track[T] + (17 * 256);
-        }
-    }
-
-    for (int T = 1; T <= ExtTracksPerDisk; T++)
-    {
-        if (T == 18)
-        {
-            TabStartS[T] = -1;
-            T++;
-            S += 2;
-        }
-
-        int SCnt = 0;
-
-        if (T < 18)
-        {
-            SMax = 21;
-            IL = IL0 % SMax;
-        }
-        else if (T < 25)
-        {
-            SMax = 19;
-            IL = IL1 % SMax;
-        }
-        else if (T < 31)
-        {
-            SMax = 18;
-            IL = IL2 % SMax;
-        }
-        else
-        {
-            SMax = 17;
-            IL = IL3 % SMax;
-        }
-
-        if (S >= SMax)
-        {
-            S -= SMax;
-            if ((T < 18) && (S > 0))    //Wrap around: Subtract 1 if S>0 for tracks 1-17
-                S--;
-        }
-        TabStartS[T] = S;
-
-        while (SCnt < SMax)
-        {
-        NextSector:
-            if (Sectors[Tr[T] + S] == 0)
-            {
-                Sectors[Tr[T] + S] = 1;
-                TabT[i] = T;
-                TabS[i] = S;
-                LastS = S;
-                TabSCnt[i] = SMax - SCnt;
-                i++;
-                SCnt++;
-                S += IL;
-
-                if (S >= SMax)
-                {
-                    S -= SMax;
-                    if ((T < 18) && (S > 0))    //Wrap around: Subtract 1 if S>0 for tracks 1-17
-                        S--;
-                }
-            }
-            else
-            {
-                S++;
-                if (S >= SMax)
-                    S = 0;
-            }
-        }
-    }
-
-    //WriteBinaryFile("C:\\Tmp\\TabT.bin", TabT, sizeof(TabT));
-    //WriteBinaryFile("C:\\Tmp\\TabS.bin", TabS, sizeof(TabS));
-    //WriteBinaryFile("C:\\Tmp\\TabSCnt.bin", TabSCnt, sizeof(TabSCnt));
-    //WriteBinaryFile("C:\\Tmp\\TabStartS.bin", TabStartS, sizeof(TabStartS));
-
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
