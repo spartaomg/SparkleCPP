@@ -1,4 +1,4 @@
-#include "common.h"
+//#include "common.h"
 
 const int Petscii2DirArt_size = 256;
 unsigned char Petscii2DirArt[Petscii2DirArt_size] = {

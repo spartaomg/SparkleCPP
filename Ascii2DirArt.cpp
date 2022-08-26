@@ -1,4 +1,4 @@
-#include "common.h"
+//#include "common.h"
 
 const int Ascii2DirArt_size = 256;
 unsigned char Ascii2DirArt[Ascii2DirArt_size] = {

@@ -30,9 +30,8 @@ int TracksPerDisk = StdTracksPerDisk;
 
 int BlocksFree = SectorsPerDisk;
 
-unsigned char ByteSt[ExtBytesPerDisk];
-
 unsigned char TabT[ExtSectorsPerDisk]{}, TabS[ExtSectorsPerDisk]{}, TabSCnt[ExtSectorsPerDisk]{}, TabStartS[ExtTracksPerDisk + 1]{};  //TabStartS is 1 based
+unsigned char ByteSt[ExtBytesPerDisk];
 
 unsigned char Disk[ExtBytesPerDisk];
 unsigned char NextTrack;
@@ -157,6 +156,15 @@ int PrgAdd, PrgLen;
 bool FileUnderIO = false;
 
 bool SaverSupportsIO = false;
+
+//const int SD_size;
+//unsigned char SD[];
+//const int Loader_size;
+//unsigned char Loader[];
+//const int SS_size;
+//unsigned char SS[];
+//const int SSIO_size;
+//unsigned char SSIO[];
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -310,7 +318,7 @@ void WriteBinaryFile(const string& FileName, unsigned char* Buffer, streamsize S
 bool SectorOK(unsigned char T, unsigned char S) {
 
     int BAMPos = Track[18] + (T * 4) + 1 + (S / 8) + ((T > 35) ? (7 * 4) : 0);
-    int BAMBit = 1 << (S & 8);
+    int BAMBit = 1 << (S % 8);
 
     return (Disk[BAMPos] & BAMBit) != 0;
 
@@ -340,11 +348,11 @@ bool FindNextFreeSector() {
 void DeleteBit(unsigned char T, unsigned char S, bool UpdateFreeBlocks) {
 
     int BAMPos = Track[18] + (T * 4) + 1 + (S / 8) + ((T > 35) ? (7 * 4) : 0);
-    int BAMBit = 255 - (1 << (S & 8));
+    int BAMBit = 255 - (1 << (S % 8));
 
     Disk[BAMPos] &= BAMBit;
 
-    BAMPos = Track[18] + (T * 4) + (S / 8) + ((T > 35) ? (7 * 4) : 0);
+    BAMPos = Track[18] + (T * 4) + + ((T > 35) ? (7 * 4) : 0);
 
     Disk[BAMPos]--;
 
@@ -945,7 +953,8 @@ bool ResetDiskVariables() {
     MaxBundleNoExceeded = false;
 
     //ReDim ByteSt(-1);
-    //ResetBuffer();
+    std::fill_n(ByteSt, ExtBytesPerDisk, 0);
+    ResetBuffer();
 
     D64Name = "";
     DiskHeader = ""; //'"demo disk " + Year(Now).ToString
@@ -1208,7 +1217,7 @@ int CheckNextIO(int Address, int Length, bool NextFileUnderIO) {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool CloseBundle(int NextFileIO, bool LastPartOnDisk) {
+//bool CloseBundle(int NextFileIO, bool LastPartOnDisk) {
 
 
     //SequenceFits() -> in Packer.cpp
@@ -1217,8 +1226,8 @@ bool CloseBundle(int NextFileIO, bool LastPartOnDisk) {
     //CloseBuffer()
     //AddLitBits() -> in Packer.cpp
 
-    return true;
-}
+//    return true;
+//}
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -1397,7 +1406,9 @@ bool SortBundle() {
                                 tmpPrgs[o].Prg = tmpPrgs[i].Prg;
 
                                 tmpPrgs[o].FileAddr = tmpPrgs[i].FileAddr;
+                                tmpPrgs[o].iFileAddr = tmpPrgs[i].iFileAddr;
                                 tmpPrgs[o].FileOffs = tmpPrgs[i].FileOffs;
+                                tmpPrgs[o].iFileOffs = tmpPrgs[i].iFileOffs;
 
                                 Change = true;
                             }
@@ -1411,6 +1422,7 @@ bool SortBundle() {
                             //New file's length is the length of the two merged files
                             FEO += FEI;
                             tmpPrgs[o].FileLen = ConvertIntToHextString(FEO, 4);
+                            tmpPrgs[o].iFileLen = FEO;
 
                             //Remove File(I) and all its parameters
                             vector<FileStruct>::iterator iter = tmpPrgs.begin() + i;
@@ -1775,7 +1787,7 @@ bool AddFileToBundle() {
     }
     else
     {
-        cout << "***CRITICAL***\The following file does not exist: " << FN << "\n";
+        cout << "***CRITICAL***\nThe following file does not exist: " << FN << "\n";
         return false;
     }
 
@@ -2727,9 +2739,9 @@ bool UpdateZP() {
 
     //Find the JMP $0700 sequence in the code to identify the beginning of loader
     int LoaderBase = 0xffff;
-    for (int i = 0; i < SL_size - 1 - 2; i++)
+    for (int i = 0; i < Loader_size - 1 - 2; i++)
     {
-        if ((SL[i] == 0x4c) && (SL[i + 1] == 0x00) && (SL[i + 2] == 0x07))
+        if ((Loader[i] == 0x4c) && (Loader[i + 1] == 0x00) && (Loader[i + 2] == 0x07))
         {
             LoaderBase = i + 3;
             break;
@@ -2754,37 +2766,37 @@ bool UpdateZP() {
 
     unsigned char ZPBase = 0x02;
 
-    for (int i = LoaderBase; i < SL_size - 2; i++)
+    for (int i = LoaderBase; i < Loader_size - 2; i++)
     {
-        if ((SL[i] == OPC_STAZP) || (SL[i] == OPC_ADCZP) || (SL[i] == OPC_STAZPY))
+        if ((Loader[i] == OPC_STAZP) || (Loader[i] == OPC_ADCZP) || (Loader[i] == OPC_STAZPY))
         {
-            if ((SL[i + 1] == ZPBase) && (SL[i + 2] != OPC_EORIMM))   //Skip STA $0265 EOR #$FF
+            if ((Loader[i + 1] == ZPBase) && (Loader[i + 2] != OPC_EORIMM))   //Skip STA $0265 EOR #$FF
             {
-                SL[i + 1] = ZP;
+                Loader[i + 1] = ZP;
                 i++;
             }
         }
     }
 
-    for (int i = LoaderBase; i < SL_size - 1; i++)
+    for (int i = LoaderBase; i < Loader_size - 1; i++)
     {
-        if ((SL[i] == OPC_STAZP) || (SL[i] == OPC_DECZP) || (SL[i] == OPC_LDAZP))
+        if ((Loader[i] == OPC_STAZP) || (Loader[i] == OPC_DECZP) || (Loader[i] == OPC_LDAZP))
         {
-            if (SL[i + 1] == (ZPBase + 1))
+            if (Loader[i + 1] == (ZPBase + 1))
             {
-                SL[i + 1] = ZP + 1;
+                Loader[i + 1] = ZP + 1;
                 i++;
             }
         }
     }
 
-    for (int i = LoaderBase; i < SL_size - 1; i++)
+    for (int i = LoaderBase; i < Loader_size - 1; i++)
     {
-        if ((SL[i] == OPC_STAZP) || (SL[i] == OPC_RORZP) || (SL[i] == OPC_ASLZP))
+        if ((Loader[i] == OPC_STAZP) || (Loader[i] == OPC_RORZP) || (Loader[i] == OPC_ASLZP))
         {
-            if (SL[i + 1] == (ZPBase + 2))
+            if (Loader[i + 1] == (ZPBase + 2))
             {
-                SL[i + 1] = ZP + 2;
+                Loader[i + 1] = ZP + 2;
                 i++;
             }
         }
@@ -2818,28 +2830,28 @@ bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL) {
     AdLo = (B - 1) % 256;
     AdHi = (B - 1) / 256;
 
-    //unsigned char* Loader = new unsigned char [SL_size];
+    //unsigned char* Loader = new unsigned char [Loader_size];
 
-    //for (int i = 0; i < SL_size; i++)
+    //for (int i = 0; i < Loader_size; i++)
     //{
-        //Loader[i] = SL[i];
+        //Loader[i] = Loader[i];
     //}
 
     if (!UpdateZP())
         return false;
 
-    for (int i = 0; i < SL_size - 6; i++)   //Find JMP Sparkle_LoadFetched instruction
+    for (int i = 0; i < Loader_size - 6; i++)   //Find JMP Sparkle_LoadFetched instruction
     {
-        if ((SL[i] == 0x10) && (SL[i + 3] == 0xad) && (SL[i + 5] == 0x4c))
+        if ((Loader[i] == 0x10) && (Loader[i + 3] == 0xad) && (Loader[i + 5] == 0x4c))
         {
-            SL[i] = AdHi;                   //Hi Byte return address at the end of Loader
-            SL[i + 3] = AdLo;               //Lo Byte return address at the end of Loader
+            Loader[i] = AdHi;                   //Hi Byte return address at the end of Loader
+            Loader[i + 3] = AdLo;               //Lo Byte return address at the end of Loader
         }
     }
 
     //Number of blocks in Loader
-    LoaderBlockCount = SL_size / 254;
-    if (SL_size % 254 != 0)
+    LoaderBlockCount = Loader_size / 254;
+    if (Loader_size % 254 != 0)
     {
         LoaderBlockCount += 1;
     }
@@ -2853,9 +2865,9 @@ bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL) {
         SS = CS;
         for (int c = 0; c < 254; c++)
         {
-            if ((i * 254) + c < SL_size)
+            if ((i * 254) + c < Loader_size)
             {
-                Disk[Track[CT] + (CS * 256) + 2 + c] = SL[(i * 254) + c];
+                Disk[Track[CT] + (CS * 256) + 2 + c] = Loader[(i * 254) + c];
             }
         }
         DeleteBit(CT, CS, false);
@@ -2870,13 +2882,13 @@ bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL) {
         else
         {
             Disk[Track[ST] + (SS * 256) + 0] = 0;
-            if (SL_size % 254 == 0)
+            if (Loader_size % 254 == 0)
             {
                 Disk[Track[ST] + (SS * 256) + 1] = 255;     //254+1
             }
             else
             {
-                Disk[Track[ST] + (SS * 256) + 1] = ((SL_size) % 254) + 1;
+                Disk[Track[ST] + (SS * 256) + 1] = ((Loader_size) % 254) + 1;
             }
         }
     }
@@ -3017,7 +3029,7 @@ bool AddCompressedBundlesToDisk() {
     {
         CT = TabT[i];
         CS = TabS[i];
-        for (int j = 0; i < 256; j++)
+        for (int j = 0; j < 256; j++)
         {
             Disk[Track[CT] + (256 * CS) + j] = ByteSt[(i * 256) + j];
         }
@@ -3120,7 +3132,10 @@ bool Build() {
         cout << "***CRITICAL***\nInvalid script file!" + '\n';
         return false;
     }
-
+    if (!ResetDiskVariables())
+    {
+        return false;
+    }
     bool NewD = true;
     NewBundle = false;
     TmpSetNewBlock = false;
@@ -3141,7 +3156,14 @@ bool Build() {
                 }
 
                 if (NumScriptEntries > -1)
+                {
                     D64Name = ScriptEntryArray[0];
+                    if (D64Name.find(":") == string::npos)
+                    {
+                        D64Name = ScriptPath + D64Name;                      //sPath is relative - use Sparkle's base folder to make it a full path
+                    }
+
+                }
 
                 NewBundle = true;
             }
@@ -3426,10 +3448,10 @@ bool Build() {
             }
             else if (ScriptEntryType == EntryTypeScript)
             {
-            if (!InsertScript(ScriptEntryArray[0]))
-            {
-                return false;
-            }
+                if (!InsertScript(ScriptEntryArray[0]))
+                {
+                    return false;
+                }
 
                 NewBundle = true;   //Files in the embedded script will ALWAYS be in a new bundle (i.e. scripts cannot be embedded in a bundle)!!!
             }
