@@ -21,9 +21,6 @@
     <ClCompile Include="SD.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="SL.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="Ascii2DirArt.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -39,6 +36,9 @@
     <ClCompile Include="Packer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Loader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Common.h">
@@ -47,16 +47,5 @@
     <ClInclude Include="Sparkle.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Packer.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="Resources\Ascii2DirArt.bin">
-      <Filter>Resource Files</Filter>
-    </None>
-    <None Include="Resources\Petscii2DirArt.bin">
-      <Filter>Resource Files</Filter>
-    </None>
   </ItemGroup>
 </Project>

@@ -1217,30 +1217,16 @@ int CheckNextIO(int Address, int Length, bool NextFileUnderIO) {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-//bool CloseBundle(int NextFileIO, bool LastPartOnDisk) {
-
-
-    //SequenceFits() -> in Packer.cpp
-    //EORTransform() -> in Packer.cpp
-    //AddBits() -> in Packer.cpp
-    //CloseBuffer()
-    //AddLitBits() -> in Packer.cpp
-
-//    return true;
-//}
-
-//----------------------------------------------------------------------------------------------------------------------------------------------------------
-
 bool CompressBundle() {             //NEEDS PackFile() and CloseFile()
+
+    int PreBCnt = BufferCnt;
 
     if (Prgs.size() == 0)
         return true;
 
-    int PreBCnt = BufferCnt;
-
     //DO NOT RESET ByteSt AND BUFFER VARIABLES HERE!!!
 
-    if ((BufferCnt == 0) || (BytePtr == 255))
+    if ((BufferCnt == 0) && (BytePtr == 255))
     {
         NewBlock = SetNewBlock;
         SetNewBlock = false;
@@ -1282,6 +1268,8 @@ bool CompressBundle() {             //NEEDS PackFile() and CloseFile()
     LastFileOfBundle = false;
 
     PartialFileIndex = -1;
+    
+    cout << "Compressing bundle #" << BundleNo << "...\n";
 
     for (int i = 0; i < Prgs.size(); i++)
     {
@@ -1802,6 +1790,8 @@ bool AddFileToBundle() {
         FirstFileStart = FA;
         FirstFileOfDisk = false;
     }
+    
+    FileCnt++;
 
     tmpPrgs.push_back(FileStruct(P, FN, FA, FO, FL, FUIO));
 

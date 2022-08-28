@@ -1,4 +1,4 @@
-Bin2Array SL.prg
+Bin2Array Loader.prg
 Bin2Array SD.prg 2
 Bin2Array SS.prg 2
 Bin2Array SSIO.prg 2

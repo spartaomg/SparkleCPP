@@ -759,7 +759,7 @@ void FindFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex, int RefMaxAd
     {
         //Offset goes from 1 to max offset (cannot be 0)
         //Match length goes from 1 to max length
-        for (int O = RefMinAddress; O <= RefMaxAddress; O++)
+        for (int O = RefMinAddressIndex; O <= RefMaxAddressIndex; O++)
         {
             //Check if first byte matches at offset, if not go to next offset
             if (Prgs[CurrentFileIndex].Prg[Pos] == Prgs[RefIndex].Prg[O])
@@ -832,7 +832,7 @@ void FindVirtualFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex,int Re
     {
         //Offset goes from 1 to max offset (cannot be 0)
         //Match length goes from 1 to max length
-        for (int O = RefMinAddress; O <= RefMaxAddress; O++)
+        for (int O = RefMinAddressIndex; O <= RefMaxAddressIndex; O++)
         {
             //Check if first byte matches at offset, if not go to next offset
             if (Prgs[CurrentFileIndex].Prg[Pos] == VFiles[RefIndex].Prg[O])
@@ -1078,7 +1078,7 @@ void Pack()
     StartPtr = SI;
 
 Restart:
-    while (SI > +0)
+    while (SI >= 0)
     {
         if (Seq[SI + 1].Off == 0)
         {
@@ -1559,8 +1559,8 @@ bool CloseBuffer() {
 
     //----------------------------------------------------------------------------------------------------------
 
-    Buffer[BytePtr] = (PrgAdd + SI) % 256;
     AdLoPos = BytePtr;
+    Buffer[BytePtr--] = (PrgAdd + SI) % 256;
 
     BlockUnderIO = CheckIO(SI, -1);          //Check if last byte of prg could go under IO
 
@@ -1569,12 +1569,11 @@ bool CloseBuffer() {
         BytePtr--;
     }
 
+    AdHiPos = BytePtr;
     Buffer[BytePtr--] = ((PrgAdd + SI) / 256) % 256;
-    AdHiPos = BytePtr--;
     LastByte = BytePtr;             //LastByte = the first byte of the ByteStream after and Address Bytes (253 or 252 with BlockCnt)
 
     StartPtr = SI;
-
 
     return true;
 }
