@@ -1,8 +1,12 @@
 # depslib dependency file v1.0
-1658000912 source:c:\users\tamas\onedrive\c64\c++\sparkle\sparkle.cpp
+1661646308 source:c:\users\tamas\onedrive\c64\c++\sparkle\sparkle.cpp
+	"common.h"
+
+1661647243 c:\users\tamas\onedrive\c64\c++\sparkle\common.h
 	<algorithm>
 	<iostream>
 	<string>
+	<array>
 	<vector>
 	<fstream>
 	<sys/stat.h>
@@ -12,25 +16,26 @@
 	<iomanip>
 	<iostream>
 	<filesystem>
+
+1661175221 source:c:\users\tamas\onedrive\c64\c++\sparkle\ascii2dirart.cpp
+
+1661175254 source:c:\users\tamas\onedrive\c64\c++\sparkle\petscii2dirart.cpp
+
+1661646157 source:c:\users\tamas\onedrive\c64\c++\sparkle\sd.cpp
 	"common.h"
 
-1658000143 c:\users\tamas\onedrive\c64\c++\sparkle\common.h
-
-1658000406 source:c:\users\tamas\onedrive\c64\c++\sparkle\ascii2dirart.cpp
+1661640994 source:c:\users\tamas\onedrive\c64\c++\sparkle\sl.cpp
 	"common.h"
 
-1658000406 source:c:\users\tamas\onedrive\c64\c++\sparkle\petscii2dirart.cpp
+1661646157 source:c:\users\tamas\onedrive\c64\c++\sparkle\ss.cpp
 	"common.h"
 
-1658000406 source:c:\users\tamas\onedrive\c64\c++\sparkle\sd.cpp
+1661646158 source:c:\users\tamas\onedrive\c64\c++\sparkle\ssio.cpp
 	"common.h"
 
-1658000405 source:c:\users\tamas\onedrive\c64\c++\sparkle\sl.cpp
+1661646157 source:c:\users\tamas\onedrive\c64\c++\sparkle\loader.cpp
 	"common.h"
 
-1658000406 source:c:\users\tamas\onedrive\c64\c++\sparkle\ss.cpp
-	"common.h"
-
-1658000406 source:c:\users\tamas\onedrive\c64\c++\sparkle\ssio.cpp
+1661642103 source:c:\users\tamas\onedrive\c64\c++\sparkle\packer.cpp
 	"common.h"
 

@@ -3525,19 +3525,21 @@ void SetScriptPath(string sPath, string aPath)
 
 int main(int argc, char* argv[])
 {
+    auto cstart = std::chrono::system_clock::now();
+
     cout << "Sparkle by Sparta/OMG 2019-2022\n";
 
     string AppPath{filesystem::current_path().string() + "\\"};
 
     if (argc < 2)
     {
-        //cerr << "***INFO***\nUsage: Sparkle script.sls\nFor details please read the user manual!\n";
-		//return 1;
+        cerr << "***INFO***\nUsage: Sparkle script.sls\nFor details please read the user manual!\n";
+		return 1;
         
-        string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\GP\\GPSpaceXDemo\\6502\\SpaceXDemo.sls";
-        Script = ReadFileToString(ScriptFileName);
+        //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\GP\\GPSpaceXDemo\\6502\\SpaceXDemo.sls";
+        //Script = ReadFileToString(ScriptFileName);
 
-        SetScriptPath(ScriptFileName, AppPath);
+        //SetScriptPath(ScriptFileName, AppPath);
     }
     else
     {
@@ -3562,6 +3564,11 @@ int main(int argc, char* argv[])
 
     if (!Build())
         return -1;
+
+    auto cend = std::chrono::system_clock::now();
+    std::chrono::duration<double> elapsed_seconds = cend - cstart;
+
+    std::cout << "Elapsed time: " << elapsed_seconds.count() << "s\n";
 
     return 0;
 }

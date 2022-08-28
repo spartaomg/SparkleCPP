@@ -56,7 +56,6 @@ struct FileStruct {
     int iFileOffs;
     int iFileLen;
 
-
     FileStruct(vector<unsigned char> Prg, string FileName, string FileAddr, string FileOffs, string FileLen, bool FileIO) {
         this->Prg = Prg;
         this->FileName = FileName;
@@ -98,9 +97,9 @@ extern bool NewBlock;              //This will fire at the specified bundle
 //Functions
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------
 
+void PackFile(int Index);
+void ResetBuffer();
 bool CloseBuffer();
 bool CloseFile();
-void PackFile(int Index);
-unsigned char EORtransform(unsigned char Input);
 bool CloseBundle(int NextFileIO, bool LastPartOnDisk);
-void ResetBuffer();
+unsigned char EORtransform(unsigned char Input);
