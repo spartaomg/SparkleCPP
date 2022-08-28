@@ -10,6 +10,12 @@ struct sequence {
     int TotalBits;		//Total Bits in Buffer
 };
 
+template <class T>
+T FastMin(const T& left, const T& right)
+{
+    return left < right ? left : right;
+}
+
 sequence *Seq;
 
 bool TransitionalBlock;
@@ -419,7 +425,7 @@ void CheckLitSeq(int Pos)
     
     int LC = (LitCnt + 1) % MaxLitPerBlock;
     
-    if ( LC == 0)
+    if (LC == 0)
     {
         LitBits++;              //Lits = 0	    1 literal       1 bit
     }
@@ -548,10 +554,10 @@ bool SequenceFits(int BytesToAdd, int BitsToAdd, int SequenceUnderIO) {
             {
                 BitPtr--;                                   //BitPtr also needs to be moved BUT ONLY IF > 0 - BUG reported by Raistlin/G*P
             }
+            AdHiPos--;                                          //Update AdHi Position in Buffer
+            BlockUnderIO = 1;                                   //Set BlockUnderIO Flag
         }
-        AdHiPos--;                                          //Update AdHi Position in Buffer
-        BlockUnderIO = 1;                                   //Set BlockUnderIO Flag
-        
+       
         return true;
     }
     else
@@ -703,7 +709,7 @@ NewB:
         if (LastBlockCnt > 255)
         {
             //Bundles cannot be larger than 255 blocks compressed
-            cout << "***CRITICAL***\nBundle " << BundleCnt << " would need " << LastBlockCnt << " blocks on the disk.\nBundles cannot be larger than 255 blocks!\n";
+            cout << "***CRITICAL***\tBundle " << BundleCnt << " would need " << LastBlockCnt << " blocks on the disk.\nBundles cannot be larger than 255 blocks!\n";
             return false;
         }
 
@@ -764,7 +770,8 @@ void FindFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex, int RefMaxAd
             //Check if first byte matches at offset, if not go to next offset
             if (Prgs[CurrentFileIndex].Prg[Pos] == Prgs[RefIndex].Prg[O])
             {
-                int MaxLL = min(min(Pos + 1, MaxLongLen), O - RefMinAddressIndex + 1);   //MaxLL = 255 or less
+                int MaxLL = FastMin(FastMin(Pos + 1, MaxLongLen),O - RefMinAddressIndex + 1);   //MaxLL = 255 or less
+                //int MaxLL = min(min(Pos + 1, MaxLongLen), O - RefMinAddressIndex + 1);   //MaxLL = 255 or less
                 for (int L = 1; L <= MaxLL; L++)
                 {
                     if ((L == MaxLL) || (Prgs[CurrentFileIndex].Prg[Pos - L] != Prgs[RefIndex].Prg[O - L]))
@@ -1505,7 +1512,7 @@ bool CloseBuffer() {
                 }
 
                 //Search any finished files on track (partial file < finished file < current file)
-                for (int I = PartialFileIndex + 1; I < CurrentFileIndex - 1; I++)
+                for (int I = PartialFileIndex + 1; I <= CurrentFileIndex - 1; I++)
                 {
                     //ReferenceFile = Prgs(I).ToArray
                     ReferenceFileStart = Prgs[I].iFileAddr;

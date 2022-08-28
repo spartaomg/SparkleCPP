@@ -261,6 +261,11 @@ int ReadBinaryFile(const string& FileName, vector<unsigned char>& prg)
 
     ifstream infile(FileName, ios_base::binary);
 
+    if (infile.fail())
+    {
+        return -1;
+    }
+
     infile.seekg(0, ios_base::end);
     int length = infile.tellg();
     infile.seekg(0, ios_base::beg);
@@ -283,6 +288,11 @@ string ReadFileToString(const string& FileName)
     }
 
     ifstream t(FileName);
+
+    if (t.fail())
+    {
+        return "";
+    }
 
     string str;
 
@@ -323,14 +333,14 @@ void WriteDiskImage(const string& DiskName)
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
-
+/*
 void WriteBinaryFile(const string& FileName, unsigned char* Buffer, streamsize Size) {
 
     ofstream myFile(FileName, ios::out | ios::binary);
     myFile.write((char*)&Buffer[0], Size);
 
 }
-
+*/
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
 bool SectorOK(unsigned char T, unsigned char S) {
@@ -631,7 +641,11 @@ bool AddHSFile()
     if (FileExits(FN))
     {
         HSFile.clear();
-        ReadBinaryFile(FN, HSFile);
+        if (ReadBinaryFile(FN, HSFile) == -1)
+        {
+            cout << "***CRITICAL***\tUnable to open Hi-score File\n";
+            return false;
+        }
 
         switch (NumParams)
         {
@@ -644,7 +658,7 @@ bool AddHSFile()
             }
             else                                                                //Short file without paramters -> HARD STOP
             {
-                cout << "***CRITICAL***\nFile paramteres are needed for the Hi-Score File: " << FN << "\n";
+                cout << "***CRITICAL***\tFile paramteres are needed for the Hi-Score File: " << FN << "\n";
                 return false;
             }
             break;
@@ -694,7 +708,7 @@ bool AddHSFile()
             FLN = (0x10000 - FAN);// & 0xf00;
             //if (FLN < 0x100)
             //{
-            //    cout << "***CRITICAL***\nThe Hi-Score File's size must be at least $100 bytes!\n";
+            //    cout << "***CRITICAL***\tThe Hi-Score File's size must be at least $100 bytes!\n";
             //        return false;
             //}
         }
@@ -739,7 +753,7 @@ bool AddHSFile()
                 FLN = (0x10000 - FAN);// & 0xf00;
                 //if (FLN < 0x100)
                 //{
-                //    cout << "***CRITICAL***\nThe Hi-Score File's size must be at least $100 bytes!\n";
+                //    cout << "***CRITICAL***\tThe Hi-Score File's size must be at least $100 bytes!\n";
                 //        return false;
                 //}
             }
@@ -766,7 +780,7 @@ bool AddHSFile()
         }
         else
         {
-            cout << "***CRITICAL***\nThe Hi-Score File " << HSFileName << " doesn't exist and an empty Hi-Score File could not be created without all 3 parameters.\n";
+            cout << "***CRITICAL***\tThe Hi-Score File " << HSFileName << " doesn't exist and an empty Hi-Score File could not be created without all 3 parameters.\n";
             return false;
         }
     }
@@ -937,7 +951,7 @@ void NewDisk() {
 bool ResetDiskVariables() {
 
     if (DiskCnt == 126) {
-        cout << "***CRITICAL***\nYou have reached the maximum number of disks (127) in this project. " + '\n';
+        cout << "***CRITICAL***\tYou have reached the maximum number of disks (127) in this project.\n";
         return false;
     }
 
@@ -1099,7 +1113,10 @@ bool FindNextScriptEntry() {
 
     if (LineEnd == Script.length())
     {
-        ScriptEntry += tolower(S);
+        if ((S != 13) && (S != 10))
+        {
+            ScriptEntry += tolower(S);
+        }
     }
     else
     {
@@ -1126,7 +1143,7 @@ bool InsertScript(string& SubScriptPath)
 
     if (!FileExits(SubScriptPath))
     {
-        cout << "***CRITICAL***\nThe following script was not found and could not be processed: " << SubScriptPath << "\n";
+        cout << "***CRITICAL***\tThe following script was not found and could not be processed: " << SubScriptPath << "\n";
         return false;
     }
 
@@ -1201,7 +1218,7 @@ bool InsertScript(string& SubScriptPath)
     string SS2 = (LineEnd < Script.length())? Script.substr(LineEnd, Script.length() - (LineEnd)) : "";
     Script = SS1 + S + SS2;
 
-/*
+
     ofstream out1("C:\\Tmp\\SS1.sls");
     out1 << SS1;
     out1.close();
@@ -1209,7 +1226,7 @@ bool InsertScript(string& SubScriptPath)
     out2 << SS2;
     out2.close();
     WriteTextToFile("C:\\Tmp\\TestScript.sls");
-*/
+
     Lines.clear();
 
     LineEnd = (LineStart > 0) ? LineStart - 1 : LineStart;
@@ -1317,7 +1334,7 @@ bool CompressBundle() {             //NEEDS PackFile() and CloseFile()
     if (LastBlockCnt > 255)
     {
         //Parts cannot be larger than 255 blocks compressed
-        cout << "***CRITICAL***\nBundle exceeds 255-block limit! Bundle " << BundleCnt << " would need " << LastBlockCnt << " blocks on the disk.\n";
+        cout << "***CRITICAL***\tBundle exceeds 255-block limit! Bundle " << BundleCnt << " would need " << LastBlockCnt << " blocks on the disk.\n";
         return false;
     }
 
@@ -1347,7 +1364,7 @@ bool SortBundle() {
             int FSO{}, FEO{}, FSI{}, FEI{};
 
             //Check for overlaps
-            for (int o = 0; o < tmpPrgs.size() - 1;o++)
+            for (int o = 0; o < tmpPrgs.size() - 1; o++)
             {
                 FSO = tmpPrgs[o].iFileAddr;               //Outer loop file start
                 FEO = FSO + tmpPrgs[o].iFileLen - 1;     //Outer loop file end
@@ -1369,9 +1386,9 @@ bool SortBundle() {
                         }
                         else
                         {
-                            cout << "***CRITICAL***\nThe following two files overlap in Bundle " << dec << (BundleCnt - 1) + ":\n";
-                            cout << tmpPrgs[i].FileName << " ($" << tmpPrgs[i].FileAddr << " - $" << hex << FEI << ")\n";
-                            cout << tmpPrgs[o].FileName << " ($" << tmpPrgs[o].FileAddr << " - $" << hex << FEO << ")\n";
+                            cout << "***CRITICAL***\tThe following two files overlap in Bundle " << dec << (BundleCnt - 1) << ":\n"
+                            << tmpPrgs[i].FileName << " ($" << tmpPrgs[i].FileAddr << " - $" << hex << FEI << ")\n"
+                            << tmpPrgs[o].FileName << " ($" << tmpPrgs[o].FileAddr << " - $" << hex << FEO << ")\n";
                             return false;
                         }
                     }
@@ -1383,7 +1400,9 @@ bool SortBundle() {
 
             while (Change)
             {
+
                 Change = false;
+
                 for (int o = 0; o < tmpPrgs.size() - 1; o++)
                 {
                     FSO = tmpPrgs[o].iFileAddr;
@@ -1393,6 +1412,7 @@ bool SortBundle() {
                     {
                         FSI = tmpPrgs[i].iFileAddr;
                         FEI = tmpPrgs[i].iFileLen;
+
 
                         if (FSO + FEO == FSI)
                         {
@@ -1436,8 +1456,11 @@ bool SortBundle() {
 
                             //One less file left
                             FileCnt--;
+                            break;
                         }
                     }
+                    if (Change)
+                        break;
                 }
             }
             //Sort files by length (short files first, thus, last block will more likely contain 1 file only = faster depacking)
@@ -1552,7 +1575,11 @@ bool AddVirtualFile()
     //Get file variables from script, or get default values if there were none in the script entry
     if (FileExits(FN))
     {
-        ReadBinaryFile(FN, P);
+        if (ReadBinaryFile(FN, P) == -1)
+        {
+            cout << "***CRITICAL***\tUnable to open the following file: " << FN << "\n";
+            return false;
+        };
 
         switch (NumParams)
         {
@@ -1572,7 +1599,7 @@ bool AddVirtualFile()
             }
             else                                                        //Short file without paramters -> HARD STOP
             {
-                cout << "***CRITICAL***\nFile parameteres are needed for the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                cout << "***CRITICAL***\tFile parameteres are needed for the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                 return false;
             }
             break;
@@ -1588,7 +1615,7 @@ bool AddVirtualFile()
             FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
             if (FON > P.size() - 1)
             {
-                cout << "***CRITICAL***\nInvalid file offset detected in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                cout << "***CRITICAL***\tInvalid file offset detected in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                 return false;
             }
             FL = ConvertIntToHextString(P.size() - FON, 4);             //Length=prg length-offset
@@ -1601,7 +1628,7 @@ bool AddVirtualFile()
             FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
             if (FON > P.size() - 1)
             {
-                cout << "***CRITICAL***\nInvalid file offset detected in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                cout << "***CRITICAL***\tInvalid file offset detected in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                 return false;
             }
         }
@@ -1613,14 +1640,14 @@ bool AddVirtualFile()
         //Make sure file length is not longer than actual file
         if (FON + FLN > P.size())
         {
-            cout << "***CRITICAL***\nInvalid file length detected in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+            cout << "***CRITICAL***\tInvalid file length detected in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
             return false;
         }
 
         //Make sure file address+length<=&H10000
         if (FAN + FLN > 0x10000)
         {
-            cout << "***CRITICAL***\nInvalid file address and/or length detected in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+            cout << "***CRITICAL***\tInvalid file address and/or length detected in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
             return false;
         }
 
@@ -1696,14 +1723,18 @@ bool AddFileToBundle() {
     }
 
     //Convert string to lowercase
-    for (int i = 0; i < FN.length(); i++)
-        FN[i] = tolower(FN[i]);
+    //for (int i = 0; i < FN.length(); i++)
+        //FN[i] = tolower(FN[i]);
 
     //Get file variables from script, or get default values if there were none in the script entry
     if (FileExits(FN))
     {
         //P.clear();
-        ReadBinaryFile(FN, P);
+        if (ReadBinaryFile(FN, P) == -1)
+        {
+            cout << "***CRITICAL***\tUnable to open the following file: " << FN << "\n";
+            return false;
+        }
 
         switch (NumParams)
         {
@@ -1723,7 +1754,7 @@ bool AddFileToBundle() {
             }
             else                                                        //Short file without paramters -> HARD STOP
             {
-                cout << "***CRITICAL***\nFile parameteres are needed for the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                cout << "***CRITICAL***\tFile parameteres are needed for the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                 return false;
             }
             break;
@@ -1739,7 +1770,7 @@ bool AddFileToBundle() {
             FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
             if (FON > P.size() - 1)
             {
-                cout << "***CRITICAL***\nInvalid file offset detected in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                cout << "***CRITICAL***\tInvalid file offset detected in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                 return false;
             }
             FL = ConvertIntToHextString(P.size() - FON, 4);             //Length=prg length-offset
@@ -1752,7 +1783,7 @@ bool AddFileToBundle() {
             FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
             if (FON > P.size() - 1)
             {
-                cout << "***CRITICAL***\nInvalid file offset detected in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                cout << "***CRITICAL***\tInvalid file offset detected in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                 return false;
             }
         }
@@ -1764,14 +1795,14 @@ bool AddFileToBundle() {
         //Make sure file length is not longer than actual file
         if(FON + FLN > P.size())
         {
-            cout << "***CRITICAL***\nInvalid file length detected in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+            cout << "***CRITICAL***\tInvalid file length detected in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
             return false;
         }
 
         //Make sure file address+length<=&H10000
         if (FAN + FLN > 0x10000)
         {
-            cout << "***CRITICAL***\nInvalid file address and/or length detected in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+            cout << "***CRITICAL***\tInvalid file address and/or length detected in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
             return false;
         }
 
@@ -1793,7 +1824,7 @@ bool AddFileToBundle() {
     }
     else
     {
-        cout << "***CRITICAL***\nThe following file does not exist: " << FN << "\n";
+        cout << "***CRITICAL***\tThe following file does not exist: " << FN << "\n";
         return false;
     }
 
@@ -1970,7 +2001,11 @@ void ConvertBintoDirArt(string DirArtType) {
 
     vector<unsigned char> DA;
 
-    ReadBinaryFile(DirArtName, DA);
+    if (ReadBinaryFile(DirArtName, DA)==-1)
+    {
+        cout << "***CRITICAL***\tUnable to open the following file: " << DirArtName << "\n";
+        return;
+    }
 
     DirTrack = 18;
     DirSector = 1;
@@ -2070,11 +2105,17 @@ void ConvertTxtToDirArt() {
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
+
 void ConvertD64ToDirArt() {
     
     vector<unsigned char> DA;
     
-    ReadBinaryFile(DirArtName, DA);
+    if(ReadBinaryFile(DirArtName, DA)==-1)
+    {
+        cout << "***CRITICAL***\tUnable to open the following file: " << DirArtName << "\n";
+        return;
+    }
+
     int T = 18;
     int S = 1;
 
@@ -2144,14 +2185,15 @@ void ConvertD64ToDirArt() {
 void AddDirArt() {
 
     if (DirArtName == "")
-        cout << "***INFO***\nInvalid DirArt file name.\n";
-        cout << "The disk will be build without DirArt. \n";
+    {
+        //cout << "***INFO***\tInvalid DirArt file name. The disk will be build without DirArt.\n";
         return;
+    }
         
     if (!FileExits(DirArtName))
     {
-        cout << "***INFO***\nThe following DirArt file does not exist: " << DirArtName << "\n";
-        cout << "The disk will be build without DirArt. \n";
+        cout << "***INFO***\tThe following DirArt file does not exist: " << DirArtName << "\n";
+        cout << "The disk will be build without DirArt.\n";
         return;
     }
 
@@ -2295,17 +2337,17 @@ bool InjectSaverPlugin() {
 
     if (HSFile.size() == 0)
     {
-        cout << "***CRITICAL***\nThe Hi-Score File's size must be multiples of $100 bytes, but not greater than $f00 bytes.\n";
+        cout << "***CRITICAL***\tThe Hi-Score File's size must be multiples of $100 bytes, but not greater than $f00 bytes.\n";
         return false;
     }
     if (HSFileName == "")
     {
-        cout << "***CRITICAL***\nThe Hi-Score File's name is not defined.\n";
+        cout << "***CRITICAL***\tThe Hi-Score File's name is not defined.\n";
         return false;
     }
     if (BundleNo > 125)
     {
-        cout << "***CRITICAL***\nThe Hi-Score File Saver Plugin cannot be added to the disk because the number of file bundles exceeds 126!\n";
+        cout << "***CRITICAL***\tThe Hi-Score File Saver Plugin cannot be added to the disk because the number of file bundles exceeds 126!\n";
         cout << "The Plugin and the Hi-Score File would use bundle indices $7e and $7f, respectively.\n";
         return false;
     }
@@ -2317,7 +2359,7 @@ bool InjectSaverPlugin() {
 
     if (BlocksFree < BlocksUsedBySaver)
     {
-        cout << "***CRITICAL***\nThe Hi-Score File and the Saver Plugin cannot be added because there is not enough free space on the disk!\n";
+        cout << "***CRITICAL***\tThe Hi-Score File and the Saver Plugin cannot be added because there is not enough free space on the disk!\n";
         return false;
     }
 
@@ -2731,12 +2773,12 @@ bool UpdateZP() {
     //ZP cannot be $00, $01, or $ff
     if (ZP < 2)
     {
-        cout << "***CRITICAL***\nZeropage value cannot be less than $02.\n";
+        cout << "***CRITICAL***\tZeropage value cannot be less than $02.\n";
         return false;
     }
     else if (ZP > 0xfd)
     {
-        cout << "***CRITICAL***\nZeropage value cannot be greater than $fd.\n";
+        cout << "***CRITICAL***\tZeropage value cannot be greater than $fd.\n";
         return false;
     }
     
@@ -2761,7 +2803,7 @@ bool UpdateZP() {
 
     if (LoaderBase == 0xffff)
     {
-        cout << "***CRITICAL***\nZeropage offset could not updated.\n";
+        cout << "***CRITICAL***\tZeropage offset could not updated.\n";
         return false;
     }
 
@@ -2834,7 +2876,7 @@ bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL) {
     }
     else
     {
-        cout << "***CRITICAL***\nStart address is missing!\n";
+        cout << "***CRITICAL***\tStart address is missing!\n";
         return false;
     }
     
@@ -3027,7 +3069,7 @@ bool AddCompressedBundlesToDisk() {
 
     if (BlocksFree < BufferCnt)
     {
-        cout << "***CRITICAL***\n" << D64Name << " cannot be built because it would require " << BufferCnt << " blocks.\n";
+        cout << "***CRITICAL***\t" << D64Name << " cannot be built because it would require " << BufferCnt << " blocks.\n";
         cout << "This disk only has " << SectorsPerDisk << " blocks.";
         return false;
     }
@@ -3081,7 +3123,7 @@ bool FinishDisk(bool LastDisk) {
 
     if ((BundleCnt == 0) && (FileCnt == -1))
     {
-        cout << "***CRITICAL***\nThis disk does not contain any files!\n";
+        cout << "***CRITICAL***\tThis disk does not contain any files!\n";
         return false;
     }
 
@@ -3096,7 +3138,7 @@ bool FinishDisk(bool LastDisk) {
 
     if (MaxBundleNoExceeded)
     {
-        cout << "***INFO***\nThe number of file bundles is greater than 128 on this disk!\n";
+        cout << "***INFO***\tThe number of file bundles is greater than 128 on this disk!\n";
         cout << "You can only access bundles 0-127 by bundle index. The rest can only be loaded using the LoadNext function.";
     }
 
@@ -3140,7 +3182,7 @@ bool Build() {
 
     if (ScriptEntry != ScriptHeader)
     {
-        cout << "***CRITICAL***\nInvalid script file!" + '\n';
+        cout << "***CRITICAL***\tInvalid script file!\n";
         return false;
     }
     if (!ResetDiskVariables())
@@ -3254,7 +3296,7 @@ bool Build() {
                 }
                 else
                 {
-                    cout << "***INFO***\nThe following DirArt file does not exist: " << ScriptEntryArray[0] << "\nThe disk will be built without DirArt.\n";
+                    cout << "***INFO***\tThe following DirArt file does not exist: " << ScriptEntryArray[0] << "\nThe disk will be built without DirArt.\n";
                 }
 
                 NewBundle = true;
@@ -3406,7 +3448,7 @@ bool Build() {
                     }
                     else
                     {
-                        cout << "***INFO***\nThe Product ID must be a maximum 6-digit long hexadecimal number!\nSparkle will use the following pseudorandom Product ID: " << hex << ProductID <<"\n";
+                        cout << "***INFO***\tThe Product ID must be a maximum 6-digit long hexadecimal number!\nSparkle will use the following pseudorandom Product ID: " << hex << ProductID <<"\n";
                     }
                 }
 
@@ -3553,7 +3595,7 @@ int main(int argc, char* argv[])
 
     if (argc < 2)
     {
-        cerr << "***INFO***\nUsage: Sparkle script.sls\nFor details please read the user manual!\n";
+        cerr << "***INFO***\tUsage: Sparkle script.sls\nFor details please read the user manual!\n";
 		return 1;
         
         //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\GP\\GPSpaceXDemo\\6502\\SpaceXDemo.sls";
@@ -3569,14 +3611,13 @@ int main(int argc, char* argv[])
         SetScriptPath(ScriptFileName, AppPath);
     }
 
-
     if (Script == "")
     {
-        cerr <<"***CRITICAL***\nUnable to load script file or  the file is empty!\n";
-        return 1;
+        cerr <<"***CRITICAL***\tUnable to load script file or the file is empty!\n";
+        return -1;
     }
 
-    CalcTabs();             //IS THIS NEEDED HERE???
+    CalcTabs();     //IS THIS NEEDED HERE???
 
     if (!Build())
         return -1;
