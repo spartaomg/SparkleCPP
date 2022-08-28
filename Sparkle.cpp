@@ -3527,7 +3527,7 @@ int main(int argc, char* argv[])
 {
     auto cstart = std::chrono::system_clock::now();
 
-    cout << "Sparkle by Sparta/OMG 2019-2022\n";
+    cout << "Sparkle 2.3 by Sparta 2019-2022\n";
 
     string AppPath{filesystem::current_path().string() + "\\"};
 
