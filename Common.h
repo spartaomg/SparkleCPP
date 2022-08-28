@@ -29,7 +29,8 @@ extern int BytePtr, BitPtr, NibblePtr, BitPos, BitsLeft;
 //extern vector<array<unsigned char, 256>> ByteSt;
 extern unsigned char ByteSt[] ;
 
-extern int PartialFileIndex, PartialFileOffset;
+extern int PartialFileIndex;
+extern size_t PartialFileOffset;
 extern bool FileUnderIO;
 extern bool LastFileOfBundle;
 extern const int SD_size;

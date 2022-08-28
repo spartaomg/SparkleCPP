@@ -1,8 +1,25 @@
 #include "common.h"
 
-unsigned char VersionMajor = 2;
-unsigned char VersionMinor = 3;
-unsigned long int VersionBuild = 0x220718;
+//--------------------------------------------------------
+//  COMPILE TIME VARIABLES FOR VERSION INFO
+//--------------------------------------------------------
+
+constexpr unsigned int Year = ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
+
+constexpr unsigned int Month = (__DATE__[0] == 'J') ? ((__DATE__[1] == 'a') ? 1 : ((__DATE__[2] == 'n') ? 6 : 7))    // Jan, Jun or Jul
+                             : (__DATE__[0] == 'F') ? 2                                                              // Feb
+                             : (__DATE__[0] == 'M') ? ((__DATE__[2] == 'r') ? 3 : 5)                                 // Mar or May
+                             : (__DATE__[0] == 'A') ? ((__DATE__[2] == 'p') ? 4 : 8)                                 // Apr or Aug
+                             : (__DATE__[0] == 'S') ? 9                                                              // Sep
+                             : (__DATE__[0] == 'O') ? 10                                                             // Oct
+                             : (__DATE__[0] == 'N') ? 11                                                             // Nov
+                             : (__DATE__[0] == 'D') ? 12                                                             // Dec
+                             : 0;
+constexpr unsigned int Day = (__DATE__[4] == ' ') ? (__DATE__[5] - '0') : (__DATE__[4] - '0') * 10 + (__DATE__[5] - '0');
+constexpr unsigned long int VersionBuild = ((Year / 10) * 0x100000) + ((Year % 10) * 0x10000) + ((Month / 10) * 0x1000) + ((Month % 10) * 0x100) + ((Day / 10) * 0x10) + (Day % 10);
+
+constexpr unsigned char VersionMajor = 2;
+constexpr unsigned char VersionMinor = 3;
 
 unsigned char LoaderBlockCount = 0;
 
@@ -93,9 +110,9 @@ unsigned char DirPtr[128]{};
 //Hi-Score File variables
 string HSFileName = "";
 vector<unsigned char> HSFile;
-int HSAddress = 0;
-int HSOffset = 0;
-int HSLength = 0;
+size_t HSAddress = 0;
+size_t HSOffset = 0;
+size_t HSLength = 0;
 bool bSaverPlugin =false;
 
 //Interleave constants and variables
@@ -150,7 +167,8 @@ int BitPtr;
 
 bool LastFileOfBundle = false;
 
-int PartialFileIndex, PartialFileOffset;
+int PartialFileIndex;
+size_t PartialFileOffset;
 
 int PrgAdd, PrgLen;
 bool FileUnderIO = false;
@@ -576,9 +594,9 @@ bool AddHSFile()
     string FA = "";
     string FO = "";
     string FL = "";
-    int FAN = 0;
-    int FON = 0;
-    int FLN = 0;
+    size_t FAN = 0;
+    size_t FON = 0;
+    size_t FLN = 0;
     bool FUIO = false;
 
     //vector<unsigned char> P;
@@ -1624,7 +1642,7 @@ bool AddVirtualFile()
     }
     else
     {
-        cout << "***CRITICAL***\The following Mem file does not exist: " << FN << "\n";
+        cout << "***CRITICAL***\tThe following Mem file does not exist: " << FN << "\n";
         return false;
     }
 
@@ -1779,7 +1797,7 @@ bool AddFileToBundle() {
         return false;
     }
 
-    UncompBundleSize += FLN / 256;
+    UncompBundleSize += FLN / static_cast<double>(256);
     if (FLN % 256 != 0)
     {
         UncompBundleSize++;
@@ -2232,7 +2250,7 @@ void AddDemoNameToDisk(unsigned char T, unsigned char S) {
 
 void AddHeaderAndID() {
 
-    unsigned char B;
+    //unsigned char B;
     int BAM = Track[18];
 
     for (int i = 0x90; i <= 0xaa; i++)
@@ -2407,7 +2425,7 @@ bool InjectSaverPlugin() {
     {
         int j = 0 - i;
         if (j < 0)
-            j + 256;
+            j += 256;
         Disk[Track[CT] + (CS * 256) + j] = EORtransform(SaveCode[256 + i]);
     }
 
@@ -2573,6 +2591,8 @@ bool InjectSaverPlugin() {
         Disk[Track[CT] + (CS * 256) + i] = Buffer[i];
     }
 
+    return true;
+
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -2604,9 +2624,10 @@ bool InjectDriveCode(unsigned char& idcDiskID, char& idcFileCnt, char& idcNextID
     //   VersionInfo
     //-------------------
     //Add version info: YY MM DD VV
+    
     int VI = 0x5b;
-    Drive[VI + 0] = VersionBuild >> 32;
-    Drive[VI + 1] = (VersionBuild & 0xff00) >> 16;
+    Drive[VI + 0] = VersionBuild >> 16;
+    Drive[VI + 1] = (VersionBuild & 0xff00) >> 8;
     Drive[VI + 2] = VersionBuild & 0xff;
     Drive[VI + 4] = (VersionMajor << 4) + VersionMinor;
 
@@ -2615,8 +2636,8 @@ bool InjectDriveCode(unsigned char& idcDiskID, char& idcFileCnt, char& idcNextID
     //-------------------
     //Add Product ID
     int PID = 0x1b;
-    Drive[PID + 0] = ProductID >> 32;
-    Drive[PID + 1] = (ProductID & 0xff00) >> 16;
+    Drive[PID + 0] = ProductID >> 16;
+    Drive[PID + 1] = (ProductID & 0xff00) >> 8;
     Drive[PID + 2] = ProductID & 0xff;
 
     //Resort blocks in drive code:
@@ -2965,7 +2986,7 @@ void CalcTabs() {
 
         while (SCnt < SMax)
         {
-        NextSector:
+        //NextSector:
             if (Sectors[Tr[T] + S] == 0)
             {
                 Sectors[Tr[T] + S] = 1;
@@ -3109,7 +3130,7 @@ bool Build() {
     srand(time(NULL));
 
     /* generate a random number between 0 and 0Xffffff: */
-    ProductID = ((rand() & 0xff0) << 12) + (rand() & 0xffff);
+    ProductID = (((rand() & 0xff0) << 16) + (rand() & 0xffff)) & 0xffffff;
 
     LineStart = 0;
     LineEnd = 0;
@@ -3457,7 +3478,7 @@ bool Build() {
             else if (ScriptEntryType == EntryTypeMem)
             {
 
-                if(!AddVirtualFile)
+                if(!AddVirtualFile())
                   return false;
 
                 NewBundle = false;
@@ -3520,7 +3541,6 @@ void SetScriptPath(string sPath, string aPath)
 
     //cout << ScriptPath << "\n";
 }
-
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
 int main(int argc, char* argv[])
@@ -3556,11 +3576,7 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    CalcTabs();
-
-    //NewDisk();
-
-    //WriteDiskImage("C:\\Tmp\\Disk.d64");
+    CalcTabs();             //IS THIS NEEDED HERE???
 
     if (!Build())
         return -1;

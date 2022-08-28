@@ -1129,7 +1129,7 @@ Restart:
 
             MLen = Seq[SI + 1].Len;     //1 based
             MOff = Seq[SI + 1].Off;     //1 based
-        Match:
+        //Match:
             CalcMatchBytesAndBits(MLen, MOff);
 
             ReferenceUnderIO = 0;
@@ -1274,7 +1274,7 @@ Restart:
                     }   //Literal vs nothing
                 }   //Short match vs literal
             }   //Long, mid, or short match
-        Done:
+        //Done:
             SI -= MLen;
 
             if (BufferFull)
