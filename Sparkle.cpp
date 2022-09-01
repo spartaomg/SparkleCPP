@@ -1351,7 +1351,7 @@ bool CompressBundle() {             //NEEDS PackFile() and CloseFile()
     TotalOrigSize += OrigSize;
     TotalCompSize += BC;
 
-    cout << OrigSize <<" block" << ((OrigSize == 1)? " " : "s") << " ->\t" << BC << " block" << ((BC == 1) ? " " : "s") << "\t(" << (BC * 100/OrigSize) <<"%)\n";
+    cout << OrigSize <<" block" << ((OrigSize == 1)? " " : "s") << (OrigSize < 10 ? "  " : (OrigSize < 100 ? " ": "")) << "  ->\t" << BC << " block" << ((BC == 1) ? " " : "s") << "\t(" << (BC * 100 / OrigSize) << "%)\n";
 
     if (LastBlockCnt > 255)
     {
@@ -3187,8 +3187,10 @@ bool FinishDisk(bool LastDisk) {
 
     UpdateBlocksFree();
 
-    cout << "\nFinal disk size : " << ((TracksPerDisk == StdTracksPerDisk) ? (StdSectorsPerDisk - BlocksFree) : (ExtSectorsPerDisk - BlocksFree)) << " blocks used, "
-        << BlocksFree << " blocks free. Compression ratio: " << (TotalCompSize*100/TotalOrigSize) << "%\n\n";
+    int BlocksUsed = ((TracksPerDisk == StdTracksPerDisk) ? (StdSectorsPerDisk - BlocksFree) : (ExtSectorsPerDisk - BlocksFree));
+
+    cout << "\nFinal disk size : " << BlocksUsed << " block" << (BlocksUsed == 1? "" : "s") << " used, "
+        << BlocksFree << " block" << (BlocksFree == 1 ? "" : "s") << " free. Overall compression ratio : " << (TotalCompSize * 100 / TotalOrigSize) << " % \n\n";
 
     WriteDiskImage(D64Name);
 
@@ -3657,7 +3659,7 @@ int main(int argc, char* argv[])
     auto cend = std::chrono::system_clock::now();
     std::chrono::duration<double> elapsed_seconds = cend - cstart;
 
-    std::cout << "Elapsed time: " << elapsed_seconds.count() << "s\n";
+    std::cout << "Elapsed time: " << elapsed_seconds.count() << "s\n\n";
 
     return 0;
 }
