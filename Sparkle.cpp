@@ -18,8 +18,8 @@ constexpr unsigned int Month = (__DATE__[0] == 'J') ? ((__DATE__[1] == 'a') ? 1 
 constexpr unsigned int Day = (__DATE__[4] == ' ') ? (__DATE__[5] - '0') : (__DATE__[4] - '0') * 10 + (__DATE__[5] - '0');
 constexpr unsigned long int VersionBuild = ((Year / 10) * 0x100000) + ((Year % 10) * 0x10000) + ((Month / 10) * 0x1000) + ((Month % 10) * 0x100) + ((Day / 10) * 0x10) + (Day % 10);
 
-constexpr unsigned char VersionMajor = 2;
-constexpr unsigned char VersionMinor = 3;
+constexpr int VersionMajor = 2;
+constexpr int VersionMinor = 3;
 
 unsigned char LoaderBlockCount = 0;
 
@@ -29,7 +29,6 @@ string ScriptName = "";
 string ScriptEntry = "";
 string ScriptLine = "";
 string ScriptEntryType = "";
-string ScriptHeader = "[sparkle loader script]";
 const int MaxNumEntries = 5;
 string ScriptEntryArray[MaxNumEntries]{};
 int NumScriptEntries = -1;
@@ -62,6 +61,7 @@ bool TmpSetNewBlock = false;
 bool SetNewBlock = false;           //This will fire at the previous bundle and will set NewBlock2
 bool NewBlock = false;              //This will fire at the specified bundle
 
+string EntryTypeScriptHeader = "[sparkle loader script]";
 string EntryTypePath = "path:";
 string EntryTypeHeader = "header:";
 string EntryTypeID = "id:";
@@ -173,14 +173,7 @@ bool FileUnderIO = false;
 
 bool SaverSupportsIO = false;
 
-//const int SD_size;
-//unsigned char SD[];
-//const int Loader_size;
-//unsigned char Loader[];
-//const int SS_size;
-//unsigned char SS[];
-//const int SSIO_size;
-//unsigned char SSIO[];
+int TotalOrigSize{}, TotalCompSize{};
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -987,6 +980,9 @@ bool ResetDiskVariables() {
     BundleNo = 0;
     MaxBundleNoExceeded = false;
 
+    TotalOrigSize = 0;
+    TotalCompSize = 0;
+
     //ReDim ByteSt(-1);
     std::fill_n(ByteSt, ExtBytesPerDisk, 0);
     ResetBuffer();
@@ -1019,7 +1015,7 @@ bool ResetDiskVariables() {
 
     //-------------------------------------------------------------
 
-    BundleCnt = -1;        //'WILL BE INCREASED TO 0 IN ResetPartVariables
+    BundleCnt = -1;        //'WILL BE INCREASED TO 0 IN ResetBundleVariables
     LoaderBundles = 1;
     FilesInBuffer = 1;
 
@@ -1045,10 +1041,11 @@ bool SplitScriptEntry() {
     unsigned int Pos = 0;
     unsigned char ThisChar;
     ScriptEntryType = "";
+    
     while (Pos < ScriptEntry.length()) {
         ThisChar = tolower(ScriptEntry[Pos++]);
         if (ThisChar != '\t') {
-            ScriptEntryType += ThisChar;
+            ScriptEntryType += ThisChar;            //Entry Type to lower case
         }
         else
         {
@@ -1064,7 +1061,15 @@ bool SplitScriptEntry() {
         if (NumScriptEntries == -1)
             NumScriptEntries++;
 
-        ThisChar = tolower(ScriptEntry[Pos++]);
+        if (ScriptEntryType == EntryTypePath)
+        {
+
+            ThisChar = ScriptEntry[Pos++];                  //Keep original D64 path
+        }
+        else
+        {
+            ThisChar = tolower(ScriptEntry[Pos++]);     //Lower case everything else
+        }
 
         if (ThisChar != '\t') {
             ScriptEntryArray[NumScriptEntries] += ThisChar;
@@ -1097,7 +1102,9 @@ bool FindNextScriptEntry() {
         LineStart++;
     }
 
+    //OrigScriptEntry = "";
     ScriptEntry = "";
+    
     char S = Script[LineStart++];
 
     //Find the first non-linebreak character => LineStart
@@ -1110,7 +1117,8 @@ bool FindNextScriptEntry() {
     LineEnd = LineStart--;
 
     while ((S != 13) && (S != 10) && (LineEnd <= Script.length() - 1)) {
-        ScriptEntry += tolower(S);
+        //OrigScriptEntry += S;
+        ScriptEntry += S;// tolower(S);
             S = Script[LineEnd++];
     }
 
@@ -1118,7 +1126,8 @@ bool FindNextScriptEntry() {
     {
         if ((S != 13) && (S != 10))
         {
-            ScriptEntry += tolower(S);
+            //OrigScriptEntry += S;
+            ScriptEntry += S;// tolower(S);
         }
     }
     else
@@ -1126,7 +1135,7 @@ bool FindNextScriptEntry() {
         LineEnd--;
     }
 
-    return true;
+    return SplitScriptEntry();
 
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1187,7 +1196,7 @@ bool InsertScript(string& SubScriptPath)
         SplitScriptEntry();                 //This will also convert the script entry to lower case
 
         //Skip Script Header
-        if (Lines[i] != ScriptHeader)
+        if (Lines[i] != EntryTypeScriptHeader)
         {
             if (S != "")
                 S += "\n";
@@ -1338,6 +1347,9 @@ bool CompressBundle() {             //NEEDS PackFile() and CloseFile()
     int BC = LastBlockCnt;
     if (BundleNo == 1)
         BC++;
+
+    TotalOrigSize += OrigSize;
+    TotalCompSize += BC;
 
     cout << OrigSize <<" block" << ((OrigSize == 1)? " " : "s") << " ->\t" << BC << " block" << ((BC == 1) ? " " : "s") << "\t(" << (BC * 100/OrigSize) <<"%)\n";
 
@@ -3176,7 +3188,7 @@ bool FinishDisk(bool LastDisk) {
     UpdateBlocksFree();
 
     cout << "\nFinal disk size : " << ((TracksPerDisk == StdTracksPerDisk) ? (StdSectorsPerDisk - BlocksFree) : (ExtSectorsPerDisk - BlocksFree)) << " blocks used, "
-        << BlocksFree << " blocks free\n\n";
+        << BlocksFree << " blocks free. Compression ratio: " << (TotalCompSize*100/TotalOrigSize) << "%\n\n";
 
     WriteDiskImage(D64Name);
 
@@ -3198,8 +3210,7 @@ bool Build() {
 
     FindNextScriptEntry();
 
-
-    if (ScriptEntry != ScriptHeader)
+    if (ScriptEntryType != EntryTypeScriptHeader)
     {
         cout << "***CRITICAL***\tInvalid script file!\n";
         return false;
@@ -3216,7 +3227,7 @@ bool Build() {
 
         if (FindNextScriptEntry())
         {
-            SplitScriptEntry();
+            //SplitScriptEntry();
 
             if (ScriptEntryType == EntryTypePath)
             {
@@ -3608,13 +3619,15 @@ int main(int argc, char* argv[])
 {
     auto cstart = std::chrono::system_clock::now();
 
-    cout << "Sparkle 2.3 by Sparta 2019-2022\n";
+    cout << "\n**************************************\n";
+    cout << "Sparkle " << VersionMajor <<"." << VersionMinor << "." << hex << VersionBuild << dec << " by Sparta 2019-2022\n";
+    cout << "**************************************\n\n";
 
     string AppPath{filesystem::current_path().string() + "\\"};
 
     if (argc < 2)
     {
-        cout << "***INFO***\tUsage: Sparkle script.sls\nFor details please read the user manual!\n";
+        cout << "Usage: Sparkle script.sls\n\nFor details please read the user manual!\n";
 		return 1;
 
         //string ScriptFileName = "c:\\Users\\Tamas\\source\\repos\\GPMagazine\\Magazine\\Issue32\\Sparkle\\Magazine.sls";
