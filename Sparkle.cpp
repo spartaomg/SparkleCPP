@@ -477,7 +477,7 @@ void InjectDirBlocks() {
     //DirBlocks(2) = EORtransform(Remaining sectors on track)
     //DirBlocks(3) = BitPtr
 
-    if (BundleNo > 0)
+    if (BundleNo >= 0)
     {
         for (int i = BundleNo + 1; i < 128; i++)
         {
@@ -725,9 +725,15 @@ bool AddHSFile()
 
         FL = ConvertIntToHextString(FLN, 4);
 
-        vector<unsigned char>::iterator First = HSFile.begin();
-        HSFile.erase(First + FON + FLN, First + HSFile.size() - 1); //Trim HSFile from end of file (Offset+Length-1) to end of vector
-        HSFile.erase(First, First + FON - 1);                       //Trim HSFile from beginning of file to Offset
+        //vector<unsigned char>::iterator First = HSFile.begin();
+        if (FON + FLN < HSFile.size())
+        {
+            HSFile.erase(HSFile.begin() + FON + FLN, HSFile.end()); //Trim HSFile from end of file (Offset+Length-1) to end of vector
+        }
+        if (FON > 0)
+        {
+            HSFile.erase(HSFile.begin(), HSFile.begin() + FON);                       //Trim HSFile from beginning of file to Offset
+        }
 
         HSFileName = FN + (FUIO ? "*" : "");
         HSAddress = FAN;
@@ -1963,7 +1969,6 @@ void ConvertCArrayToDirArt() {
 
     DirTrack = 18;
     DirSector = 1;
-    //unsigned char NB = 0;
 
     for (size_t b = 0; b < BinFileLength; b += 16)
     {
@@ -1979,7 +1984,7 @@ void ConvertCArrayToDirArt() {
             {
                 if (b + i < BinFileLength)
                 {
-                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Petscii2DirArt[DA[b + i]];
+                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Petscii2DirArt[BinFile[b + i]];
                 }
                 else
                 {
@@ -1997,11 +2002,13 @@ void ConvertCArrayToDirArt() {
             break;
         }
     }
+
+    delete[] BinFile;
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void ConvertBintoDirArt(string DirArtType) {
+void ConvertBinToDirArt(string DirArtType) {
 
     vector<unsigned char> DA;
 
@@ -2127,38 +2134,39 @@ void ConvertD64ToDirArt() {
     DirSector = 1;
 
     bool DirFull = false;
-    int DAPtr = Track[T] + (S * 256);
+    int DAPtr{};
 
-    DA[DAPtr] = T;
-    DA[DAPtr + 1] = S;
-
-    while ((!DirFull) && (DA[DAPtr] != 0))
+    while ((!DirFull) && (T != 0))
     {
         DAPtr = Track[T] + (S * 256);
         for (int b = 2; b < 256; b += 32)
         {
-            //FindNextDirPos();
-            if (DirPos != 0)
+            if (DA[DAPtr + b] != 0)
             {
-                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0] = 0x82;      //"PRG" -  all dir entries will point at first file in dir
-                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 1] = 18;        //Track 18 (track pointer of boot loader)
-                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 2] = 7;         //Sector 7 (sector pointer of boot loader)
+                FindNextDirPos();
 
-                for (int i = 0; i < 16; i++)
+                if (DirPos != 0)
                 {
-                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = DA[DAPtr + b + 3 + i];
-                }
+                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0] = 0x82;      //"PRG" -  all dir entries will point at first file in dir
+                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 1] = 18;        //Track 18 (track pointer of boot loader)
+                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 2] = 7;         //Sector 7 (sector pointer of boot loader)
 
-                if ((DirTrack == 18) && (DirSector == 1) && (DirPos == 2))
-                {
-                    //Very first dir entry, also add loader block count
-                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0x1c] = LoaderBlockCount;
+                    for (int i = 0; i < 16; i++)
+                    {
+                        Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = DA[DAPtr + b + 3 + i];
+                    }
+
+                    if ((DirTrack == 18) && (DirSector == 1) && (DirPos == 2))
+                    {
+                        //Very first dir entry, also add loader block count
+                        Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0x1c] = LoaderBlockCount;
+                    }
                 }
-            }
-            else
-            {
-                DirFull = true;
-                break;
+                else
+                {
+                    DirFull = true;
+                    break;
+                }
             }
         }
         T = DA[DAPtr];
@@ -2220,7 +2228,7 @@ void AddDirArt() {
     }
     else if (DirArtType == "prg")
     {
-        ConvertBintoDirArt(DirArtType);
+        ConvertBinToDirArt(DirArtType);
     }
     else if (DirArtType == "c")
     {
@@ -2228,7 +2236,7 @@ void AddDirArt() {
     }
     else
     {
-        ConvertBintoDirArt("");
+        ConvertBinToDirArt("");
     }
 }
 
@@ -2368,6 +2376,7 @@ bool InjectSaverPlugin() {
     }
 
     unsigned char SaveCode[512]{};
+    int SaveCodeSize{};
 
     if (HSFileName.find("*") == HSFileName.length() - 1)
     {
@@ -2378,6 +2387,7 @@ bool InjectSaverPlugin() {
         {
             SaveCode[i] = SSIO[i];
         }
+        SaveCodeSize = SSIO_size;
     }
     else
     {
@@ -2387,6 +2397,7 @@ bool InjectSaverPlugin() {
         {
             SaveCode[i] = SS[i];
         }
+        SaveCodeSize = SS_size;
     }
 
     //UpdateZP BUG REPORTED BY Rico/Pretzel Logic
@@ -2467,7 +2478,7 @@ bool InjectSaverPlugin() {
     CS = TabS[SctPtr];
 
     //Copy second block of saver plugin to disk
-    for (int i = 0; i < 256; i++)
+    for (int i = 0; i < SaveCodeSize - 256; i++)
     {
         int j = 0 - i;
         if (j < 0)
@@ -2629,7 +2640,8 @@ bool InjectSaverPlugin() {
         Buffer[(SaverSupportsIO ? 251 : 252) - HSLength + i] = HSFile[i];
     }
 
-    Buffer[(SaverSupportsIO ? 251 : 252) - HSLength - 1] = 0xf8;    //End of File Bundle flag
+    Buffer[(SaverSupportsIO ? 251 : 252) - HSLength - 1] = NearLongMatchTag;    //End of Bundle: 0x84
+    Buffer[(SaverSupportsIO ? 251 : 252) - HSLength - 2] = EndOfBundleTag;      //End of Bundle: 0x00
 
 
     for (int i = 0; i < 256; i++)
@@ -3605,7 +3617,7 @@ int main(int argc, char* argv[])
         cout << "***INFO***\tUsage: Sparkle script.sls\nFor details please read the user manual!\n";
 		return 1;
 
-        //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\GP\\GPSpaceXDemo\\6502\\SpaceXDemo.sls";
+        //string ScriptFileName = "c:\\Users\\Tamas\\source\\repos\\GPMagazine\\Magazine\\Issue32\\Sparkle\\Magazine.sls";
         //Script = ReadFileToString(ScriptFileName);
 
         //SetScriptPath(ScriptFileName, AppPath);

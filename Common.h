@@ -94,6 +94,9 @@ extern int BlockCnt;
 extern bool SetNewBlock;           //This will fire at the previous bundle and will set NewBlock2
 extern bool NewBlock;              //This will fire at the specified bundle
 
+extern const unsigned char NearLongMatchTag;    //= 0x84;
+extern const unsigned char EndOfBundleTag;      //= 0x00;
+
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------
 //Functions
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------
