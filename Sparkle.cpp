@@ -105,7 +105,7 @@ vector<FileStruct> VFiles;
 vector<FileStruct> tmpVFiles;
 
 unsigned char DirBlocks[512]{};
-unsigned char DirPtr[128]{};
+int DirPtr[128]{};
 
 //Hi-Score File variables
 string HSFileName = "";
@@ -140,21 +140,19 @@ string DirArtName = "";
 string DirEntry = "";
 
 int BlockPtr;
-unsigned char LastBlockCnt = 0;
+int LastBlockCnt = 0;
 char LoaderBundles = 1;
 unsigned char FilesInBuffer = 1;
 
 int Track[41]{};
-unsigned char CT, CS, CP, BlockCnt;
+unsigned char CT, CS, CP;
+int BlockCnt;
 unsigned char StartTrack = 1;
 unsigned char StartSector = 0;
 
 bool FirstFileOfDisk = false;
 string FirstFileStart = "";
 
-int TotalBundles = 0;
-vector<int> BundleSizeV;
-vector<int> BundleOrigSizeV;
 double UncompBundleSize = 0;
 
 int BitsNeededForNextBundle = 0;
@@ -328,6 +326,8 @@ void WriteDiskImage(const string& DiskName)
         BytesPerDisk = ExtBytesPerDisk;
     }
 
+    cout << "Writing disk image: " << DiskName << "\n\n";
+
     ofstream myFile(DiskName, ios::out | ios::binary);
     myFile.write((char*)&Disk[0], BytesPerDisk);
 }
@@ -457,12 +457,14 @@ unsigned char EORtransform(unsigned char Input) {
     switch (Input & 0x09){
     case 0:
         return (Input ^ 0x7f);
-    case 1:
-        return (Input ^ 0x76);
-    case 8:
-        return (Input ^ 0x76);
+    //case 1:
+        //return (Input ^ 0x76);
+    //case 8:
+        //return (Input ^ 0x76);
     case 9:
         return (Input ^ 0x7f);
+    default:
+        return (Input ^ 0x76);
     }
 }
 
@@ -573,7 +575,7 @@ bool ParameterIsNumeric(int i)
 
 void CorrectParameterStringLength(const int& i)
 {
-    int MaxNumChars = 0;
+    size_t MaxNumChars = 0;
     if (i == 2)
     {
         MaxNumChars = 8;    //File Offset max. $ffff ffff (dword)
@@ -585,7 +587,7 @@ void CorrectParameterStringLength(const int& i)
 
     if (ScriptEntryArray[i].size() < MaxNumChars)
     {
-        for (int j = ScriptEntryArray[i].size(); j < MaxNumChars; j++)
+        for (size_t j = ScriptEntryArray[i].size(); j < MaxNumChars; j++)
         {
             ScriptEntryArray[i] = "0" + ScriptEntryArray[i];
         }
@@ -860,11 +862,6 @@ bool ResetBundleVariables() {
     tmpVFiles.clear();
 
     BundleCnt++;
-
-    TotalBundles++;
-
-    BundleSizeV.clear();
-    BundleOrigSizeV.clear();
 
     BlockCnt = 0;
 
@@ -1164,7 +1161,7 @@ bool InsertScript(string& SubScriptPath)
     string SubScript = ReadFileToString(SubScriptPath);
 
     //Count line breakes
-    int NumLines = std::count(SubScript.begin(), SubScript.end(), '\n') + 1;
+    //int NumLines = std::count(SubScript.begin(), SubScript.end(), '\n') + 1;
 
     //Store lines in vector
     vector<string> Lines;
@@ -1303,10 +1300,11 @@ bool CompressBundle() {             //NEEDS PackFile() and CloseFile()
     LastFileOfBundle = false;
 
     PartialFileIndex = -1;
-    
-    cout << "Compressing bundle #" << BundleNo << "...\n";
+    int OrigSize{};
 
-    for (int i = 0; i < Prgs.size(); i++)
+    cout << "Compressing bundle #" << (BundleNo - 1) << "...\t";
+
+    for (size_t i = 0; i < Prgs.size(); i++)
     {
         //Mark the last file in a bundle for better compression
         if (i == Prgs.size() - 1)
@@ -1317,10 +1315,12 @@ bool CompressBundle() {             //NEEDS PackFile() and CloseFile()
         if (PartialFileIndex == -1)
             PartialFileOffset = Prgs[i].Prg.size() - 1;
 
+        OrigSize += (Prgs[i].iFileLen + 253) / 254;
+
         PackFile(i);
         if (i < Prgs.size() - 1)
         {
-            //WE NEED TO USE THE NEXT FILE'S ADDRESS, LENGTH AND I / O STATUS HERE
+            //WE NEED TO USE THE NEXT FILE'S ADDRESS, LENGTH AND I/O STATUS HERE
             //FOR I/O BYTE CALCULATION FOR THE NEXT PART - BUG reported by Raistlin/G*P
             PrgAdd = Prgs[i + 1].iFileAddr;
             PrgLen = Prgs[i + 1].iFileLen;
@@ -1328,8 +1328,12 @@ bool CompressBundle() {             //NEEDS PackFile() and CloseFile()
             CloseFile();
         }
     }
-
     LastBlockCnt = BlockCnt;
+    int BC = LastBlockCnt;
+    if (BundleNo == 1)
+        BC++;
+
+    cout << OrigSize <<" block" << ((OrigSize == 1)? " " : "s") << " ->\t" << BC << " block" << ((BC == 1) ? " " : "s") << "\t(" << (BC * 100/OrigSize) <<"%)\n";
 
     if (LastBlockCnt > 255)
     {
@@ -1364,11 +1368,11 @@ bool SortBundle() {
             int FSO{}, FEO{}, FSI{}, FEI{};
 
             //Check for overlaps
-            for (int o = 0; o < tmpPrgs.size() - 1; o++)
+            for (size_t o = 0; o < tmpPrgs.size() - 1; o++)
             {
                 FSO = tmpPrgs[o].iFileAddr;               //Outer loop file start
                 FEO = FSO + tmpPrgs[o].iFileLen - 1;     //Outer loop file end
-                for (int i = o + 1; i < tmpPrgs.size(); i++)
+                for (size_t i = o + 1; i < tmpPrgs.size(); i++)
                 {
                     FSI = tmpPrgs[i].iFileAddr;           //Inner loop file start
                     FEI = FSI + tmpPrgs[i].iFileLen - 1; //Inner loop file end
@@ -1403,12 +1407,12 @@ bool SortBundle() {
 
                 Change = false;
 
-                for (int o = 0; o < tmpPrgs.size() - 1; o++)
+                for (size_t o = 0; o < tmpPrgs.size() - 1; o++)
                 {
                     FSO = tmpPrgs[o].iFileAddr;
                     FEO = tmpPrgs[o].iFileLen;
 
-                    for (int i = o + 1; i < tmpPrgs.size(); i++)
+                    for (size_t i = o + 1; i < tmpPrgs.size(); i++)
                     {
                         FSI = tmpPrgs[i].iFileAddr;
                         FEI = tmpPrgs[i].iFileLen;
@@ -1534,9 +1538,9 @@ bool AddVirtualFile()
     string FA = "";
     string FO = "";
     string FL = "";
-    int FAN = 0;
-    int FON = 0;
-    int FLN = 0;
+    size_t FAN = 0;
+    size_t FON = 0;
+    size_t FLN = 0;
     bool FUIO = false;
 
     vector<unsigned char> P;
@@ -1569,7 +1573,7 @@ bool AddVirtualFile()
     }
 
     //Convert string to lowercase
-    for (int i = 0; i < FN.length(); i++)
+    for (size_t i = 0; i < FN.length(); i++)
         FN[i] = tolower(FN[i]);
 
     //Get file variables from script, or get default values if there were none in the script entry
@@ -1683,14 +1687,14 @@ bool AddVirtualFile()
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
 bool AddFileToBundle() {
-    
+
     string FN = ScriptEntryArray[0];
     string FA = "";
     string FO = "";
     string FL = "";
-    int FAN = 0;
-    int FON = 0;
-    int FLN = 0;
+    size_t FAN = 0;
+    size_t FON = 0;
+    size_t FLN = 0;
     bool FUIO = false;
 
     vector<unsigned char> P;
@@ -1839,7 +1843,7 @@ bool AddFileToBundle() {
         FirstFileStart = FA;
         FirstFileOfDisk = false;
     }
-    
+
     FileCnt++;
 
     tmpPrgs.push_back(FileStruct(P, FN, FA, FO, FL, FUIO));
@@ -1909,7 +1913,7 @@ void FindNextDirPos() {
                 DirPos = i;
                 return;
             }
-        }  
+        }
         FindNextDirSector();
     }
 }
@@ -1955,13 +1959,13 @@ void ConvertCArrayToDirArt() {
         }
     }
 
-    int BinFileLength = (CharRow * 16) + CharPos;
+    size_t BinFileLength = (CharRow * 16) + CharPos;
 
     DirTrack = 18;
     DirSector = 1;
-    unsigned char NB = 0;
+    //unsigned char NB = 0;
 
-    for (int b = 0; b < BinFileLength; b += 16)
+    for (size_t b = 0; b < BinFileLength; b += 16)
     {
         FindNextDirPos();
 
@@ -1971,7 +1975,7 @@ void ConvertCArrayToDirArt() {
             Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 1] = 18;        //Track 18 (track pointer of boot loader)
             Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 2] = 7;         //Sector 7 (sector pointer of boot loader)
 
-            for (int i = 0; i < 16; i++)
+            for (size_t i = 0; i < 16; i++)
             {
                 if (b + i < BinFileLength)
                 {
@@ -2009,10 +2013,10 @@ void ConvertBintoDirArt(string DirArtType) {
 
     DirTrack = 18;
     DirSector = 1;
-    unsigned char NB = 0;
+    //unsigned char NB = 0;
     int DAPtr = (DirArtType == "prg") ? 2 : 0;
 
-    for (int b = DAPtr; b < DA.size(); b += 40)
+    for (size_t b = DAPtr; b < DA.size(); b += 40)
     {
         FindNextDirPos();
         if (DirPos != 0)
@@ -2081,8 +2085,8 @@ void ConvertTxtToDirArt() {
     string delimiter = "\n";
     DirTrack = 18;
     DirSector = 1;
-    
-    while (DirArt.find(delimiter) != string::npos) 
+
+    while (DirArt.find(delimiter) != string::npos)
     {
         string DirEntry = DirArt.substr(0, DirArt.find(delimiter));
         DirArt.erase(0, DirArt.find(delimiter) + delimiter.length());
@@ -2096,7 +2100,7 @@ void ConvertTxtToDirArt() {
             break;
         }
     }
-    
+
     FindNextDirPos();
     if (DirPos != 0)
     {
@@ -2107,9 +2111,9 @@ void ConvertTxtToDirArt() {
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
 void ConvertD64ToDirArt() {
-    
+
     vector<unsigned char> DA;
-    
+
     if(ReadBinaryFile(DirArtName, DA)==-1)
     {
         cout << "***CRITICAL***\tUnable to open the following file: " << DirArtName << "\n";
@@ -2189,7 +2193,7 @@ void AddDirArt() {
         //cout << "***INFO***\tInvalid DirArt file name. The disk will be build without DirArt.\n";
         return;
     }
-        
+
     if (!FileExits(DirArtName))
     {
         cout << "***INFO***\tThe following DirArt file does not exist: " << DirArtName << "\n";
@@ -2200,7 +2204,7 @@ void AddDirArt() {
     string DirArtType = "";
     if (DirArtName.find(".") != string::npos)
     {
-        for (int i = DirArtName.find(".") + 1; i < DirArtName.length(); i++)
+        for (size_t i = DirArtName.find(".") + 1; i < DirArtName.length(); i++)
         {
             DirArtType += tolower(DirArtName[i]);
         }
@@ -2279,7 +2283,7 @@ void AddDemoNameToDisk(unsigned char T, unsigned char S) {
         Disk[Cnt + B + 3 + W] = 0xa0;
     }
 
-    for (int W = 0; W < DN.length(); W++)
+    for (size_t W = 0; W < DN.length(); W++)
     {
         A = Ascii2DirArt[DN[W]];
         Disk[Cnt + B + 3 + W] = A;
@@ -2309,7 +2313,7 @@ void AddHeaderAndID() {
     }
     else
     {
-        for (int i = 0; i < ((DiskHeader.size() <= 16) ? DiskHeader.size() : 16); i++)
+        for (size_t i = 0; i < ((DiskHeader.size() <= 16) ? DiskHeader.size() : 16); i++)
         {
             Disk[BAM + 0x90 + i] = Ascii2DirArt[DiskHeader[i]];
         }
@@ -2324,7 +2328,7 @@ void AddHeaderAndID() {
     }
     else
     {
-        for (int i = 0; i < ((DiskID.size() <= 5) ? DiskID.size() : 5); i++)
+        for (size_t i = 0; i < ((DiskID.size() <= 5) ? DiskID.size() : 5); i++)
         {
             Disk[BAM + 0xa2 + i] = Ascii2DirArt[DiskID[i]];         //Overwrites Disk ID and DOS type (5 characters max.)
         }
@@ -2387,7 +2391,7 @@ bool InjectSaverPlugin() {
 
     //UpdateZP BUG REPORTED BY Rico/Pretzel Logic
     //WE ALSO NEED TO UPDATE ZP OFFSET IN THE SAVER CODE!!!
-    
+
     //Convert LoaderZP to byte - it has already been validated in UpdateZP
     unsigned char ZP = ConvertStringToInt(LoaderZP);
 
@@ -2493,7 +2497,7 @@ bool InjectSaverPlugin() {
     unsigned char Buffer[256]{};
     int HSStartAdd = HSAddress + HSLength - 1;
     unsigned char BlockCnt = HSLength / 256;
-    
+
 
     //First block
     Buffer[0] = 0;
@@ -2588,7 +2592,7 @@ bool InjectSaverPlugin() {
             HSLength -= 0xfb;
         }
     }
-    
+
     //Last block of Hi-Score File
 
     SctPtr++;
@@ -2620,7 +2624,7 @@ bool InjectSaverPlugin() {
 
     }
 
-    for (int i = 0; i < HSLength; i++)
+    for (size_t i = 0; i < HSLength; i++)
     {
         Buffer[(SaverSupportsIO ? 251 : 252) - HSLength + i] = HSFile[i];
     }
@@ -2666,7 +2670,7 @@ bool InjectDriveCode(unsigned char& idcDiskID, char& idcFileCnt, char& idcNextID
     //   VersionInfo
     //-------------------
     //Add version info: YY MM DD VV
-    
+
     int VI = 0x5b;
     Drive[VI + 0] = VersionBuild >> 16;
     Drive[VI + 1] = (VersionBuild & 0xff00) >> 8;
@@ -2688,7 +2692,7 @@ bool InjectDriveCode(unsigned char& idcDiskID, char& idcFileCnt, char& idcNextID
         Drive[(3 * 256) + i] = Drive[(4 * 256) + i];    //Copy ZP GCR Tab and GCR loop to block 3 for loading
         Drive[(4 * 256) + i] = Drive[(5 * 256) + i];    //Copy Init code to block 4 for loading
         Drive[(5 * 256) + i] = B3[i];                   //Copy original block 3 EOR transformed to block 5 to be loaded by init code
-        
+
     }
 
     //Add NextID and IL0-IL3 to ZP
@@ -2740,7 +2744,7 @@ bool InjectDriveCode(unsigned char& idcDiskID, char& idcFileCnt, char& idcNextID
     Disk[BAM + 248] = EORtransform((ProductID / 0x10000) & 0xff);
     Disk[BAM + 247] = EORtransform((ProductID / 0x100) & 0xff);
     Disk[BAM + 246] = EORtransform(ProductID & 0xff);
-    
+
     return true;
 
 }
@@ -2752,7 +2756,7 @@ bool UpdateZP() {
     if (LoaderZP.size() < 2)    //00 - need 2, 01 - need 1
     {
         string DefaultZP = "02";
-        for (int i = 0; i < LoaderZP.size(); i++)
+        for (size_t i = 0; i < LoaderZP.size(); i++)
         {
             LoaderZP = DefaultZP[i] + LoaderZP;
         }
@@ -2761,7 +2765,7 @@ bool UpdateZP() {
     {
         string DefaultZP = LoaderZP;
         LoaderZP = "";
-        for (int i = LoaderZP.size()-2; i < LoaderZP.size(); i++)
+        for (size_t i = LoaderZP.size()-2; i < LoaderZP.size(); i++)
         {
             LoaderZP += DefaultZP[i];
         }
@@ -2781,7 +2785,7 @@ bool UpdateZP() {
         cout << "***CRITICAL***\tZeropage value cannot be greater than $fd.\n";
         return false;
     }
-    
+
     //ZP=02 is the default, no need to update
     if (ZP == 2)
     {
@@ -2862,10 +2866,10 @@ bool UpdateZP() {
 
 bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL) {
 
-    int B{}, I{}, Cnt{}, W{};
-    unsigned char ST{}, SS{}, A{}, AdLo{}, AdHi{};
+    int B{};
+    unsigned char ST{}, SS{}, AdLo{}, AdHi{};
 
-    
+
     if (DemoStart != "")                            //Check if we have a Demo Start Address
     {
         B = ConvertHexStringToInt(DemoStart);
@@ -2879,7 +2883,7 @@ bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL) {
         cout << "***CRITICAL***\tStart address is missing!\n";
         return false;
     }
-    
+
     AdLo = (B - 1) % 256;
     AdHi = (B - 1) / 256;
 
@@ -2945,9 +2949,9 @@ bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL) {
             }
         }
     }
-    
+
     //delete[] Loader;
-    
+
     return true;
 }
 
@@ -2959,7 +2963,7 @@ void CalcTabs() {
     char Sectors[ExtSectorsPerDisk + 19]{};
     int Tr[41]{};       //0-40
     int S = 0;
-    int LastS = 0;
+    //int LastS = 0;
     int i = 0;
 
     for (int T = 1; T < ExtTracksPerDisk; T++)
@@ -3034,7 +3038,7 @@ void CalcTabs() {
                 Sectors[Tr[T] + S] = 1;
                 TabT[i] = T;
                 TabS[i] = S;
-                LastS = S;
+                //LastS = S;
                 TabSCnt[i] = SMax - SCnt;
                 i++;
                 SCnt++;
@@ -3101,7 +3105,7 @@ bool AddCompressedBundlesToDisk() {
         NextSector = 0;
     }
 
-    
+
     return true;
 }
 
@@ -3149,7 +3153,7 @@ bool FinishDisk(bool LastDisk) {
         return false;
 
     char NextID = LastDisk ? 0x80 : DiskCnt + 1;        //Negative value means no more disk, otherwise 0x00-0x7f
-   
+
     if (!InjectDriveCode(DiskCnt,LoaderBundles,NextID))
         return false;
 
@@ -3158,6 +3162,9 @@ bool FinishDisk(bool LastDisk) {
     AddDirArt();
 
     UpdateBlocksFree();
+
+    cout << "\nFinal disk size : " << ((TracksPerDisk == StdTracksPerDisk) ? (StdSectorsPerDisk - BlocksFree) : (ExtSectorsPerDisk - BlocksFree)) << " blocks used, "
+        << BlocksFree << " blocks free\n\n";
 
     WriteDiskImage(D64Name);
 
@@ -3595,9 +3602,9 @@ int main(int argc, char* argv[])
 
     if (argc < 2)
     {
-        cerr << "***INFO***\tUsage: Sparkle script.sls\nFor details please read the user manual!\n";
+        cout << "***INFO***\tUsage: Sparkle script.sls\nFor details please read the user manual!\n";
 		return 1;
-        
+
         //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\GP\\GPSpaceXDemo\\6502\\SpaceXDemo.sls";
         //Script = ReadFileToString(ScriptFileName);
 

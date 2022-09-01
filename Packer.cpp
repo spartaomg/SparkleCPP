@@ -87,7 +87,7 @@ unsigned char LastByte;
 void UpdateByteStream()
 {
     memcpy(&ByteSt[(BufferCnt - 1) * 256], &Buffer[0], 256 * sizeof(Buffer[0]));
-    
+
     //for (int i = 0; i < 256; i++)
     //{
         //ByteSt[((BufferCnt - 1) * 256) + i] = Buffer[i];
@@ -121,7 +121,7 @@ int CheckIO(int Offset, int NextFileUnderIO) {
 void ResetBuffer()
 {
     Buffer.fill(0);     //Reset Buffer
-    
+
     //Both of these would work:
     //memset(Buffer.data(), 0, Buffer.size() * sizeof(Buffer[0]));    //memset() is faster than fill()
     //fill(Buffer.begin(), Buffer.end(), 0);  //New empty buffer
@@ -239,7 +239,7 @@ void AddLitSequence()
     {
         return;
     }
-    
+
     int Lits = LitCnt;
 
     if (Lits >= MaxLitsPerNibble)
@@ -301,7 +301,7 @@ void AddShortMatch()
 void AddNearMidMatch()
 {
     //				X-3	     X-2	  X-1      X		    OFFSET (STORED AS)  	LENGTH (STORED AS)
-    //	NEAR MID:	                  oooooooo 1LLLLL00	    $01-$100 ($00-$FF)   	$02-$1F ($02-$1F)	
+    //	NEAR MID:	                  oooooooo 1LLLLL00	    $01-$100 ($00-$FF)   	$02-$1F ($02-$1F)
 
     AddMatchBit();
 
@@ -315,7 +315,7 @@ void AddNearMidMatch()
 void AddFarMidMatch()
 {
     //				X-3	     X-2	  X-1      X		    OFFSET (STORED AS)  	    LENGTH (STORED AS)
-    //	FAR MID:		     oooooooo HHHHHHHH 0LLLLL00	    $0101-$FFFF ($0100-$FFFE) 	$03-$1F ($03-$1F)	
+    //	FAR MID:		     oooooooo HHHHHHHH 0LLLLL00	    $0101-$FFFF ($0100-$FFFE) 	$03-$1F ($03-$1F)
 
     AddMatchBit();
 
@@ -422,9 +422,9 @@ void CheckLitSeq(int Pos)
 
     //Calculate literal bits for a presumtive LitCnt+1 value
     LitBits = ((LitCnt + 1) / MaxLitPerBlock) * 13;
-    
+
     int LC = (LitCnt + 1) % MaxLitPerBlock;
-    
+
     if (LC == 0)
     {
         LitBits++;              //Lits = 0	    1 literal       1 bit
@@ -497,7 +497,7 @@ void CheckMatchSeq(int SeqLen, int SeqOff, int Pos)
 //----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 bool SequenceFits(int BytesToAdd, int BitsToAdd, int SequenceUnderIO) {
-    
+
     int BytesFree = BytePtr;    //1,2,3,...,BytePtr-1,BytePtr
 
     //If this is a transitional block (including block 0 on disk) then we need 1 byte for block count (will be overwritten by Close Byte
@@ -557,7 +557,7 @@ bool SequenceFits(int BytesToAdd, int BitsToAdd, int SequenceUnderIO) {
             AdHiPos--;                                          //Update AdHi Position in Buffer
             BlockUnderIO = 1;                                   //Set BlockUnderIO Flag
         }
-       
+
         return true;
     }
     else
@@ -596,7 +596,7 @@ bool CloseFile() {
 
         //If last sequence was a match (no literals) then add a match bit
         if ((MLen > 0) || (LitCnt == -1)) AddBits(MatchSelector, 1);
-            
+
         Buffer[BytePtr--] = NextFileTag;                            //Then add New File Match Tag
         FirstLitOfBlock = true;
     }
@@ -658,7 +658,7 @@ bool CloseBundle(int NextFileIO, bool LastPartOnDisk)
         Buffer[BytePtr--] = EndOfBundleTag;
         BitPtr = BytePtr--;
         Buffer[BitPtr] = 0x01;
-        
+
         BitPos = 7;
         BitsLeft = 7;
 
@@ -761,17 +761,19 @@ void FindFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex, int RefMaxAd
     int OffsetBase = (ReferenceFileStart >= PrgAdd) ? ReferenceFileStart - PrgAdd : ReferenceFileStart + 0x10000 - PrgAdd;
 
     //Pos = Min>0 to Max value, direction of execution is arbitrary (could be Max to Min>0 Step -1)
-    for (int Pos = SeqMinIndex; Pos <= SeqMaxIndex; Pos++)  //Pos cannot be 0, Prg(0) is always literal as it is always 1 byte left
+    for (int Pos = SeqMinIndex; Pos <= SeqMaxIndex; Pos++)  //Pos cannot be 0, Prg(0) is always literal as there is always 1 byte left
     {
+        unsigned char PrgValAtPos = Prgs[CurrentFileIndex].Prg[Pos];
+
         //Offset goes from 1 to max offset (cannot be 0)
         //Match length goes from 1 to max length
         for (int O = RefMinAddressIndex; O <= RefMaxAddressIndex; O++)
         {
             //Check if first byte matches at offset, if not go to next offset
-            if (Prgs[CurrentFileIndex].Prg[Pos] == Prgs[RefIndex].Prg[O])
+            if (PrgValAtPos == Prgs[RefIndex].Prg[O])
             {
-                int MaxLL = FastMin(FastMin(Pos + 1, MaxLongLen),O - RefMinAddressIndex + 1);   //MaxLL = 255 or less
-                //int MaxLL = min(min(Pos + 1, MaxLongLen), O - RefMinAddressIndex + 1);   //MaxLL = 255 or less
+                //int MaxLL = FastMin(FastMin(Pos + 1, MaxLongLen),O - RefMinAddressIndex + 1);   //MaxLL = 255 or less
+                int MaxLL = min(min(Pos + 1, MaxLongLen), O - RefMinAddressIndex + 1);   //MaxLL = 255 or less
                 for (int L = 1; L <= MaxLL; L++)
                 {
                     if ((L == MaxLL) || (Prgs[CurrentFileIndex].Prg[Pos - L] != Prgs[RefIndex].Prg[O - L]))
@@ -837,12 +839,14 @@ void FindVirtualFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex,int Re
     //Pos = Min>0 to Max value, direction of execution is arbitrary (could be Max to Min>0 Step -1)
     for (int Pos = SeqMinIndex; Pos <= SeqMaxIndex; Pos++)  //Pos cannot be 0, Prg(0) is always literal as it is always 1 byte left
     {
+        unsigned char PrgValAtPos = Prgs[CurrentFileIndex].Prg[Pos];
+
         //Offset goes from 1 to max offset (cannot be 0)
         //Match length goes from 1 to max length
         for (int O = RefMinAddressIndex; O <= RefMaxAddressIndex; O++)
         {
             //Check if first byte matches at offset, if not go to next offset
-            if (Prgs[CurrentFileIndex].Prg[Pos] == VFiles[RefIndex].Prg[O])
+            if (PrgValAtPos == VFiles[RefIndex].Prg[O])
             {
                 int MaxLL = min(min(Pos + 1, MaxLongLen), O - RefMinAddressIndex + 1);   //MaxLL = 255 or less
                 for (int L = 1; L <= MaxLL; L++)
@@ -914,10 +918,12 @@ void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
                 FL[Pos] = 0;
             }
 
+            unsigned char PrgValAtPos = Prgs[CurrentFileIndex].Prg[Pos];
+
             for (int O = 1; O <= MaxO; O++)
             {
                 //Check if first byte matches at offset, if not go to next offset
-                if (Prgs[CurrentFileIndex].Prg[Pos] == Prgs[CurrentFileIndex].Prg[Pos + O])
+                if (PrgValAtPos == Prgs[CurrentFileIndex].Prg[Pos + O])
                 {
                     for (int L = 1; L <= MaxLL; L++)
                     {
@@ -956,7 +962,7 @@ void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
             }
         }
     }
-    
+
 /*  for (int Pos = SeqLowestIndex; Pos <= SeqHighestIndex; Pos++)
     {
         if ((FirstRun) || (FO[Pos] + Pos > SeqHighestIndex) || (NO[Pos] + Pos > SeqHighestIndex) || (SO[Pos] + Pos > SeqHighestIndex))
@@ -986,7 +992,7 @@ void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
             //Match length goes from 1 to max length
             vector<unsigned char>::iterator SBegin = Prgs[CurrentFileIndex].Prg.begin() + Pos + 1;
             vector<unsigned char>::iterator SEnd = Prgs[CurrentFileIndex].Prg.begin()+SeqHighestIndex;
-            
+
             while ((SBegin = search(SBegin, SEnd, MinMatch.begin(), MinMatch.end())) != SEnd)
             {
                 pair<vector<unsigned char>::iterator, vector<unsigned char>::iterator> MatchEnd
@@ -1011,7 +1017,7 @@ void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
                     NL[Pos] = MatchLength;
                     NO[Pos] = MatchOffset;
                 }
-                
+
                 if ((MatchOffset > MaxNearOffset) && (FL[Pos] < MatchLength) && (MatchLength > 2))
                 {
                     FL[Pos] = MatchLength;
@@ -1588,7 +1594,7 @@ bool CloseBuffer() {
 //----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 void PackFile(int Index) {
-    
+
     //----------------------------------------------------------------------------------------------------------
     //PROCESS FILE
     //----------------------------------------------------------------------------------------------------------
@@ -1607,7 +1613,7 @@ void PackFile(int Index) {
     FFO = new int[PrgLen]{};
 
     Seq = new sequence[PrgLen + 1]{};   //This is actually one element more in the array, to have starter element with 0 values
-    
+
     //Initialize first element of sequence - WAS Seq[1]!!!
     Seq[0].Len = 0;         //1 Literal byte, Len is 0 based
     Seq[0].Off = 0;         //Offset = 0 -> literal sequence, Off is 1 based
@@ -1622,7 +1628,7 @@ void PackFile(int Index) {
 
     CurrentFileIndex = Index;
 
-    for (int RefIndex  = 0; RefIndex < VFiles.size(); RefIndex++)
+    for (size_t RefIndex  = 0; RefIndex < VFiles.size(); RefIndex++)
     {
         ReferenceFileStart = VFiles[RefIndex].iFileAddr;
         SearchVirtualFile(PrgLen - 1, RefIndex, ReferenceFileStart + VFiles[RefIndex].iFileLen - 1, ReferenceFileStart + 1);

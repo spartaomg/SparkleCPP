@@ -1,8 +1,8 @@
 # depslib dependency file v1.0
-1661646308 source:c:\users\tamas\onedrive\c64\c++\sparkle\sparkle.cpp
+1661706972 source:c:\users\tamas\onedrive\c64\c++\sparkle\sparkle.cpp
 	"common.h"
 
-1661652981 c:\users\tamas\onedrive\c64\c++\sparkle\common.h
+1661990269 c:\users\tamas\onedrive\c64\c++\sparkle\common.h
 	<algorithm>
 	<iostream>
 	<string>
@@ -36,6 +36,6 @@
 1661646157 source:c:\users\tamas\onedrive\c64\c++\sparkle\loader.cpp
 	"common.h"
 
-1661642103 source:c:\users\tamas\onedrive\c64\c++\sparkle\packer.cpp
+1661973688 source:c:\users\tamas\onedrive\c64\c++\sparkle\packer.cpp
 	"common.h"
 

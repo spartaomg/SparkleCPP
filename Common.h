@@ -86,11 +86,11 @@ extern int BitsNeededForNextBundle;
 extern bool NewBlock;
 extern int BundleNo;
 extern unsigned char DirBlocks[512];
-extern unsigned char DirPtr[128];
-extern unsigned char LastBlockCnt;
+extern int DirPtr[128];
+extern int LastBlockCnt;
 extern char LoaderBundles;
 extern int BundleCnt;
-extern unsigned char BlockCnt;
+extern int BlockCnt;
 extern bool SetNewBlock;           //This will fire at the previous bundle and will set NewBlock2
 extern bool NewBlock;              //This will fire at the specified bundle
 
