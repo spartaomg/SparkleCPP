@@ -35,7 +35,7 @@ const int MaxFarOffset = 65536;                     //0-based (257-65536, stored
 const int MaxNearOffset = 256;                      //0-based (1-256, stored as 0-255)
 const int MaxShortOffset = 64;                      //0-based (1-64, stored as 0-63)
 
-int MaxOffset = MaxNearOffset * 8;                  //3 is most optimal for size, loading and disk creating speed
+int MaxOffset = MaxNearOffset * 8;                  //3 is most optimal for size, loading and disk creating speed, 8 is the new standard!!!
 
 //Match lengths
 const int MaxLongLen = 255;               //1-based (32-255, stored the same)
@@ -774,6 +774,7 @@ void FindFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex, int RefMaxAd
             {
                 //int MaxLL = FastMin(FastMin(Pos + 1, MaxLongLen),O - RefMinAddressIndex + 1);   //MaxLL = 255 or less
                 int MaxLL = min(min(Pos + 1, MaxLongLen), O - RefMinAddressIndex + 1);   //MaxLL = 255 or less
+
                 for (int L = 1; L <= MaxLL; L++)
                 {
                     if ((L == MaxLL) || (Prgs[CurrentFileIndex].Prg[Pos - L] != Prgs[RefIndex].Prg[O - L]))
@@ -849,6 +850,7 @@ void FindVirtualFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex,int Re
             if (PrgValAtPos == VFiles[RefIndex].Prg[O])
             {
                 int MaxLL = min(min(Pos + 1, MaxLongLen), O - RefMinAddressIndex + 1);   //MaxLL = 255 or less
+
                 for (int L = 1; L <= MaxLL; L++)
                 {
                     if ((L == MaxLL) || (Prgs[CurrentFileIndex].Prg[Pos - L] != VFiles[RefIndex].Prg[O - L]))

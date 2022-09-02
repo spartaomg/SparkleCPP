@@ -2222,12 +2222,25 @@ void AddDirArt() {
     }
 
     string DirArtType = "";
-    if (DirArtName[DirArtName.length() - 4] == '.')
+    
+    int ExtStart = DirArtName.length();
+
+    for (int i = DirArtName.length() - 1; i >= 0; i--)
     {
-        for (size_t i = DirArtName.length() - 3; i < DirArtName.length(); i++)
+        if (DirArtName[i] == '\\')
         {
-            DirArtType += tolower(DirArtName[i]);
+            break;
         }
+        else if (DirArtName[i] == '.')
+        {
+            ExtStart = i + 1;
+            break;
+        }
+    }
+    
+    for (int i = ExtStart; i < DirArtName.length(); i++)
+    {
+        DirArtType += tolower(DirArtName[i]);
     }
 
     if (DirArtType == "d64")
