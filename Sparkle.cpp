@@ -1344,14 +1344,14 @@ bool CompressBundle() {             //NEEDS PackFile() and CloseFile()
         }
     }
     LastBlockCnt = BlockCnt;
-    int BC = LastBlockCnt;
+    int BC = BufferCnt - PreBCnt;
     if (BundleNo == 1)
         BC++;
 
     TotalOrigSize += OrigSize;
     TotalCompSize += BC;
 
-    cout << OrigSize <<" block" << ((OrigSize == 1)? " " : "s") << (OrigSize < 10 ? "  " : (OrigSize < 100 ? " ": "")) << "  ->\t" << BC << " block" << ((BC == 1) ? " " : "s") << "\t(" << (BC * 100 / OrigSize) << "%)\n";
+    cout << OrigSize << " block" << ((OrigSize == 1) ? " " : "s") << (OrigSize < 10 ? "  " : (OrigSize < 100 ? " " : "")) << "  ->\t" << BC << " block" << ((BC == 1) ? " " : "s") << "\t(" << (BC * 100 / OrigSize) << "%)\n";
 
     if (LastBlockCnt > 255)
     {
@@ -2222,9 +2222,9 @@ void AddDirArt() {
     }
 
     string DirArtType = "";
-    if (DirArtName.find(".") != string::npos)
+    if (DirArtName[DirArtName.length() - 4] == '.')
     {
-        for (size_t i = DirArtName.find(".") + 1; i < DirArtName.length(); i++)
+        for (size_t i = DirArtName.length() - 3; i < DirArtName.length(); i++)
         {
             DirArtType += tolower(DirArtName[i]);
         }
@@ -3632,6 +3632,7 @@ int main(int argc, char* argv[])
         cout << "Usage: Sparkle script.sls\n\nFor details please read the user manual!\n";
 		return 1;
 
+        //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\GP\\GitHub\\MementoMori\\6502\\Main\\MementoMori A.sls";
         //string ScriptFileName = "c:\\Users\\Tamas\\source\\repos\\GPMagazine\\Magazine\\Issue32\\Sparkle\\Magazine.sls";
         //Script = ReadFileToString(ScriptFileName);
 

@@ -35,7 +35,7 @@ const int MaxFarOffset = 65536;                     //0-based (257-65536, stored
 const int MaxNearOffset = 256;                      //0-based (1-256, stored as 0-255)
 const int MaxShortOffset = 64;                      //0-based (1-64, stored as 0-63)
 
-int MaxOffset = MaxNearOffset * 3;                  //3 is most optimal for size, loading and disk creating speed
+int MaxOffset = MaxNearOffset * 8;                  //3 is most optimal for size, loading and disk creating speed
 
 //Match lengths
 const int MaxLongLen = 255;               //1-based (32-255, stored the same)
@@ -782,7 +782,7 @@ void FindFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex, int RefMaxAd
                         //L=MatchLength + 1 here
                         if (L > 2)
                         {
-                            if (((O - Pos) > MaxNearOffset) && (FL[Pos] < L))
+                            if (((O - Pos + OffsetBase) > MaxNearOffset) && (FFL[Pos] < L))
                             {
                                 FFL[Pos] = L;
                                 FFO[Pos] = O - Pos + OffsetBase;
@@ -857,7 +857,7 @@ void FindVirtualFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex,int Re
                         //L=MatchLength + 1 here
                         if (L > 2)
                         {
-                            if (((O - Pos) > MaxNearOffset) && (FL[Pos] < L))
+                            if (((O - Pos + OffsetBase) > MaxNearOffset) && (FFL[Pos] < L))
                             {
                                 FFL[Pos] = L;
                                 FFO[Pos] = O - Pos + OffsetBase;
