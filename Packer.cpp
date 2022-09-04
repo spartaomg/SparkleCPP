@@ -61,10 +61,6 @@ const int MaxBits = 256 * 8;
 const int MaxLitPerBlock = 251 - 1;                 //Maximum number of literals that fits in a block, LitCnt is 0-based
                                                     //256 - (AdLo, AdHi , 1 Bit, 1 Nibble, Number of Lits)
 
-//Private Seq() As Sequence           'Sequence array, to find the best sequence
-
-//Private SL(), SO(), NL(), NO(), FL(), FO(), FFL(), FFO() As Integer   'Short, Near, and Far Lengths and Offsets
-
 int SI{};                                           //Sequence array index, Offset max and min for far matches
 int LitSI{};                                        //Sequence array index of last literal sequence
 int StartPtr{};
@@ -77,7 +73,7 @@ int ReferenceUnderIO{};
 
 array<unsigned char, 256> Buffer;
 
-int *SL, *SO, *NL, *NO, *FL, *FO, *FFL, *FFO;
+int *SL, *SO, *NL, *NO, *FL, *FO, * FSL, * FSO, * FNL, * FNO, *FFL, *FFO;
 
 int NibblePtr, BitPos, BitsLeft;
 unsigned char LastByte;
@@ -774,6 +770,7 @@ void FindFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex, int RefMaxAd
             {
                 //int MaxLL = FastMin(FastMin(Pos + 1, MaxLongLen),O - RefMinAddressIndex + 1);   //MaxLL = 255 or less
                 int MaxLL = min(min(Pos + 1, MaxLongLen), O - RefMinAddressIndex + 1);   //MaxLL = 255 or less
+                int MaxSL = min(min(Pos + 1, MaxShortLen), O - RefMinAddressIndex + 1);
 
                 for (int L = 1; L <= MaxLL; L++)
                 {
@@ -783,6 +780,16 @@ void FindFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex, int RefMaxAd
                         //L=MatchLength + 1 here
                         if (L > 2)
                         {
+                            if ((O - Pos + OffsetBase <= MaxShortOffset) && (FSL[Pos] < MaxSL) && (FSL[Pos] < L))
+                            {
+                                FSL[Pos] = min(MaxSL, L); //If(L > MaxShortLen, MaxShortLen, L)   'Short matches cannot be longer than 4 bytes
+                                FSO[Pos] = O - Pos + OffsetBase;                        //Keep Offset 1-based
+                            }
+                            if ((O - Pos + OffsetBase <= MaxNearOffset) && (FNL[Pos] < L))   //Allow short (2-byte) Mid Matches
+                            {
+                                FNL[Pos] = L;
+                                FNO[Pos] = O - Pos + OffsetBase;
+                            }
                             if (((O - Pos + OffsetBase) > MaxNearOffset) && (FFL[Pos] < L))
                             {
                                 FFL[Pos] = L;
@@ -850,6 +857,7 @@ void FindVirtualFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex,int Re
             if (PrgValAtPos == VFiles[RefIndex].Prg[O])
             {
                 int MaxLL = min(min(Pos + 1, MaxLongLen), O - RefMinAddressIndex + 1);   //MaxLL = 255 or less
+                int MaxSL = min(min(Pos + 1, MaxShortLen), O - RefMinAddressIndex + 1);
 
                 for (int L = 1; L <= MaxLL; L++)
                 {
@@ -859,6 +867,16 @@ void FindVirtualFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex,int Re
                         //L=MatchLength + 1 here
                         if (L > 2)
                         {
+                            if ((O - Pos + OffsetBase <= MaxShortOffset) && (FSL[Pos] < MaxSL) && (FSL[Pos] < L))
+                            {
+                                FSL[Pos] = min(MaxSL, L); //If(L > MaxShortLen, MaxShortLen, L)   'Short matches cannot be longer than 4 bytes
+                                FSO[Pos] = O - Pos + OffsetBase;                        //Keep Offset 1-based
+                            }
+                            if ((O - Pos + OffsetBase <= MaxNearOffset) && (FNL[Pos] < L))   //Allow short (2-byte) Mid Matches
+                            {
+                                FNL[Pos] = L;
+                                FNO[Pos] = O - Pos + OffsetBase;
+                            }
                             if (((O - Pos + OffsetBase) > MaxNearOffset) && (FFL[Pos] < L))
                             {
                                 FFL[Pos] = L;
@@ -1069,13 +1087,27 @@ void CalcBestSequence(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
                 CheckMatchSeq(FFL[Pos], FFO[Pos], Pos);
             }
         }
-        if (NL[Pos] > 0)
+        if ((NL[Pos] > 0) || (FNL[Pos] > 0))
         {
-            CheckMatchSeq(NL[Pos], NO[Pos], Pos);
+            if (NL[Pos] >= FNL[Pos])
+            {
+                CheckMatchSeq(NL[Pos], NO[Pos], Pos);
+            }
+            else if (Pos < SeqHighestIndex)
+            {
+                CheckMatchSeq(FNL[Pos], FNO[Pos], Pos);
+            }
         }
-        if (SL[Pos] > 0)
+        if ((SL[Pos] > 0) || (FSL[Pos] > 0))
         {
-            CheckMatchSeq(SL[Pos], SO[Pos], Pos);
+            if (SL[Pos] >= FSL[Pos])
+            {
+                CheckMatchSeq(SL[Pos], SO[Pos], Pos);
+            }
+            else if (Pos < SeqHighestIndex)
+            {
+                CheckMatchSeq(FSL[Pos], FSO[Pos], Pos);
+            }
         }
         CheckLitSeq(Pos);
     }
@@ -1605,14 +1637,18 @@ void PackFile(int Index) {
     PrgAdd = Prgs[Index].iFileAddr;
     PrgLen = Prgs[Index].iFileLen;
 
-    SL = new int[PrgLen]{};
-    SO = new int[PrgLen]{};
-    NL = new int[PrgLen]{};
-    NO = new int[PrgLen]{};
-    FL = new int[PrgLen]{};
-    FO = new int[PrgLen]{};
-    FFL = new int[PrgLen]{};
-    FFO = new int[PrgLen]{};
+    SL = new int[PrgLen] {};
+    SO = new int[PrgLen] {};
+    NL = new int[PrgLen] {};
+    NO = new int[PrgLen] {};
+    FL = new int[PrgLen] {};
+    FO = new int[PrgLen] {};
+    FSL = new int[PrgLen] {};
+    FSO = new int[PrgLen] {};
+    FNL = new int[PrgLen] {};
+    FNO = new int[PrgLen] {};
+    FFL = new int[PrgLen] {};
+    FFO = new int[PrgLen] {};
 
     Seq = new sequence[PrgLen + 1]{};   //This is actually one element more in the array, to have starter element with 0 values
 
@@ -1706,6 +1742,10 @@ void PackFile(int Index) {
     delete[] NO;
     delete[] FL;
     delete[] FO;
+    delete[] FSL;
+    delete[] FSO;
+    delete[] FNL;
+    delete[] FNO;
     delete[] FFL;
     delete[] FFO;
 
