@@ -1041,7 +1041,7 @@ bool SplitScriptEntry() {
     unsigned int Pos = 0;
     unsigned char ThisChar;
     ScriptEntryType = "";
-    
+
     while (Pos < ScriptEntry.length()) {
         ThisChar = tolower(ScriptEntry[Pos++]);
         if (ThisChar != '\t') {
@@ -1104,7 +1104,7 @@ bool FindNextScriptEntry() {
 
     //OrigScriptEntry = "";
     ScriptEntry = "";
-    
+
     char S = Script[LineStart++];
 
     //Find the first non-linebreak character => LineStart
@@ -1375,6 +1375,123 @@ bool CompareFileAddress(FileStruct F1, FileStruct F2) {
     return (F1.iFileAddr > F2.iFileAddr);
 
 }
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+bool SortVirtualFiles()
+{
+    if (tmpVFiles.size() > 1)
+    {
+        int FSO{}, FEO{}, FSI{}, FEI{};
+
+        //Check for overlaps
+        for (size_t o = 0; o < tmpVFiles.size() - 1; o++)
+        {
+            FSO = tmpVFiles[o].iFileAddr;               //Outer loop file start
+            FEO = FSO + tmpVFiles[o].iFileLen - 1;     //Outer loop file end
+            for (size_t i = o + 1; i < tmpVFiles.size(); i++)
+            {
+                FSI = tmpVFiles[i].iFileAddr;           //Inner loop file start
+                FEI = FSI + tmpVFiles[i].iFileLen - 1; //Inner loop file end
+
+                //--|------+------|----OR----|------+------|----OR----|------+------|----OR-----|------+------|--
+                //  FSO    FSI    FEO        FSO    FEI    FEO        FSI    FSO    FEI        FSI    FEO    FEI
+
+                if (((FSI >= FSO) && (FSI <= FEO)) || ((FEI >= FSO) && (FEI <= FEO)) || ((FSO >= FSI) && (FSO <= FEI)) || ((FEO >= FSI) && (FEO <= FEI))) {
+                    int OLS = (FSO >= FSI) ? FSO : FSI;
+                    int OLE = (FEO <= FEI) ? FEO : FEI;
+
+                    if ((OLS >= 0xD000) && (OLE <= 0xDFFF) && (tmpVFiles[o].FileIO != tmpVFiles[i].FileIO))
+                    {
+                        //Overlap is IO memory only and different IO status - NO OVERLAP
+                    }
+                    else
+                    {
+                        cout << "***CRITICAL***\tThe following two virtual files overlap in Bundle " << dec << (BundleCnt - 1) << ":\n"
+                            << tmpVFiles[i].FileName << " ($" << tmpVFiles[i].FileAddr << " - $" << hex << FEI << ")\n"
+                            << tmpVFiles[o].FileName << " ($" << tmpVFiles[o].FileAddr << " - $" << hex << FEO << ")\n";
+                        return false;
+                    }
+                }
+            }
+        }
+
+        //Append adjacent files
+        bool Change = true;
+
+        while (Change)
+        {
+
+            Change = false;
+
+            for (size_t o = 0; o < tmpVFiles.size() - 1; o++)
+            {
+                FSO = tmpVFiles[o].iFileAddr;
+                FEO = tmpVFiles[o].iFileLen;
+
+                for (size_t i = o + 1; i < tmpVFiles.size(); i++)
+                {
+                    FSI = tmpVFiles[i].iFileAddr;
+                    FEI = tmpVFiles[i].iFileLen;
+
+
+                    if (FSO + FEO == FSI)
+                    {
+                        if ((FSI <= 0xd000) || (FSI > 0xdfff) || (tmpVFiles[o].FileIO == tmpVFiles[i].FileIO))
+                        {
+                            tmpVFiles[o].Prg.insert(tmpVFiles[o].Prg.end(), tmpVFiles[i].Prg.begin(), tmpVFiles[i].Prg.end());
+
+                            Change = true;
+                        }
+                    }
+                    else if (FSI + FEI == FSO)
+                    {
+                        if ((FSO <= 0xd000) || (FSO > 0xdfff) || (tmpVFiles[o].FileIO == tmpVFiles[i].FileIO))
+                        {
+                            tmpVFiles[i].Prg.insert(tmpVFiles[i].Prg.end(), tmpVFiles[o].Prg.begin(), tmpVFiles[o].Prg.end());
+
+                            tmpVFiles[o].Prg = tmpVFiles[i].Prg;
+
+                            tmpVFiles[o].FileAddr = tmpVFiles[i].FileAddr;
+                            tmpVFiles[o].iFileAddr = tmpVFiles[i].iFileAddr;
+                            tmpVFiles[o].FileOffs = tmpVFiles[i].FileOffs;
+                            tmpVFiles[o].iFileOffs = tmpVFiles[i].iFileOffs;
+
+                            Change = true;
+                        }
+                    }
+
+                    if (Change)
+                    {
+                        //Update merged file's IO status
+                        tmpVFiles[o].FileIO = (tmpVFiles[o].FileIO || tmpVFiles[i].FileIO);
+
+                        //New file's length is the length of the two merged files
+                        FEO += FEI;
+                        tmpVFiles[o].FileLen = ConvertIntToHextString(FEO, 4);
+                        tmpVFiles[o].iFileLen = FEO;
+
+                        //Remove File(I) and all its parameters
+                        vector<FileStruct>::iterator iter = tmpVFiles.begin() + i;
+                        tmpVFiles.erase(iter);
+
+                        //One less file left
+                        FileCnt--;
+                        break;
+                    }
+                }
+                if (Change)
+                    break;
+            }
+        }
+        //Sort files by length (short files first, thus, last block will more likely contain 1 file only = faster depacking)
+        sort(tmpVFiles.begin(), tmpVFiles.end(), CompareFileAddress);
+    }
+
+    return true;
+
+}
+
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
 bool SortBundle() {
@@ -1523,6 +1640,11 @@ bool BundleDone() {
         //Sort files in bundle
         if (!SortBundle())
             return false;
+        
+        //Also sort virtual files in bundle
+        if (!SortVirtualFiles())
+            return false;
+
         //Then compress files and add them to bundle
         if (!CompressBundle())
             return false;     //THIS WILL RESET NewPart TO FALSE
@@ -2222,7 +2344,7 @@ void AddDirArt() {
     }
 
     string DirArtType = "";
-    
+
     int ExtStart = DirArtName.length();
 
     for (int i = DirArtName.length() - 1; i >= 0; i--)
@@ -2237,8 +2359,8 @@ void AddDirArt() {
             break;
         }
     }
-    
-    for (int i = ExtStart; i < DirArtName.length(); i++)
+
+    for (size_t i = ExtStart; i < DirArtName.length(); i++)
     {
         DirArtType += tolower(DirArtName[i]);
     }
@@ -3647,6 +3769,7 @@ int main(int argc, char* argv[])
 
         //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\GP\\GitHub\\MementoMori\\6502\\Main\\MementoMori A.sls";
         //string ScriptFileName = "c:\\Users\\Tamas\\source\\repos\\GPMagazine\\Magazine\\Issue32\\Sparkle\\Magazine.sls";
+        //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\Loader\\LoaderTests\\SparkleTest\\sparkletestfli.sls";
         //Script = ReadFileToString(ScriptFileName);
 
         //SetScriptPath(ScriptFileName, AppPath);

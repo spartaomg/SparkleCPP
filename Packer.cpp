@@ -814,6 +814,12 @@ void FindFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex, int RefMaxAd
 void FindVirtualFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex,int RefMaxAddress, int RefMinAddress)
 {
 
+    //Filter out virtual files overlapping packed file
+    if (((RefMinAddress >= PrgAdd) && (RefMinAddress < PrgAdd + PrgLen)) || ((RefMaxAddress >= PrgAdd) && (RefMaxAddress < PrgAdd + PrgLen)) || ((RefMinAddress < PrgAdd) && (RefMaxAddress >= PrgAdd + PrgLen)))
+    {
+        return;
+    }
+    
     if (!FileUnderIO)
     {
         if ((PrgAdd + SeqMinIndex >= 0xd000) && (PrgAdd + SeqMinIndex <= 0xdfff))
@@ -837,7 +843,7 @@ void FindVirtualFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex,int Re
     }
 
     //----------------------------------------------------------------------------------------------------------
-    //FIND LONGEST SHORT AND NEAR MATCHES FOR EACH POSITION, AND FAR MATCHES WITH OFFSET < MAX. 1024
+    //FIND LONGEST SHORT AND NEAR MATCHES FOR EACH POSITION, AND FAR MATCHES WITH OFFSET < MAX
      //----------------------------------------------------------------------------------------------------------
     int RefMinAddressIndex = RefMinAddress - ReferenceFileStart;
     int RefMaxAddressIndex = RefMaxAddress - ReferenceFileStart;
