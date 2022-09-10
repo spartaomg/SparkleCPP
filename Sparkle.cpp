@@ -1356,11 +1356,17 @@ bool CompressBundle() {             //NEEDS PackFile() and CloseFile()
     int BC = BufferCnt - PreBCnt;
     if (BundleNo == 1)
         BC++;
+    
+    int FirstT = TabT[PreBCnt];
+    int FirstS = TabS[PreBCnt];
+    int LastT = TabT[BufferCnt];
+    int LastS = TabS[BufferCnt];
 
     TotalOrigSize += OrigSize;
     TotalCompSize += BC;
 
-    cout << OrigSize << " block" << ((OrigSize == 1) ? " " : "s") << (OrigSize < 10 ? "  " : (OrigSize < 100 ? " " : "")) << "  ->\t" << BC << " block" << ((BC == 1) ? " " : "s") << "\t(" << (BC * 100 / OrigSize) << "%)\n";
+    cout << OrigSize << " block" << ((OrigSize == 1) ? " " : "s") << (OrigSize < 10 ? "  " : (OrigSize < 100 ? " " : "")) << "  ->\t" << BC << " block" << ((BC == 1) ? " " : "s") << "\t(" << (BC * 100 / OrigSize) << "%)\t\t"
+        << ((FirstT < 10) ? "0" : "") << FirstT << ":" << ((FirstS < 10) ? "0" : "") << FirstS << " - " << ((LastT < 10) ? "0" : "") << LastT << ":" << ((LastS < 10) ? "0" : "") << LastS << "\n";
 
     if (LastBlockCnt > 255)
     {
@@ -3368,7 +3374,7 @@ bool AddCompressedBundlesToDisk() {
         return false;
     }
 
-    CalcTabs();
+    //CalcTabs();
 
     InjectDirBlocks();
 
@@ -3816,8 +3822,11 @@ bool Build() {
                 //Add files to bundle array, if new bundle=true, we will first sort, compress and add previous bundle to disk
                 if (!AddFile())
                     return false;
-
-                NewD = false;       //We have added at least one file to this disk, so next disk info entry will be a new disk
+                if (NewD)
+                {
+                    CalcTabs();
+                    NewD = false;       //We have added at least one file to this disk, so next disk info entry will be a new disk
+                }
                 NewBundle = false;
             }
             else if (ScriptEntryType == EntryTypeMem)
@@ -3900,16 +3909,16 @@ int main(int argc, char* argv[])
 
     if (argc < 2)
     {
-        //cout << "Usage: Sparkle script.sls\n\nFor details please read the user manual!\n";
-		//return 1;
+        cout << "Usage: Sparkle script.sls\n\nFor details please read the user manual!\n";
+		return 1;
 
         //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\GP\\GitHub\\MementoMori\\6502\\Main\\MementoMori A.sls";
         //string ScriptFileName = "c:\\Users\\Tamas\\source\\repos\\GPMagazine\\Magazine\\Issue32\\Sparkle\\Magazine.sls";
         //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\Loader\\LoaderTests\\SparkleTest\\sparkletestfli.sls";
-        string ScriptFileName = "c:\\Sparkle2\\Example\\Sparkle2.sls";
-        Script = ReadFileToString(ScriptFileName);
+        //string ScriptFileName = "c:\\Sparkle2\\Example\\Sparkle2.sls";
+        //Script = ReadFileToString(ScriptFileName);
 
-        SetScriptPath(ScriptFileName, AppPath);
+        //SetScriptPath(ScriptFileName, AppPath);
     }
     else
     {
