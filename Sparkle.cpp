@@ -2069,9 +2069,118 @@ void FindNextDirPos() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
+void AddAsmDirEntry(string DirEntry) {
+
+    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0] = 0x82;      //"PRG" -  all dir entries will point at first file in dir
+    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 1] = 18;        //Track 18 (track pointer of boot loader)
+    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 2] = 7;         //Sector 7 (sector pointer of boot loader)
+
+    unsigned char Entry[16]{};
+    //Fill array with 16 SHIFT+SPACE characters
+    for (int i = 0; i < 16; i++)
+    {
+        Entry[i] = 0xa0;
+    }
+
+    string separator = "\\$";
+    int index = 0;
+
+    while (DirEntry.find(separator) != string::npos)
+    {
+        DirEntry.erase(0, DirEntry.find(separator) + separator.length());
+        for (int i = 0; i < 2; i++)
+        {
+            unsigned char NextChar = tolower(DirEntry[i]);
+            if ((NextChar >= '0') && (NextChar <= '9'))
+            {
+                NextChar -='0';
+            }
+            else if ((NextChar >= 'a') && (NextChar <= 'f'))
+            {
+                NextChar -= ('a' - 10);
+            }
+            if (i == 0)
+            {
+                Entry[index] = NextChar * 16;
+            }
+            else
+            {
+                Entry[index] += NextChar;
+            }
+        }
+        
+        index++;
+        
+        if (index == 16)
+        {
+            break;
+        }
+    }
+
+    for (int i = 0; i < 16; i++)
+    {
+        Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Entry[i];
+    }
+
+
+    if ((DirTrack == 18) && (DirSector == 1) && (DirPos == 2))
+    {
+        //Very first dir entry, also add loader block count
+        Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0x1c] = LoaderBlockCount;
+    }
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+void ConvertKickassAsmToDirArt() {
+
+    DirArt = ReadFileToString(DirArtName);
+
+    if (DirArt == "")
+    {
+        cerr << "***INFO***\tUnable to open the following DirArt file: " << DirArtName << "\n The disk will be built without DirArt.\n";
+        return;
+    }
+    
+    string delimiter = "\n";
+    DirTrack = 18;
+    DirSector = 1;
+
+    while (DirArt.find(delimiter) != string::npos)
+    {
+        string DirEntry = DirArt.substr(0, DirArt.find(delimiter));
+        DirArt.erase(0, DirArt.find(delimiter) + delimiter.length());
+        FindNextDirPos();
+        if (DirPos != 0)
+        {
+            AddAsmDirEntry(DirEntry);
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    if ((DirArt != "") && (DirPos != 0))
+    {
+        FindNextDirPos();
+        if (DirPos != 0)
+        {
+            AddAsmDirEntry(DirArt);
+        }
+    }
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
 void ConvertCArrayToDirArt() {
 
     string DA = ReadFileToString(DirArtName);
+
+    if (DA == "")
+    {
+        cerr << "***INFO***\tUnable to open the following DirArt file: " << DirArtName << "\n The disk will be built without DirArt.\n";
+        return;
+    }
 
     unsigned char* BinFile = new unsigned char[6*256];
     int First = DA.find("{");
@@ -2080,6 +2189,7 @@ void ConvertCArrayToDirArt() {
     int CharRow = 0;
     unsigned char CharCode = 0;
     bool NewChar = true;
+    
     for (int i = First + 1; i <= Last; i++)
     {
         if ((DA[i] >= '0') && (DA[i] <= '9'))
@@ -2157,13 +2267,13 @@ void ConvertBinToDirArt(string DirArtType) {
 
     if (ReadBinaryFile(DirArtName, DA)==-1)
     {
-        cerr << "***CRITICAL***\tUnable to open the following file: " << DirArtName << "\n";
+        cerr << "***INFO***\tUnable to open the following file: " << DirArtName << "\nThe disk will be built without DirArt.\n";
         return;
     }
 
     DirTrack = 18;
     DirSector = 1;
-    //unsigned char NB = 0;
+    
     int DAPtr = (DirArtType == "prg") ? 2 : 0;
 
     for (size_t b = DAPtr; b < DA.size(); b += 40)
@@ -2216,7 +2326,7 @@ void AddDirEntry(string DirEntry){
     //Copy only the first 16 characters of the edited DirEntry to the Disk Directory
     for (int i = 0; i < 16; i++)
     {
-        Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 2 + i] = toupper(DirEntry[i]);
+        Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = toupper(DirEntry[i]);
     }
 
 
@@ -2232,6 +2342,13 @@ void AddDirEntry(string DirEntry){
 void ConvertTxtToDirArt() {
 
     DirArt = ReadFileToString(DirArtName);
+    
+    if (DirArt == "")
+    {
+        cerr << "***INFO***\tUnable to open the following DirArt file: " << DirArtName << "\n The disk will be built without DirArt.\n";
+        return;
+    }
+    
     string delimiter = "\n";
     DirTrack = 18;
     DirSector = 1;
@@ -2251,10 +2368,13 @@ void ConvertTxtToDirArt() {
         }
     }
 
-    FindNextDirPos();
-    if (DirPos != 0)
+    if ((DirArt != "") && (DirPos != 0))
     {
-        AddDirEntry(DirArt);
+        FindNextDirPos();
+        if (DirPos != 0)
+        {
+            AddDirEntry(DirArt);
+        }
     }
 }
 
@@ -2266,7 +2386,7 @@ void ConvertD64ToDirArt() {
 
     if(ReadBinaryFile(DirArtName, DA)==-1)
     {
-        cerr << "***CRITICAL***\tUnable to open the following file: " << DirArtName << "\n";
+        cerr << "***INFO***\tUnable to open the following DirArt file: " << DirArtName << "\n The disk will be built without DirArt.\n";
         return;
     }
 
@@ -2341,13 +2461,12 @@ void AddDirArt() {
 
     if (DirArtName == "")
     {
-        //cerr << "***INFO***\tInvalid DirArt file name. The disk will be build without DirArt.\n";
         return;
     }
 
     if (!FileExits(DirArtName))
     {
-        cerr << "***INFO***\tThe following DirArt file does not exist: " << DirArtName << "\nThe disk will be build without DirArt.\n";
+        cerr << "***INFO***\tThe following DirArt file does not exist: " << DirArtName << "\nThe disk will be built without DirArt.\n";
         return;
     }
 
@@ -2373,25 +2492,29 @@ void AddDirArt() {
         DirArtType += tolower(DirArtName[i]);
     }
 
-    if (DirArtType == "d64")
+    if (DirArtType == "d64")                // Copy DirArt from D64
     {
         ConvertD64ToDirArt();
     }
-    else if (DirArtType == "txt")
+    else if (DirArtType == "txt")           // Convert TXT file to DirArt
     {
         ConvertTxtToDirArt();
     }
-    else if (DirArtType == "prg")
+    else if (DirArtType == "prg")           // Convert PRG (binary file with header) to DirArt
     {
         ConvertBinToDirArt(DirArtType);
     }
-    else if (DirArtType == "c")
+    else if (DirArtType == "c")             // Convert C array to DirArt
     {
         ConvertCArrayToDirArt();
     }
+    else if (DirArtType == "asm")           // Convert Kick Assembler file parameter list to DirArt (assumes hex list!!!)
+    {
+        ConvertKickassAsmToDirArt();
+    }
     else
     {
-        ConvertBinToDirArt("");
+        ConvertBinToDirArt("");             // Convert any other binary file to DirArt (same as PRG without header)
     }
 }
 
@@ -3777,15 +3900,16 @@ int main(int argc, char* argv[])
 
     if (argc < 2)
     {
-        cout << "Usage: Sparkle script.sls\n\nFor details please read the user manual!\n";
-		return 1;
+        //cout << "Usage: Sparkle script.sls\n\nFor details please read the user manual!\n";
+		//return 1;
 
         //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\GP\\GitHub\\MementoMori\\6502\\Main\\MementoMori A.sls";
         //string ScriptFileName = "c:\\Users\\Tamas\\source\\repos\\GPMagazine\\Magazine\\Issue32\\Sparkle\\Magazine.sls";
         //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\Loader\\LoaderTests\\SparkleTest\\sparkletestfli.sls";
-        //Script = ReadFileToString(ScriptFileName);
+        string ScriptFileName = "c:\\Sparkle2\\Example\\Sparkle2.sls";
+        Script = ReadFileToString(ScriptFileName);
 
-        //SetScriptPath(ScriptFileName, AppPath);
+        SetScriptPath(ScriptFileName, AppPath);
     }
     else
     {
