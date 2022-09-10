@@ -7,21 +7,19 @@
 constexpr unsigned int Year = ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
 
 constexpr unsigned int Month = (__DATE__[0] == 'J') ? ((__DATE__[1] == 'a') ? 1 : ((__DATE__[2] == 'n') ? 6 : 7))    // Jan, Jun or Jul
-                             : (__DATE__[0] == 'F') ? 2                                                              // Feb
-                             : (__DATE__[0] == 'M') ? ((__DATE__[2] == 'r') ? 3 : 5)                                 // Mar or May
-                             : (__DATE__[0] == 'A') ? ((__DATE__[2] == 'p') ? 4 : 8)                                 // Apr or Aug
-                             : (__DATE__[0] == 'S') ? 9                                                              // Sep
-                             : (__DATE__[0] == 'O') ? 10                                                             // Oct
-                             : (__DATE__[0] == 'N') ? 11                                                             // Nov
-                             : (__DATE__[0] == 'D') ? 12                                                             // Dec
-                             : 0;
+    : (__DATE__[0] == 'F') ? 2                                                              // Feb
+    : (__DATE__[0] == 'M') ? ((__DATE__[2] == 'r') ? 3 : 5)                                 // Mar or May
+    : (__DATE__[0] == 'A') ? ((__DATE__[2] == 'p') ? 4 : 8)                                 // Apr or Aug
+    : (__DATE__[0] == 'S') ? 9                                                              // Sep
+    : (__DATE__[0] == 'O') ? 10                                                             // Oct
+    : (__DATE__[0] == 'N') ? 11                                                             // Nov
+    : (__DATE__[0] == 'D') ? 12                                                             // Dec
+    : 0;
 constexpr unsigned int Day = (__DATE__[4] == ' ') ? (__DATE__[5] - '0') : (__DATE__[4] - '0') * 10 + (__DATE__[5] - '0');
 constexpr unsigned long int VersionBuild = ((Year / 10) * 0x100000) + ((Year % 10) * 0x10000) + ((Month / 10) * 0x1000) + ((Month % 10) * 0x100) + ((Day / 10) * 0x10) + (Day % 10);
 
 constexpr int VersionMajor = 2;
 constexpr int VersionMinor = 3;
-
-unsigned char LoaderBlockCount = 0;
 
 string Script = "";
 string ScriptPath = "";
@@ -175,6 +173,8 @@ bool SaverSupportsIO = false;
 
 int TotalOrigSize{}, TotalCompSize{};
 
+unsigned char LoaderBlockCount = 0;
+
 //------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 string ConvertIntToHextString(const int& i, const int& hexlen)
@@ -320,7 +320,7 @@ bool WriteDiskImage(const string& DiskName)
     }
 
     ofstream myFile(DiskName, ios::out | ios::binary);
-    
+
     if (myFile.is_open())
     {
         cout << "Writing disk image: " << DiskName << "\n\n";
@@ -1649,7 +1649,7 @@ bool BundleDone() {
         //Sort files in bundle
         if (!SortBundle())
             return false;
-        
+
         //Also sort virtual files in bundle
         if (!SortVirtualFiles())
             return false;
@@ -3335,7 +3335,7 @@ bool FinishDisk(bool LastDisk) {
     CompRatio /= TotalOrigSize;
 
     cout << "\nFinal disk: " << TotalOrigSize << " block" << (TotalOrigSize == 1 ? "" : "s") << " compressed to " << BlocksUsed << " block" << (BlocksUsed == 1 ? ", " : "s, ")
-        << BlocksFree << " block" << (BlocksFree == 1 ? "" : "s") << " remaining free. Overall compression ratio : " << setprecision(2) << fixed << CompRatio << " % \n\n";
+        << BlocksFree << " block" << (BlocksFree == 1 ? "" : "s") << " remaining free. Overall compression ratio : " << setprecision(2) << fixed << CompRatio << " %\n\n";
 
     if (!WriteDiskImage(D64Name))
     {

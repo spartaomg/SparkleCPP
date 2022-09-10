@@ -136,6 +136,10 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <LinkTimeCodeGeneration>UseFastLinkTimeCodeGeneration</LinkTimeCodeGeneration>
     </Link>
+    <PreBuildEvent>
+      <Message>make cpp arrays</Message>
+      <Command>nmake -a</Command>
+    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Ascii2DirArt.cpp" />
