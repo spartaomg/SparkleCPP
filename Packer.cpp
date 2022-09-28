@@ -920,25 +920,20 @@ void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
         int MaxLL = min(Pos + 1, MaxLongLen);
         int MaxSL = min(Pos + 1, MaxShortLen);
 
-        if ((FirstRun) || (FO[Pos] + Pos > SeqHighestIndex) || (NO[Pos] + Pos > SeqHighestIndex) || (SO[Pos] + Pos > SeqHighestIndex))
+        if ((FirstRun) || (FO[Pos] > MaxO) || (NO[Pos] > MaxO) || (SO[Pos] > MaxO))
         {
             //Only run search for this Pos if this is the first pass or the previously found match has an offset beyond block
-            if (SO[Pos] + Pos > SeqHighestIndex)
+            if (SO[Pos] > MaxO)
             {
                 SO[Pos] = 0;
                 SL[Pos] = 0;
             }
-            if (SO[Pos] + Pos > SeqHighestIndex)
-            {
-                SO[Pos] = 0;
-                SL[Pos] = 0;
-            }
-            if (NO[Pos] + Pos > SeqHighestIndex)
+            if (NO[Pos] > MaxO)
             {
                 NO[Pos] = 0;
                 NL[Pos] = 0;
             }
-            if (FO[Pos] + Pos > SeqHighestIndex)
+            if (FO[Pos] >MaxO)
             {
                 FO[Pos] = 0;
                 FL[Pos] = 0;
@@ -1542,6 +1537,9 @@ bool CloseBuffer() {
         //For the 2nd and last blocks of a bundle and the first blocks on a new track only recalculate the first byte's sequence
         //If BlockCnt <> 1 Then MsgBox((BitsLeftInBundle + BitsNeededForNextBundle).ToString + vbNewLine + (Seq(SI + 1).TotalBits + BitsNeededForNextBundle).ToString + vbNewLine + ((LastByte - 1) * 8 + BitPos).ToString)
 
+        //Only recalculate the very first byte's sequence
+        CalcBestSequence(max(SI, 1), max(SI, 1), false); //'(If(SI > 1, SI, 1), If(SI > 1, SI, 1))
+
         if (NewTrack)
         {
 
@@ -1588,8 +1586,6 @@ bool CloseBuffer() {
 
         }
 
-        //Only recalculate the very first byte's sequence
-        CalcBestSequence(max(SI, 1), max(SI, 1), false); //'(If(SI > 1, SI, 1), If(SI > 1, SI, 1))
         if ((BlockCnt != 1) && (!NewTrack))     //Do not recalculate the very first block and first blocks on each track
         {
             //Last/Transitional block
