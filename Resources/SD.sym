@@ -40,6 +40,7 @@
 .label tG=$bc
 .label tH=$bf
 .label SH=$12f
+.label CheckFlip=$5b3
 .label StepDir=$28
 .label RateDone=$563
 .label DataJmp=$357

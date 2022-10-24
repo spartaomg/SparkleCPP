@@ -933,7 +933,7 @@ void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
                 NO[Pos] = 0;
                 NL[Pos] = 0;
             }
-            if (FO[Pos] >MaxO)
+            if (FO[Pos] > MaxO)
             {
                 FO[Pos] = 0;
                 FL[Pos] = 0;

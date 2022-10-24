@@ -3220,10 +3220,25 @@ bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL) {
         //Loader[i] = Loader[i];
     //}
 
+    
     if (!UpdateZP())
         return false;
 
-    for (int i = 0; i < Loader_size - 6; i++)   //Find JMP Sparkle_LoadFetched instruction
+    unsigned char LDA_IMM = 0xa9;
+    unsigned char PHA = 0x48;
+
+    for (int i = 0; i < Loader_size - 5; i++)      //Find STA $fffb instruction which is 14 bytes from AdLo
+    {
+        if ((Loader[i] == LDA_IMM) && (Loader[i + 2] == PHA) && (Loader[i + 3] == LDA_IMM) && (Loader[i + 5] == PHA))
+        {
+            Loader[i + 1] = AdHi;                  //Hi Byte return address at the end of Loader
+            Loader[i + 4] = AdLo;                  //Lo Byte return address at the end of Loader
+            break;
+        }
+    }
+
+ /*
+     for (int i = 0; i < Loader_size - 6; i++)   //Find JMP Sparkle_LoadFetched instruction
     {
         if ((Loader[i] == 0x10) && (Loader[i + 3] == 0xad) && (Loader[i + 5] == 0x4c))
         {
@@ -3231,7 +3246,7 @@ bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL) {
             Loader[i + 3] = AdLo;               //Lo Byte return address at the end of Loader
         }
     }
-
+*/
     //Number of blocks in Loader
     LoaderBlockCount = Loader_size / 254;
     if (Loader_size % 254 != 0)
@@ -3978,6 +3993,7 @@ int main(int argc, char* argv[])
         //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\GP\\GitHub\\MementoMori\\6502\\Main\\MementoMori A.sls";
         //string ScriptFileName = "c:\\Users\\Tamas\\source\\repos\\GPMagazine\\Magazine\\Issue32\\Sparkle\\Magazine.sls";
         //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\Loader\\LoaderTests\\SparkleTest\\sparkletestfli.sls";
+        //string ScriptFileName = "c:\\Users\\Tamas\\source\\repos\\ThePumpkins\\Scripts\\ThePumpkins.sls";
         //string ScriptFileName = "c:\\Sparkle2\\Example\\Sparkle2.sls";
         //Script = ReadFileToString(ScriptFileName);
 
