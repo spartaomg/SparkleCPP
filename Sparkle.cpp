@@ -309,34 +309,29 @@ void WriteTextToFile(const string& DiskName)
 
 bool WriteDiskImage(const string& DiskName)
 {
-    
+
     string DiskDir{};
 
-    for (int i = DiskName.length() - 1; i >= 0; i--)
+    for (int i = 0; i<= DiskName.length() - 1; i++)
     {
-        if (DiskName[i] == '\\')
+        if ((DiskName[i] == '\\') || (DiskName[i] == '/'))
         {
-            for (int j = 0; j < i; j++)
+            if (DiskDir[DiskDir.length() - 1] != ':')   //Ignore files in root directory (e.g. c:\disk.d64)
             {
-                DiskDir += DiskName[j];
-            }
-            break;
-        }
-    }
-    
-    if (DiskDir[DiskDir.length() - 1] != ':')   //Ignore files in root directory (e.g. c:\disk.d64)
-    {
-        if (!filesystem::exists(DiskDir))
-        {
-            cout << "Creating folder: " << DiskDir << "\n";
-            create_directory(DiskDir);
-        }
-    }
+                if (!filesystem::exists(DiskDir))
+                {
+                    cout << "Creating folder: " << DiskDir << "\n";
+                    create_directory(DiskDir);
+                }
 
-    if (!filesystem::exists(DiskDir))
-    {
-        cerr << "***CRITICAL***\tUnable to create the following folder: " << DiskDir << "\n\n";
-        return false;
+                if (!filesystem::exists(DiskDir))
+                {
+                    cerr << "***CRITICAL***\tUnable to create the following folder: " << DiskDir << "\n\n";
+                    return false;
+                }
+            }
+        }
+        DiskDir += DiskName[i];
     }
 
     int BytesPerDisk;
@@ -562,6 +557,12 @@ bool ParameterIsNumeric(int i)
         int Pos = ScriptEntryArray[i].find(" ");
         ScriptEntryArray[i].replace(Pos, 1, "");
     }
+
+    if (ScriptEntryArray[i].length() == 0)  //Handle strings with zero length
+    {
+        return false;
+    }
+
 
     //Remove HEX prefix
     if (ScriptEntryArray[i].at(0) == '$')
@@ -1201,7 +1202,7 @@ bool InsertScript(string& SubScriptPath)
     //Find relative path of subscript
     for (int i = sPath.length() - 1; i > 0; i--)
     {
-        if (sPath[i] != '\\')
+        if ((sPath[i] != '\\') && (sPath[i] != '/'))
         {
             sPath.replace(i, 1, "");
         }
@@ -1270,13 +1271,13 @@ bool InsertScript(string& SubScriptPath)
     Script = SS1 + S + SS2;
 
 
-    ofstream out1("C:\\Tmp\\SS1.sls");
-    out1 << SS1;
-    out1.close();
-    ofstream out2("C:\\Tmp\\SS2.sls");
-    out2 << SS2;
-    out2.close();
-    WriteTextToFile("C:\\Tmp\\TestScript.sls");
+    //ofstream out1("C:\\Tmp\\SS1.sls");
+    //out1 << SS1;
+    //out1.close();
+    //ofstream out2("C:\\Tmp\\SS2.sls");
+    //out2 << SS2;
+    //out2.close();
+    //WriteTextToFile("C:\\Tmp\\TestScript.sls");
 
     Lines.clear();
 
@@ -2512,7 +2513,7 @@ void AddDirArt() {
 
     for (int i = DirArtName.length() - 1; i >= 0; i--)
     {
-        if (DirArtName[i] == '\\')
+        if ((DirArtName[i] == '\\') || (DirArtName[i] == '/'))
         {
             break;
         }
@@ -3220,7 +3221,7 @@ bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL) {
         //Loader[i] = Loader[i];
     //}
 
-    
+
     if (!UpdateZP())
         return false;
 
@@ -3928,7 +3929,7 @@ void SetScriptPath(string sPath, string aPath)
     ScriptPath = sPath;
     for (int i = sPath.length() - 1; i >= 0; i--)
     {
-        if (sPath[i] != '\\')
+        if ((sPath[i] != '\\') && (sPath[i] != '/'))
         {
             ScriptPath.replace(i, 1, "");
         }
@@ -3993,8 +3994,13 @@ int main(int argc, char* argv[])
         //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\GP\\GitHub\\MementoMori\\6502\\Main\\MementoMori A.sls";
         //string ScriptFileName = "c:\\Users\\Tamas\\source\\repos\\GPMagazine\\Magazine\\Issue32\\Sparkle\\Magazine.sls";
         //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\Loader\\LoaderTests\\SparkleTest\\sparkletestfli.sls";
-        //string ScriptFileName = "c:\\Users\\Tamas\\source\\repos\\ThePumpkins\\Scripts\\ThePumpkins.sls";
         //string ScriptFileName = "c:\\Sparkle2\\Example\\Sparkle2.sls";
+
+        //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\ThePumpkins\\Backup\\221028\\Scripts\\ThePumpkins.sls";
+        //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\ThePumpkins\\Backup\\221024-BUG\\Scripts\\ThePumpkins.sls";
+        //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\ThePumpkins\\Backup\\221024-BUG\\Scripts\\SixCage.sls";
+        
+        //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\ThePumpkins\\Backup\\221028\\Scripts\\SpartaPumpkin.sls";
         //Script = ReadFileToString(ScriptFileName);
 
         //SetScriptPath(ScriptFileName, AppPath);
