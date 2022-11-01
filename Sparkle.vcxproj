@@ -153,7 +153,11 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Common.h" />
+    <ClInclude Include="resource.h" />
     <ClInclude Include="Sparkle.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Sparkle.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
