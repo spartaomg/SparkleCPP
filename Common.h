@@ -12,6 +12,8 @@
 #include <iomanip>
 #include <iostream>
 #include <filesystem>
+#include "resource.h"
+//#include <windows.h>
 
 using namespace std;
 using namespace std::filesystem;

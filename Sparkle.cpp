@@ -3943,7 +3943,7 @@ void SetScriptPath(string sPath, string aPath)
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 void PrintScriptTemplate()
 {
-    cout << "Script template:\n\n";
+    cout << "SCRIPT TEMPLATE:\n\n";
     cout << "[Sparkle Loader Script]\n\n";
     cout << "Path:\tfilepath\\diskname.d64\t\t\t\t\t#path and file name of the D64 image <- THIS IS A COMMENT\n";
     cout << "Header:\tdisk header\t\t\t\t\t\t#max. 16 characters\n";
@@ -3974,7 +3974,17 @@ void PrintScriptTemplate()
 
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
-
+/*
+void LoadFileInResource(int name, int type, DWORD& size, const char*& data)
+{
+    HMODULE handle = ::GetModuleHandle(NULL);
+    HRSRC rc = ::FindResource(handle, MAKEINTRESOURCE(name),
+        MAKEINTRESOURCE(type));
+    HGLOBAL rcData = ::LoadResource(handle, rc);
+    size = ::SizeofResource(handle, rc);
+    data = static_cast<const char*>(::LockResource(rcData));
+}
+*/
 int main(int argc, char* argv[])
 {
     auto cstart = std::chrono::system_clock::now();
@@ -3987,7 +3997,23 @@ int main(int argc, char* argv[])
 
     if (argc < 2)
     {
-        cout << "Usage: Sparkle script.sls\n\n";
+
+        cout << "USAGE: Sparkle script.sls\n\n";
+
+/*        cout << "IMPORTANT LOADER FUNCTIONS:\n\n";
+
+        DWORD size = 0;
+        const char* data = NULL;
+        LoadFileInResource(IDR_INCFILE1, TEXTFILE, size, data);
+        // Access bytes in data - here's a simple example involving text output
+        // The text stored in the resource might not be NULL terminated.
+        char* buffer = new char[size + 1];
+        ::memcpy(buffer, data, size);
+        buffer[size] = 0; // NULL terminator
+        cout << buffer << "\n\n";
+
+        delete[] buffer;
+*/
         PrintScriptTemplate();
 		return 1;
 
@@ -3996,11 +4022,11 @@ int main(int argc, char* argv[])
         //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\Loader\\LoaderTests\\SparkleTest\\sparkletestfli.sls";
         //string ScriptFileName = "c:\\Sparkle2\\Example\\Sparkle2.sls";
 
-        //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\ThePumpkins\\Backup\\221028\\Scripts\\ThePumpkins.sls";
         //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\ThePumpkins\\Backup\\221024-BUG\\Scripts\\ThePumpkins.sls";
         //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\ThePumpkins\\Backup\\221024-BUG\\Scripts\\SixCage.sls";
         
         //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\ThePumpkins\\Backup\\221028\\Scripts\\SpartaPumpkin.sls";
+        //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\ThePumpkins\\Backup\\221028\\Scripts\\ThePumpkins.sls";
         //Script = ReadFileToString(ScriptFileName);
 
         //SetScriptPath(ScriptFileName, AppPath);
