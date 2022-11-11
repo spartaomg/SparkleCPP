@@ -1,7 +1,7 @@
 #include "common.h"
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR VERSION INFO
+//  COMPILE TIME VARIABLES FOR VERSION INFO 221111
 //--------------------------------------------------------
 
 constexpr unsigned int Year = ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
