@@ -51,6 +51,11 @@
 		<Unit filename="SS.cpp" />
 		<Unit filename="SSIO.cpp" />
 		<Unit filename="Sparkle.cpp" />
+		<Unit filename="Sparkle.ico" />
+		<Unit filename="Sparkle.rc">
+			<Option compilerVar="WINDRES" />
+		</Unit>
+		<Unit filename="resource.h" />
 		<Extensions />
 	</Project>
 </CodeBlocks_project_file>

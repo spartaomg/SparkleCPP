@@ -1,7 +1,9 @@
 #include "common.h"
 
+//#define DEBUG
+
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR VERSION INFO 221111
+//  COMPILE TIME VARIABLES FOR VERSION INFO 221112
 //--------------------------------------------------------
 
 constexpr unsigned int Year = ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -312,7 +314,7 @@ bool WriteDiskImage(const string& DiskName)
 
     string DiskDir{};
 
-    for (int i = 0; i<= DiskName.length() - 1; i++)
+    for (size_t i = 0; i <= DiskName.length() - 1; i++)
     {
         if ((DiskName[i] == '\\') || (DiskName[i] == '/'))
         {
@@ -2608,7 +2610,8 @@ void AddDemoNameToDisk(unsigned char T, unsigned char S) {
 
     for (size_t W = 0; W < DN.length(); W++)
     {
-        A = Ascii2DirArt[DN[W]];
+        int C = DN[W];
+        A = Ascii2DirArt[C];
         Disk[Cnt + B + 3 + W] = A;
     }
     Disk[Cnt + B + 0x1c] = LoaderBlockCount;    //Length of boot loader in blocks
@@ -2638,7 +2641,8 @@ void AddHeaderAndID() {
     {
         for (size_t i = 0; i < ((DiskHeader.size() <= 16) ? DiskHeader.size() : 16); i++)
         {
-            Disk[BAM + 0x90 + i] = Ascii2DirArt[DiskHeader[i]];
+            int DH = DiskHeader[i];
+            Disk[BAM + 0x90 + i] = Ascii2DirArt[DH];
         }
     }
 
@@ -2653,7 +2657,8 @@ void AddHeaderAndID() {
     {
         for (size_t i = 0; i < ((DiskID.size() <= 5) ? DiskID.size() : 5); i++)
         {
-            Disk[BAM + 0xa2 + i] = Ascii2DirArt[DiskID[i]];         //Overwrites Disk ID and DOS type (5 characters max.)
+            int DI = DiskID[i];
+            Disk[BAM + 0xa2 + i] = Ascii2DirArt[DI];         //Overwrites Disk ID and DOS type (5 characters max.)
         }
     }
 }
@@ -3941,8 +3946,25 @@ void SetScriptPath(string sPath, string aPath)
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
-void PrintScriptTemplate()
+void PrintInfo()
 {
+    cout << "USAGE: Sparkle script.sls\n\n";
+
+    /*        cout << "IMPORTANT LOADER FUNCTIONS:\n\n";
+
+            DWORD size = 0;
+            const char* data = NULL;
+            LoadFileInResource(IDR_INCFILE1, TEXTFILE, size, data);
+            // Access bytes in data - here's a simple example involving text output
+            // The text stored in the resource might not be NULL terminated.
+            char* buffer = new char[size + 1];
+            ::memcpy(buffer, data, size);
+            buffer[size] = 0; // NULL terminator
+            cout << buffer << "\n\n";
+
+            delete[] buffer;
+    */
+
     cout << "SCRIPT TEMPLATE:\n\n";
     cout << "[Sparkle Loader Script]\n\n";
     cout << "Path:\tfilepath\\diskname.d64\t\t\t\t\t#path and file name of the D64 image <- THIS IS A COMMENT\n";
@@ -3997,39 +4019,19 @@ int main(int argc, char* argv[])
 
     if (argc < 2)
     {
+#ifdef DEBUG
 
-        cout << "USAGE: Sparkle script.sls\n\n";
+        string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\ThePumpkins\\Backup\\221028\\Scripts\\ThePumpkins.sls";
+        Script = ReadFileToString(ScriptFileName);
+        SetScriptPath(ScriptFileName, AppPath);
 
-/*        cout << "IMPORTANT LOADER FUNCTIONS:\n\n";
+#else
 
-        DWORD size = 0;
-        const char* data = NULL;
-        LoadFileInResource(IDR_INCFILE1, TEXTFILE, size, data);
-        // Access bytes in data - here's a simple example involving text output
-        // The text stored in the resource might not be NULL terminated.
-        char* buffer = new char[size + 1];
-        ::memcpy(buffer, data, size);
-        buffer[size] = 0; // NULL terminator
-        cout << buffer << "\n\n";
+        PrintInfo();
+        return 1;
 
-        delete[] buffer;
-*/
-        PrintScriptTemplate();
-		return 1;
+#endif // DEBUG
 
-        //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\GP\\GitHub\\MementoMori\\6502\\Main\\MementoMori A.sls";
-        //string ScriptFileName = "c:\\Users\\Tamas\\source\\repos\\GPMagazine\\Magazine\\Issue32\\Sparkle\\Magazine.sls";
-        //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\Loader\\LoaderTests\\SparkleTest\\sparkletestfli.sls";
-        //string ScriptFileName = "c:\\Sparkle2\\Example\\Sparkle2.sls";
-
-        //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\ThePumpkins\\Backup\\221024-BUG\\Scripts\\ThePumpkins.sls";
-        //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\ThePumpkins\\Backup\\221024-BUG\\Scripts\\SixCage.sls";
-        
-        //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\ThePumpkins\\Backup\\221028\\Scripts\\SpartaPumpkin.sls";
-        //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\ThePumpkins\\Backup\\221028\\Scripts\\ThePumpkins.sls";
-        //Script = ReadFileToString(ScriptFileName);
-
-        //SetScriptPath(ScriptFileName, AppPath);
     }
     else
     {

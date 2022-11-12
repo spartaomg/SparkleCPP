@@ -73,7 +73,7 @@ int ReferenceUnderIO{};
 
 array<unsigned char, 256> Buffer;
 
-int *SO, *NO, *FO, * FSO, * FNO, *FFO;    //*SL, *NL, *FL, * FSL, * FNL, *FFL
+int *SO, *NO, *FO, * FSO, * FNO, *FFO;
 
 unsigned char* SL, * NL, * FL, * FSL, * FNL, * FFL;
 
@@ -777,11 +777,9 @@ void FindFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex, int RefMaxAd
     int OffsetBase = (ReferenceFileStart >= PrgAdd) ? ReferenceFileStart - PrgAdd : ReferenceFileStart + 0x10000 - PrgAdd;
 
     //Pos = Min>0 to Max value, direction of execution is arbitrary (could be Max to Min>0 Step -1)
-    for (int Pos = SeqMaxIndex; Pos >= SeqMinIndex + 2; Pos--)  //Pos cannot be 0, Prg(0) is always literal as there is always 1 byte left
+    for (int Pos = SeqMaxIndex; Pos >= SeqMinIndex; Pos--)  //Pos cannot be 0, Prg(0) is always literal as there is always 1 byte left
     {
         unsigned char PrgValAtPos = Prgs[CurrentFileIndex].Prg[Pos];
-        //uint16_t PrgValAtPos = *(uint16_t*)&Prgs[CurrentFileIndex].Prg[Pos - 1];
-        //unsigned char PrgValAtPosLess2 = *(uint16_t*)&Prgs[CurrentFileIndex].Prg[Pos - 2];
 
         //int ShortMinO = RefMinAddressIndex;
         //int ShortMaxO = min(max(Pos + MaxShortOffset, OffsetBase + RefMinAddressIndex), OffsetBase + RefMaxAddressIndex) - OffsetBase;
@@ -825,7 +823,7 @@ void FindFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex, int RefMaxAd
         }
 */
         //int NearMinO = min(RefMinAddressIndex, ShortMaxO);
-        int NearMaxO = min(max(Pos + MaxNearOffset, OffsetBase + RefMinAddressIndex), OffsetBase + RefMaxAddressIndex) - OffsetBase;
+        //int NearMaxO = min(max(Pos + MaxNearOffset, OffsetBase + RefMinAddressIndex), OffsetBase + RefMaxAddressIndex) - OffsetBase;
 /*
         for (int O = NearMaxO; O >= NearMinO; O--)
         {
@@ -860,11 +858,11 @@ void FindFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex, int RefMaxAd
             }
         }
 */
-        int FarMinO = max(RefMinAddressIndex, NearMaxO);
+        //int FarMinO = max(RefMinAddressIndex, NearMaxO);
         int BestLength = FFL[Pos];
         int BestOffset = FFO[Pos];
 
-        for (int O = RefMaxAddressIndex; O >= FarMinO + 2; O--)
+        for (int O = RefMaxAddressIndex; O >= RefMinAddressIndex; O--)
         {
             //Check if first byte matches at offset, if not go to next offset
             if (PrgValAtPos == Prgs[RefIndex].Prg[O])
@@ -895,104 +893,11 @@ void FindFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex, int RefMaxAd
                     break;
                 }
             }
-
-/*
-            if (PrgValAtPos == *(uint16_t*)&Prgs[RefIndex].Prg[O - 1])
-            {
-                int MaxLL = min(min(Pos + 1, MaxMidLen), O - RefMinAddressIndex + 1);   //MaxLL = 255 or less
-                
-                if (PrgValAtPosLess2 == Prgs[RefIndex].Prg[O - 2])
-                {
-                    for (int L = 3; L <= MaxLL; L += 2)
-                    {
-                        if ((L >= MaxLL) || (*(uint16_t*)&Prgs[CurrentFileIndex].Prg[Pos - L - 1] != *(uint16_t*)&Prgs[RefIndex].Prg[O - L - 1]))
-                        {
-                            if (Prgs[CurrentFileIndex].Prg[Pos - L] == Prgs[RefIndex].Prg[O - L])
-                            {
-                                L++;
-                            }
-                            //Find the first position where there is NO match -> this will give us the absolute length of the match
-                            //L=MatchLength + 1 here
-                            if (L > 2)
-                            {
-                                if (FFL[Pos] < L)
-                                {
-                                    FFL[Pos] = min(MaxLL, L);
-                                    FFO[Pos] = O - Pos + OffsetBase;
-                                    //MatchFound = true;
-                                }
-                            }
-                            break;
-                        }
-                    }
-                }
-                   //If far matches maxed out, we can leave the loop and go to the next Prg position
-                if (FFL[Pos] == MaxLL)
-                {
-                    break;
-                }
-            }
-*/
         }
 
         FFL[Pos] = BestLength;
         FFO[Pos] = BestOffset;
-        
-        /*
-        //Offset goes from 1 to max offset (cannot be 0)
-        //Match length goes from 1 to max length
-        for (int O = RefMinAddressIndex; O <= RefMaxAddressIndex; O++)
-        {
-            //Check if first byte matches at offset, if not go to next offset
-            if (PrgValAtPos == Prgs[RefIndex].Prg[O])
-            {
-                //int MaxLL = FastMin(FastMin(Pos + 1, MaxLongLen),O - RefMinAddressIndex + 1);   //MaxLL = 255 or less
-                int MaxLL = min(min(Pos + 1, MaxLongLen), O - RefMinAddressIndex + 1);   //MaxLL = 255 or less
-                int MaxSL = min(min(Pos + 1, MaxShortLen), O - RefMinAddressIndex + 1);
-
-                for (int L = 1; L <= MaxLL; L++)
-                {
-                    if ((L == MaxLL) || (Prgs[CurrentFileIndex].Prg[Pos - L] != Prgs[RefIndex].Prg[O - L]))
-                    {
-                        //Find the first position where there is NO match -> this will give us the absolute length of the match
-                        //L=MatchLength + 1 here
-                        if (L > 2)
-                        {
-                            if ((O - Pos + OffsetBase <= MaxShortOffset) && (FSL[Pos] < min(MaxSL,L)))
-                            {
-                                FSL[Pos] = min(MaxSL, L); //If(L > MaxShortLen, MaxShortLen, L)   'Short matches cannot be longer than 4 bytes
-                                FSO[Pos] = O - Pos + OffsetBase;                        //Keep Offset 1-based
-                            }
-                            if ((O - Pos + OffsetBase <= MaxNearOffset) && (FNL[Pos] < L))   //Allow short (2-byte) Mid Matches
-                            {
-                                FNL[Pos] = L;
-                                FNO[Pos] = O - Pos + OffsetBase;
-                            }
-                            if (((O - Pos + OffsetBase) > MaxNearOffset) && (FFL[Pos] < L))
-                            {
-                                FFL[Pos] = L;
-                                FFO[Pos] = O - Pos + OffsetBase;
-                            }
-                        }
-                        break;
-                    }
-                }
-                //If far matches maxed out, we can leave the loop and go to the next Prg position
-                if (FFL[Pos] == MaxLL)
-                {
-                    break;
-                }
-            }
-        }
- */
     }
-    //if (MatchFound)
-    //{
-    //    WriteBinaryFile("C:\\Tmp\\FFL16.bin", FFL, PrgLen);
-    //    cout << "\n" << Prgs[CurrentFileIndex].FileName;
-    //    cout << "\n" << Prgs[RefIndex].FileName;
-    //    MatchFound = false;
-    //}
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1029,14 +934,13 @@ void FindVirtualFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex,int Re
     }
 
     //----------------------------------------------------------------------------------------------------------
-    //FIND LONGEST SHORT AND NEAR MATCHES FOR EACH POSITION, AND FAR MATCHES WITH OFFSET < MAX
-     //----------------------------------------------------------------------------------------------------------
+    //FIND LONGEST MATCHES FOR EACH POSITION
+    //----------------------------------------------------------------------------------------------------------
     int RefMinAddressIndex = RefMinAddress - ReferenceFileStart;
     int RefMaxAddressIndex = RefMaxAddress - ReferenceFileStart;
 
     int OffsetBase = (ReferenceFileStart >= PrgAdd) ? ReferenceFileStart - PrgAdd : ReferenceFileStart + 0x10000 - PrgAdd;
 
-    //Pos = Min>0 to Max value, direction of execution is arbitrary (could be Max to Min>0 Step -1)
     for (int Pos = SeqMinIndex; Pos <= SeqMaxIndex; Pos++)  //Pos cannot be 0, Prg(0) is always literal as it is always 1 byte left
     {
 
@@ -1128,7 +1032,7 @@ void FindVirtualFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex,int Re
             if (PrgValAtPos == VFiles[RefIndex].Prg[O])
             {
                 //int MaxLL = FastMin(FastMin(Pos + 1, MaxLongLen),O - RefMinAddressIndex + 1);   //MaxLL = 255 or less
-                int MaxLL = min(min(Pos + 1, MaxLongLen), O - RefMinAddressIndex + 1);   //MaxLL = 255 or less
+                int MaxLL = min(min(Pos + 1, MaxMidLen * 2), O - RefMinAddressIndex + 1);   //MaxLL = 255 or less
                 //If far matches maxed out, we can leave the loop and go to the next Prg position
                 if (FFL[Pos] == MaxLL)
                 {
@@ -1284,11 +1188,11 @@ void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
                                     BestNL = CurrentMaxL;
                                     BestNO = O;
                                 }
-                                //int I = 1;
-                                //while ((L >= (CurrentMaxL = min(Pos - I, MaxLL))) && (L-- > 1))
+                                //int I = Pos - 1;
+                                //while ((L >= (CurrentMaxL = min(I, MaxLL))) && (L-- > 1))
                                 //{
                                 //    NL[Pos - I] = CurrentMaxL;
-                                //    NO[Pos - I++] = O;
+                                //    NO[Pos - I] = O;
                                 //}
                             }
                             break;
@@ -1321,16 +1225,16 @@ void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
                             //L=MatchLength + 1 here
                             if (L > (BestSL > 1 ? BestSL : 1))    // max(1, SL[Pos]))     //Only check match lengths > SL[Pos]
                             {
-                                if (BestNL < (CurrentMaxL = min(L--, MaxLL)))
+                                if (BestNL < (CurrentMaxL = min(L, MaxLL)))
                                 {
                                     BestNL = CurrentMaxL;
                                     BestNO = O;
                                 }
-                                int I = 1;
-                                while ((L >= (CurrentMaxL = min(Pos - I, MaxLL))) && (L-- > 1))
+                                int I = Pos;
+                                while ((L >= (CurrentMaxL = min(I, MaxLL))) && (L-- > 1))
                                 {
-                                    NL[Pos - I] = CurrentMaxL;
-                                    NO[Pos - I++] = O;
+                                    NL[I] = CurrentMaxL;
+                                    NO[I--] = O;
                                 }
                             }
                              break;
@@ -1365,16 +1269,16 @@ void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
                             {
                                 if (L > (BestNL > 2 ? BestNL : 2))    // max(2, NL[Pos])) //Only check lengths > NL[Pos]
                                 {
-                                    if (BestFL < (CurrentMaxL = min(L--, MaxLL)))
+                                    if (BestFL < (CurrentMaxL = min(L, MaxLL)))
                                     {
                                         BestFL = CurrentMaxL;
                                         BestFO = O;
                                     }
-                                    int I = 1;
-                                    while ((L >= (CurrentMaxL = min(Pos, MaxLL))) && (L-- > 2))
+                                    int I = Pos;
+                                    while ((L >= (CurrentMaxL = min(I, MaxLL))) && (L-- > 2))
                                     {
-                                        FL[Pos - I] = CurrentMaxL;
-                                        FO[Pos - I++] = O;
+                                        FL[I] = CurrentMaxL;
+                                        FO[I--] = O;
                                     }
                                 }
                                 break;
