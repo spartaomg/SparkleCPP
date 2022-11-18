@@ -288,8 +288,8 @@ Sparkle_LoadFetched:
 		sty	$dd00				//4	Clear CO and DO to signal Ready-To-Receive
 		bit	$dd00				//Wait for Drive
 		bvs	*-3					//$dd00=#$cx - drive is busy, $0x - drive is ready	00,01	(BMI would also work)
-		stx	$dd00				//Release ATN						02-05
-		dex						//							06,07
+		stx	$dd00				//Release ATN										02-05
+		dex						//													06,07
 		jsr	Set01				//Waste a few cycles... (drive takes 16 cycles)		08-24 minimum needed here is 8 cycles
 
 //-------------------------------------
@@ -299,7 +299,7 @@ Sparkle_LoadFetched:
 //-------------------------------------
 
 RcvLoop:
-Read1:	lda	$dd00				//4		W1-W2 = 18 cycles					25-28
+Read1:	lda	$dd00				//4		W1-W2 = 18 cycles							25-28
 		sty	$dd00				//4	8	Y=#$08 -> ATN=1
 		lsr						//2	10
 		lsr						//2	12

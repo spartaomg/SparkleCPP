@@ -3,7 +3,7 @@
 //#define DEBUG
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR VERSION INFO 221112
+//  COMPILE TIME VARIABLES FOR VERSION INFO 221118
 //--------------------------------------------------------
 
 constexpr unsigned int Year = ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
