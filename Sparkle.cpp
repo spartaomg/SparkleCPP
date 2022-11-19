@@ -3,7 +3,7 @@
 //#define DEBUG
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR VERSION INFO 221118
+//  COMPILE TIME VARIABLES FOR VERSION INFO 221119
 //--------------------------------------------------------
 
 constexpr unsigned int Year = ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -65,6 +65,8 @@ string EntryTypeScriptHeader = "[sparkle loader script]";
 string EntryTypePath = "path:";
 string EntryTypeHeader = "header:";
 string EntryTypeID = "id:";
+string EntryTypeThisID = "thisside:";
+string EntryTypeNextID = "nextside:";
 string EntryTypeName = "name:";
 string EntryTypeStart = "start:";
 string EntryTypeDirArt = "dirart:";
@@ -134,6 +136,8 @@ string DemoName = "";
 string DemoStart = "";
 string LoaderZP = "02";
 string DirArt = "";
+unsigned char ThisID = 255;
+unsigned char NextID = 255;
 
 int DirTrack, DirSector, DirPos;
 string DirArtName = "";
@@ -1036,6 +1040,9 @@ bool ResetDiskVariables() {
     DemoStart = "";
     DirArtName = "";
     LoaderZP = "02";
+
+    ThisID = 255;
+    NextID = 255;
 
     //Reset Disk image
     NewDisk();
@@ -2724,7 +2731,7 @@ bool InjectSaverPlugin() {
     //WE ALSO NEED TO UPDATE ZP OFFSET IN THE SAVER CODE!!!
 
     //Convert LoaderZP to byte - it has already been validated in UpdateZP
-    unsigned char ZP = ConvertStringToInt(LoaderZP);
+    unsigned char ZP = ConvertHexStringToInt(LoaderZP);
 
     if (ZP != 2)
     {
@@ -2975,7 +2982,7 @@ bool InjectSaverPlugin() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool InjectDriveCode(unsigned char& idcDiskID, char& idcFileCnt, char& idcNextID) {
+bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& idcNextID) {
 
     int BAM = Track[18];
 
@@ -3033,7 +3040,7 @@ bool InjectDriveCode(unsigned char& idcDiskID, char& idcFileCnt, char& idcNextID
     Drive[(3 * 256) + ZPILTabLoc + 0] = 256 - IL3;
     Drive[(3 * 256) + ZPILTabLoc + 1] = 256 - IL2;
     Drive[(3 * 256) + ZPILTabLoc + 2] = 256 - IL1;
-    Drive[(3 * 256) + ZPILTabLoc + 3] = idcNextID;
+    Drive[(3 * 256) + ZPILTabLoc + 3] = idcNextID % 256;
     Drive[(3 * 256) + ZPILTabLoc + 4] = 256 - IL0;
 
     CT = 18;
@@ -3049,14 +3056,14 @@ bool InjectDriveCode(unsigned char& idcDiskID, char& idcFileCnt, char& idcNextID
         CS++;
     }
 
-    //Add DiskID
-    Disk[BAM + 255] = EORtransform(idcDiskID);
+    //Add SideID
+    Disk[BAM + 255] = EORtransform(idcSideID % 256);
 
     //Add Custom Interleave Info and Next Side ID
     Disk[BAM + 254] = EORtransform(256 - IL3);
     Disk[BAM + 253] = EORtransform(256 - IL2);
     Disk[BAM + 252] = EORtransform(256 - IL1);
-    Disk[BAM + 251] = EORtransform(idcNextID);
+    Disk[BAM + 251] = EORtransform(idcNextID % 256);
     Disk[BAM + 250] = EORtransform(256 - IL0);
 
     //Add IncludeSaveCode flag and Saver plugin if required
@@ -3104,7 +3111,7 @@ bool UpdateZP() {
     }
 
     //Convert LoaderZP to byte
-    unsigned char ZP = ConvertStringToInt(LoaderZP) % 256;
+    unsigned char ZP = ConvertHexStringToInt(LoaderZP) % 256;
 
     //ZP cannot be $00, $01, or $ff
     if (ZP < 2)
@@ -3124,7 +3131,7 @@ bool UpdateZP() {
         return true;
     }
 
-    //ZPUpdate BUG REPORTED BY Rico/Pretzel Logic
+    //UpdateZP BUG REPORTED BY Rico/Pretzel Logic
 
     //Find the JMP $0700 sequence in the code to identify the beginning of loader
     int LoaderBase = 0xffff;
@@ -3496,12 +3503,19 @@ bool FinishDisk(bool LastDisk) {
     //Now add compressed parts to disk
     if (!AddCompressedBundlesToDisk())
         return false;
-    if (!InjectLoader(18,7,1))                    //If InjectLoader(-1, 18, 7, 1) = False Then GoTo NoDisk
+    if (!InjectLoader(18,7,1))                      //If InjectLoader(-1, 18, 7, 1) = False Then GoTo NoDisk
         return false;
 
-    char NextID = LastDisk ? 0x80 : DiskCnt + 1;        //Negative value means no more disk, otherwise 0x00-0x7f
+    if (ThisID == 255)
+    {
+        ThisID = DiskCnt;
+    }
 
-    if (!InjectDriveCode(DiskCnt,LoaderBundles,NextID))
+    if (NextID == 255)
+    {
+        NextID = LastDisk ? 0xff : DiskCnt + 1;            //Negative value means no more disk, otherwise 0x00-0x7f
+    }
+    if (!InjectDriveCode(ThisID,LoaderBundles,NextID))
         return false;
 
     AddHeaderAndID();
@@ -3576,6 +3590,57 @@ bool Build() {
                         D64Name = ScriptPath + D64Name;                      //sPath is relative - use Sparkle's base folder to make it a full path
                     }
 
+                }
+
+                NewBundle = true;
+            }
+            else if (ScriptEntryType == EntryTypeThisID)
+            {
+                if (!NewD)
+                {
+                    NewD = true;
+                    if ((!FinishDisk(false)) || (!ResetDiskVariables()))
+                        return false;
+                }
+                if (NumScriptEntries > -1)
+                {
+                    if (IsNumeric(ScriptEntryArray[0]))
+                    {
+                        ThisID = ConvertHexStringToInt(ScriptEntryArray[0]) % 256;
+                        if (ThisID > 127)
+                        {
+                            cerr << "***CRITICAL***\tThis Side Index must be a hex number and cannot be greater than $7f!\n";
+                            return false;
+                        }
+                    }
+                    else
+                    {
+                        cerr << "***CRITICAL***\tThis Side Index must be a hex number and cannot be greater than $7f!\n";
+                        return false;
+                    }
+                }
+
+                NewBundle = true;
+            }
+            else if (ScriptEntryType == EntryTypeNextID)
+            {
+                if (!NewD)
+                {
+                    NewD = true;
+                    if ((!FinishDisk(false)) || (!ResetDiskVariables()))
+                        return false;
+                }
+                if (NumScriptEntries > -1)
+                {
+                    if (IsNumeric(ScriptEntryArray[0]))
+                    {
+                        NextID = ConvertHexStringToInt(ScriptEntryArray[0]) % 256;
+                    }
+                    else
+                    {
+                        cerr << "***CRITICAL***\tNext Side Index must be a hex number!\n";
+                        return false;
+                    }
                 }
 
                 NewBundle = true;
@@ -4021,7 +4086,7 @@ int main(int argc, char* argv[])
     {
 #ifdef DEBUG
 
-        string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\ThePumpkins\\Backup\\221028\\Scripts\\ThePumpkins.sls";
+        string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\ThePumpkins\\Backup\\221028\\Scripts\\ThePumpkins-Disk3.sls";
         Script = ReadFileToString(ScriptFileName);
         SetScriptPath(ScriptFileName, AppPath);
 
