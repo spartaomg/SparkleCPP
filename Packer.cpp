@@ -1172,6 +1172,19 @@ void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
                 //Check if first byte matches at offset, if not go to next offset
                 if (PrgValAtPos == Prgs[CurrentFileIndex].Prg[Pos + O])
                 {
+                    L = 1;
+                    do
+                    {
+                        if (Prgs[CurrentFileIndex].Prg[Pos - L] != Prgs[CurrentFileIndex].Prg[Pos + O - L])
+                        {
+                            break;
+                        }
+                        else
+                        {
+                            L++;
+                        }
+                    } while (L <= MaxLL);
+/*
                     for (L = 1; L <= MaxLL; L += 0)
                     {
                         if (Prgs[CurrentFileIndex].Prg[Pos - L] != Prgs[CurrentFileIndex].Prg[Pos + O - L])
@@ -1183,6 +1196,7 @@ void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
                             L++;
                         }
                     }
+*/
                     if (L > 1)
                     {
                         if (BestSL < (CurrentMaxL = min(MaxSL, L)))
@@ -1214,6 +1228,18 @@ void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
                 //Check if first byte matches at offset, if not go to next offset
                 if (PrgValAtPos == Prgs[CurrentFileIndex].Prg[Pos + O])
                 {
+                    L = 1;
+                    do {
+                        if (Prgs[CurrentFileIndex].Prg[Pos - L] != Prgs[CurrentFileIndex].Prg[Pos + O - L])
+                        {
+                            break;
+                        }
+                        else
+                        {
+                            L++;
+                        }
+                    } while (L <= Pos);
+/*
                     for (L = 1; L <= Pos; L += 0)
                     {
                         if (Prgs[CurrentFileIndex].Prg[Pos - L] != Prgs[CurrentFileIndex].Prg[Pos + O - L])
@@ -1225,6 +1251,7 @@ void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
                             L++;
                         }
                     }
+ */
                     if (L > (BestSL > 1 ? BestSL : 1))    // max(1, SL[Pos]))     //Only check match lengths > SL[Pos]
                     {
                         if (BestNL < (CurrentMaxL = min(L, MaxLL)))
@@ -1261,6 +1288,18 @@ void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
                     //Check if first byte matches at offset, if not go to next offset
                     if (PrgValAtPos == Prgs[CurrentFileIndex].Prg[Pos + O])
                     {
+                        L = 1;
+                        do {
+                            if (Prgs[CurrentFileIndex].Prg[Pos - L] != Prgs[CurrentFileIndex].Prg[Pos + O - L])
+                            {
+                                break;
+                            }
+                            else
+                            {
+                                L++;
+                            }
+                        } while (L <= Pos);
+/*
                         for (L = 1; L <= Pos; L += 0)
                         {
                             if (Prgs[CurrentFileIndex].Prg[Pos - L] != Prgs[CurrentFileIndex].Prg[Pos + O - L])
@@ -1272,6 +1311,7 @@ void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
                                 L++;
                             }
                         }
+*/
                         if (L > (BestNL > 2 ? BestNL : 2))    // max(2, NL[Pos])) //Only check lengths > NL[Pos]
                         {
                             if (BestFL < (CurrentMaxL = min(L, MaxLL)))

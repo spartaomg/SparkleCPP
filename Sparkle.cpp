@@ -3604,7 +3604,7 @@ bool Build() {
                 }
                 if (NumScriptEntries > -1)
                 {
-                    if (IsNumeric(ScriptEntryArray[0]))
+                    if (IsHexString(ScriptEntryArray[0]))
                     {
                         ThisID = ConvertHexStringToInt(ScriptEntryArray[0]) % 256;
                         if (ThisID > 127)
@@ -3632,7 +3632,7 @@ bool Build() {
                 }
                 if (NumScriptEntries > -1)
                 {
-                    if (IsNumeric(ScriptEntryArray[0]))
+                    if (IsHexString(ScriptEntryArray[0]))
                     {
                         NextID = ConvertHexStringToInt(ScriptEntryArray[0]) % 256;
                     }
@@ -4086,7 +4086,7 @@ int main(int argc, char* argv[])
     {
 #ifdef DEBUG
 
-        string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\ThePumpkins\\Backup\\221028\\Scripts\\ThePumpkins-Disk3.sls";
+        string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\ThePumpkins\\Backup\\221028\\Scripts\\ThePumpkins.sls";
         Script = ReadFileToString(ScriptFileName);
         SetScriptPath(ScriptFileName, AppPath);
 
