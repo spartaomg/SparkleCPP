@@ -66,7 +66,6 @@ int SI{};                                           //Sequence array index, Offs
 int LitSI{};                                        //Sequence array index of last literal sequence
 int StartPtr{};
 
-//Public PartialFileIndex, PartialFileOffset As Integer
 int CurrentFileIndex{};
 int ReferenceFileIndex{};
 int ReferenceFileStart{};
@@ -389,7 +388,7 @@ int CalcLitBits(int Lits)
     //As we always start with at least one literal byte
     if ((FirstLitOfBlock) && (LitBits > 0))
     {
-        LitBits -= 1;
+        LitBits--;
     }
 
     return LitBits;
@@ -1184,19 +1183,7 @@ void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
                             L++;
                         }
                     } while (L <= MaxLL);
-/*
-                    for (L = 1; L <= MaxLL; L += 0)
-                    {
-                        if (Prgs[CurrentFileIndex].Prg[Pos - L] != Prgs[CurrentFileIndex].Prg[Pos + O - L])
-                        {
-                            break;
-                        }
-                        else
-                        {
-                            L++;
-                        }
-                    }
-*/
+
                     if (L > 1)
                     {
                         if (BestSL < (CurrentMaxL = min(MaxSL, L)))
@@ -1239,19 +1226,7 @@ void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
                             L++;
                         }
                     } while (L <= Pos);
-/*
-                    for (L = 1; L <= Pos; L += 0)
-                    {
-                        if (Prgs[CurrentFileIndex].Prg[Pos - L] != Prgs[CurrentFileIndex].Prg[Pos + O - L])
-                        {
-                            break;
-                        }
-                        else
-                        {
-                            L++;
-                        }
-                    }
- */
+
                     if (L > (BestSL > 1 ? BestSL : 1))    // max(1, SL[Pos]))     //Only check match lengths > SL[Pos]
                     {
                         if (BestNL < (CurrentMaxL = min(L, MaxLL)))
@@ -1299,19 +1274,7 @@ void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
                                 L++;
                             }
                         } while (L <= Pos);
-/*
-                        for (L = 1; L <= Pos; L += 0)
-                        {
-                            if (Prgs[CurrentFileIndex].Prg[Pos - L] != Prgs[CurrentFileIndex].Prg[Pos + O - L])
-                            {
-                                break;
-                            }
-                            else
-                            {
-                                L++;
-                            }
-                        }
-*/
+
                         if (L > (BestNL > 2 ? BestNL : 2))    // max(2, NL[Pos])) //Only check lengths > NL[Pos]
                         {
                             if (BestFL < (CurrentMaxL = min(L, MaxLL)))
@@ -1505,7 +1468,7 @@ Restart:
                 {
                     break;
                 }
-                LitCnt -= 1;
+                LitCnt--;
                 BufferFull = true;
             }
 
@@ -1531,13 +1494,13 @@ Restart:
         //Match:
             CalcMatchBytesAndBits(MLen, MOff);
 
-            ReferenceUnderIO = 0;
-
             if (MatchBytes == 4)
             {
                 //--------------------------------------------------------------------
                 //Far Long Match - 4 match bytes + 0/1 match bit
                 //--------------------------------------------------------------------
+
+                ReferenceUnderIO = 0;
 
                 if ((((PrgAdd + SI + MOff) % 0x10000 >= 0xD000) && ((PrgAdd + SI + MOff) % 0x10000 < 0xE000)) ||
                     (((PrgAdd + SI + MOff - MLen + 1) % 0x10000 >= 0xD000) && ((PrgAdd + SI + MOff - MLen + 1) % 0x10000 < 0xE000)))
@@ -1573,6 +1536,9 @@ Restart:
                 //--------------------------------------------------------------------
                 //Far Mid Match or Near Long Match - 3 match bytes + 0/1 match bit
                 //--------------------------------------------------------------------
+            Check3Bytes:
+
+                ReferenceUnderIO = 0;
 
                 if (MOff > MaxNearOffset)
                 {
@@ -1591,7 +1557,6 @@ Restart:
                     }
                 }
 
-            Check3Bytes:
                 if (SequenceFits(MatchBytes + LitCnt + 1, MatchBits + CalcLitBits(LitCnt), max(CheckIO(SI - MLen + 1, -1), ReferenceUnderIO)))
                 {
                     AddLitSequence();
@@ -1691,7 +1656,7 @@ Restart:
                     {
                         if (LitCnt == -1)
                         {
-                            //If no literals, current SI will be LitSI, else, do not change LitSi
+                            //If no literals, current SI will be LitSI, else, do not change LitSI
                             LitSI = SI;
 
                         }
@@ -2038,12 +2003,9 @@ void PackFile(int Index) {
     Seq = new sequence[PrgLen + 1]{};   //This is actually one element more in the array, to have starter element with 0 values
 
     //Initialize first element of sequence - WAS Seq[1]!!!
-    Seq[0].Len = 0;         //1 Literal byte, Len is 0 based
-    Seq[0].Off = 0;         //Offset = 0 -> literal sequence, Off is 1 based
+    //Seq[0].Len = 0;         //1 Literal byte, Len is 0 based
+    //Seq[0].Off = 0;         //Offset = 0 -> literal sequence, Off is 1 based
     Seq[0].TotalBits = 10;  //LitLen bit + 8 bits, DO NOT CHANGE IT TO 9!!!
-
-    //Seq[PrgLen - 1].Len = -1;
-    //Seq[PrgLen - 1].TotalBits = 10;
 
     //----------------------------------------------------------------------------------------------------------
     //SEARCH REFERENCE FILES FOR FAR MATCHES

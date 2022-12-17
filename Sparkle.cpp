@@ -406,19 +406,63 @@ bool FindNextFreeSector() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void DeleteBit(unsigned char T, unsigned char S, bool UpdateFreeBlocks) {
+void DeleteBit(unsigned char T, unsigned char S)
+{
 
-    int BAMPos = Track[18] + (T * 4) + 1 + (S / 8) + ((T > 35) ? (7 * 4) : 0);
-    int BAMBit = 255 - (1 << (S % 8));
+    int NumSectorPtr = Track[18] + (T * 4) + ((T > 35) ? 7 * 4 : 0);
+    int BitPtr = NumSectorPtr + 1 + (S / 8);        //BAM Position for Bit Change
+    unsigned char BitToDelete = 1 << (S % 8);       //BAM Bit to be deleted
 
-    Disk[BAMPos] &= BAMBit;
+    if (Disk[BitPtr] && BitToDelete != 0)
+    {
+        Disk[BitPtr] &= (255 - BitToDelete);
 
-    BAMPos = Track[18] + (T * 4) + + ((T > 35) ? (7 * 4) : 0);
+        unsigned char NumUnusedSectors = 0;
 
-    Disk[BAMPos]--;
+        for (int I = NumSectorPtr + 1; I <= NumSectorPtr + 3; I++)
+        {
+            unsigned char B = Disk[I];
+            for (int J = 0; J < 8; J++)
+            {
+                if (B % 2 == 1)
+                {
+                    NumUnusedSectors++;
+                }
+                B >>= 1;
+            }
+        }
+        Disk[NumSectorPtr] = NumUnusedSectors;
 
-    if (UpdateFreeBlocks)
-        BlocksFree--;
+        if (T != 18)
+            BlocksFree--;
+    }
+
+/*    If(Disk(BitPtr) And BitToDelete) < > 0 Then
+        Disk(BitPtr) = Disk(BitPtr) And(255 - BitToDelete)
+
+        Dim NumUnusedSectors As Byte = 0
+        For I As Integer = NumSectorPtr + 1 To NumSectorPtr + 3
+        Dim B As Byte = Disk(I)
+        For J As Integer = 0 To 7
+        If B Mod 2 = 1 Then
+        NumUnusedSectors += 1
+        End If
+        B = Int(B / 2)
+        Next
+        Next
+        Disk(NumSectorPtr) = NumUnusedSectors
+        End If
+*/
+        //int BAMPos = Track[18] + (T * 4) + 1 + (S / 8) + ((T > 35) ? (7 * 4) : 0);
+        //int BAMBit = 255 - (1 << (S % 8));
+
+
+        //int BAMPos = Track[18] + (T * 4) + + ((T > 35) ? (7 * 4) : 0);
+
+        //Disk[BAMPos]--;
+
+        //if (UpdateFreeBlocks)
+        //BlocksFree--;
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -551,6 +595,9 @@ void InjectDirBlocks() {
     {
         Disk[Track[18] + (17 * 256) + i] = DirBlocks[i];
     }
+
+    DeleteBit(18, 17);
+    DeleteBit(18, 18);
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -973,16 +1020,15 @@ void NewDisk() {
         Disk[BAM + (i * 4) + 3] = 1;
     }
 
-    Disk[BAM + (18 * 4) + 0] = 17;
-    Disk[BAM + (18 * 4) + 1] = 252;
+    Disk[BAM + (18 * 4) + 0] = 17;      // Track 18 - 17 out of 19 sectors free (sectors 0-1 are used by default)
+    Disk[BAM + (18 * 4) + 1] = 252;     // 11111100 - Sector 0 (BAM) and Sector 1 (First Dir sector) are already in use by default
 
     CT = 18;
     CS = 1;
 
     //SetMaxSector();
 
-    BAM = Track[CT] + (256 * CS);
-    Disk[BAM + 1] = 255;
+    Disk[BAM + (CS * 256) + 1] = 255;   // First dir sector will start with 00 FF
 
     NextTrack = 1;
     NextSector = 0;
@@ -2076,21 +2122,31 @@ void FindNextDirSector() {
     if (DirSector < 6)
     {
         DirSector++;
+
+        Disk[Track[DirTrack] + (LastDirSector * 256)] = DirTrack;
+        Disk[Track[DirTrack] + (LastDirSector * 256) + 1] = DirSector;
+
+        Disk[Track[DirTrack] + (DirSector * 256)] = 0;
+        Disk[Track[DirTrack] + (DirSector * 256) + 1] = 255;
+
+        DeleteBit(DirTrack, DirSector);
     }
     else
     {
         DirSector = 0;
     }
 
-    Disk[Track[DirTrack] + (LastDirSector * 256)] = DirTrack;
-    Disk[Track[DirTrack] + (LastDirSector * 256) + 1] = DirSector;
-
-
+    /*
     if (DirSector != 0)
     {
+        Disk[Track[DirTrack] + (LastDirSector * 256)] = DirTrack;
+        Disk[Track[DirTrack] + (LastDirSector * 256) + 1] = DirSector;
+
         Disk[Track[DirTrack] + (DirSector * 256)] = 0;
         Disk[Track[DirTrack] + (DirSector * 256) + 1] = 255;
     }
+    */
+
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -2254,9 +2310,8 @@ void ConvertCArrayToDirArt() {
                 CharPos++;
                 if (CharPos == 16)
                 {
-                    CharRow++;
                     CharPos = 0;
-
+                    CharRow++;
                 }
                 NewChar = true;
                 CharCode = 0;
@@ -2789,7 +2844,7 @@ bool InjectSaverPlugin() {
     }
 
     //Mark sector off in BAM
-    DeleteBit(CT, CS, true);
+    DeleteBit(CT, CS);
 
     //Add plugin to directory
     Disk[Track[18] + (18 * 256) + 8] = EORtransform(CT);               //DirBlocks(0) = EORtransform(Track) = 35
@@ -2814,7 +2869,7 @@ bool InjectSaverPlugin() {
     }
 
     //Mark sector off in BAM
-    DeleteBit(CT, CS, true);
+    DeleteBit(CT, CS);
 
     //-----------------
     //  Add SaveFile
@@ -2830,7 +2885,7 @@ bool InjectSaverPlugin() {
     Disk[Track[18] + (18 * 256) + 2] = EORtransform(TabSCnt[SctPtr]);   //DirBlocks(2) = EORtransform(Remaining sectors on track)
     Disk[Track[18] + (18 * 256) + 1] = 0xfe;                                 //DirBlocks(3) = BitPtr
 
-    DeleteBit(CT, CS, true);
+    DeleteBit(CT, CS);
 
     unsigned char Buffer[256]{};
     int HSStartAdd = HSAddress + HSLength - 1;
@@ -2887,7 +2942,7 @@ bool InjectSaverPlugin() {
         CT = TabT[SctPtr];
         CS = TabS[SctPtr];
 
-        DeleteBit(CT, CS, true);
+        DeleteBit(CT, CS);
 
         memset(Buffer, 0, sizeof(Buffer));
 
@@ -2938,7 +2993,7 @@ bool InjectSaverPlugin() {
     CT = TabT[SctPtr];
     CS = TabS[SctPtr];
 
-    DeleteBit(CT, CS, true);
+    DeleteBit(CT, CS);
 
     memset(Buffer, 0, sizeof(Buffer));
 
@@ -3052,7 +3107,7 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
         {
             Disk[Track[CT] + (CS * 256) + i] = Drive[(c * 256) + i];
         }
-        DeleteBit(CT, CS, false);
+        DeleteBit(CT, CS);
         CS++;
     }
 
@@ -3281,7 +3336,7 @@ bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL) {
                 Disk[Track[CT] + (CS * 256) + 2 + c] = Loader[(i * 254) + c];
             }
         }
-        DeleteBit(CT, CS, false);
+        DeleteBit(CT, CS);
 
         AddInterleave(IL);      //Go to next free sector with Interleave IL
 
@@ -3445,7 +3500,7 @@ bool AddCompressedBundlesToDisk() {
             Disk[Track[CT] + (256 * CS) + j] = ByteSt[(i * 256) + j];
         }
 
-        DeleteBit(CT, CS, true);
+        DeleteBit(CT, CS);
     }
 
     if (BufferCnt < SectorsPerDisk)
@@ -3458,7 +3513,6 @@ bool AddCompressedBundlesToDisk() {
         NextTrack = 18;
         NextSector = 0;
     }
-
 
     return true;
 }
@@ -3501,8 +3555,9 @@ bool FinishDisk(bool LastDisk) {
     }
 
     //Now add compressed parts to disk
-    if (!AddCompressedBundlesToDisk())
+    if (!AddCompressedBundlesToDisk())                      //Also adds two dir sectors (18:17 and 18:18)
         return false;
+
     if (!InjectLoader(18,7,1))                      //If InjectLoader(-1, 18, 7, 1) = False Then GoTo NoDisk
         return false;
 
@@ -4088,7 +4143,8 @@ int main(int argc, char* argv[])
     {
 #ifdef DEBUG
 
-        string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\ThePumpkins\\Backup\\221028\\Scripts\\ThePumpkins.sls";
+        //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\ThePumpkins\\Backup\\221028\\Scripts\\ThePumpkins.sls";
+        string ScriptFileName = "c:\\Users\\Tamas\\source\\repos\\GPMagazine\\Magazine\\Issue33\\Sparkle\\Magazine.sls";
         Script = ReadFileToString(ScriptFileName);
         SetScriptPath(ScriptFileName, AppPath);
 
