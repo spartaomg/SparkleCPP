@@ -1,9 +1,9 @@
 #include "common.h"
 
-//#define DEBUG
+#define DEBUG
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR VERSION INFO 221119
+//  COMPILE TIME VARIABLES FOR VERSION INFO 221217
 //--------------------------------------------------------
 
 constexpr unsigned int Year = ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -599,6 +599,57 @@ void InjectDirBlocks() {
     DeleteBit(18, 17);
     DeleteBit(18, 18);
 }
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+bool StringIsNumeric(string NumericString)
+{
+    //Remove unwanted spaces
+    while (NumericString.find(" ") != string::npos)
+    {
+        int Pos = NumericString.find(" ");
+        NumericString.replace(Pos, 1, "");
+    }
+
+    if (NumericString.length() == 0)  //Handle strings with zero length
+    {
+        return false;
+    }
+
+
+    //Remove HEX prefix
+    if (NumericString.at(0) == '$')
+    {
+        NumericString.replace(0, 1, "");
+    }
+
+    string prefix = NumericString.substr(0, 2);
+
+    if ((prefix == "0x") || (prefix == "0X") || (prefix == "&h") || (prefix == "&H"))
+    {
+        NumericString.replace(0, 2, "");
+    }
+
+    //If decimal -> convert it to hex
+    if (NumericString.at(0) == '.')
+    {
+        NumericString.replace(0, 1, "");
+        if (IsNumeric(NumericString))
+        {
+            int StringToInt = ConvertStringToInt(NumericString);
+            int hexlen = 2;
+            NumericString = ConvertIntToHextString(StringToInt, hexlen);
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    return IsHexString(NumericString);
+
+}
+
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -2272,6 +2323,134 @@ void ConvertKickassAsmToDirArt() {
         }
     }
 }
+
+bool AddCArrayDirEntry(int RowLen)
+{
+    if (DirEntry.find(0x0d) != string::npos)        //Make sure 0x0d is removed from end of string
+    {
+        DirEntry = DirEntry.substr(0, DirEntry.find(0x0d));
+    }
+
+    string Entry[16];
+    size_t EntryStart = 0;
+    int NumEntries = 0;
+    string delimiter = ",";
+
+    while ((EntryStart = DirEntry.find(delimiter)) != string::npos)
+    {
+        if (DirEntry.substr(0, EntryStart) != "")
+        {
+            Entry[NumEntries++] = DirEntry.substr(0, EntryStart);
+        }
+
+        DirEntry.erase(0, EntryStart + delimiter.length());
+
+        if (NumEntries == RowLen)   //Max row length reached, ignore rest of the char row
+        {
+            break;
+        }
+    }
+
+    if ((NumEntries < 16) && (DirEntry != ""))
+    {
+        for (int i = 0; i < DirEntry.length(); i++)
+        {
+            string S = DirEntry.substr(0, 1);
+            DirEntry.erase(0, 1);
+            if (IsNumeric(S))
+            {
+                Entry[NumEntries] += S;
+            }
+            else
+            {
+                break;
+            }
+
+        }
+        NumEntries++;
+    }
+
+    if (NumEntries == RowLen)       //Ignore rows that are too short (e.g.
+    {
+        unsigned char bEntry[16]{};
+        bool AllNumeric = true;
+        int V = 0;
+
+        for (int i = 0; i < NumEntries; i++)
+        {
+            string prefix = Entry[i].substr(0, 2);
+            if ((prefix == "0x") || (prefix == "&h"))
+            {
+                Entry[i].erase(0, 2);
+                if (IsHexString(Entry[i]))
+                {
+                    bEntry[V++] = ConvertHexStringToInt(Entry[i]);
+                }
+                else
+                {
+                    AllNumeric = false;
+                    break;
+                }
+            }
+            else if (Entry[i].substr(0, 1) == "&")
+            {
+                Entry[i].erase(0, 1);
+                if (IsHexString(Entry[i]))
+                {
+                    bEntry[V++] = ConvertHexStringToInt(Entry[i]);
+                }
+                else
+                {
+                    AllNumeric = false;
+                    break;
+                }
+            }
+            else
+            {
+                if (IsNumeric(Entry[i]))
+                {
+                    bEntry[V++] = ConvertStringToInt(Entry[i]);
+                }
+                else
+                {
+                    AllNumeric = false;
+                    break;
+                }
+            }
+        }
+
+        if (AllNumeric)
+        {
+
+            FindNextDirPos();
+
+            if (DirPos != 0)
+            {
+                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0] = 0x82;      //"PRG" -  all dir entries will point at first file in dir
+                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 1] = 18;        //Track 18 (track pointer of boot loader)
+                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 2] = 7;         //Sector 7 (sector pointer of boot loader)
+
+                for (size_t i = 0; i < 16; i++)
+                {
+                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Petscii2DirArt[bEntry[i]];
+                }
+                if ((DirTrack == 18) && (DirSector == 1) && (DirPos == 2))
+                {
+                    //Very first dir entry, also add loader block count
+                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0x1c] = LoaderBlockCount;
+                }
+            }
+            else
+            {
+                return false;
+            }
+        }
+    }
+
+    return true;
+
+}
+
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
 void ConvertCArrayToDirArt() {
@@ -2284,9 +2463,87 @@ void ConvertCArrayToDirArt() {
         return;
     }
 
-    unsigned char* BinFile = new unsigned char[6*256];
-    int First = DA.find("{");
-    int Last = DA.find("}");
+    for (int i = 0; i < DA.length(); i++)
+    {
+        DA[i] = tolower(DA[i]);
+    }
+
+    //unsigned char* BinFile = new unsigned char[6*256];
+    const char *findmeta = "meta:";
+    size_t indexMeta = DA.find(findmeta);
+    
+    string sRowLen = "0";
+    string sRowCnt = "0";
+
+    if (indexMeta != string::npos)
+    {
+        int i = indexMeta;
+        while ((i < DA.length()) && (DA[i] != ' '))     //Skip META:
+        {
+            i++;
+        }
+
+        while ((i < DA.length()) && (DA[i] == ' '))      //Skip SPACE between values
+        {
+            i++;
+        }
+
+        while ((i < DA.length()) && (DA[i] != ' '))
+        {
+            sRowLen += DA[i++];
+        }
+
+        while ((i < DA.length()) && (DA[i] == ' '))      //Skip SPACE between values
+        {
+            i++;
+        }
+
+        while ((i < DA.length()) && (DA[i] != ' '))
+        {
+            sRowCnt += DA[i++];
+        }
+    }
+
+    DirTrack = 18;
+    DirSector = 1;
+
+    int RowLen = min(ConvertStringToInt(sRowLen),16);
+    int RowCnt = min(ConvertStringToInt(sRowCnt),48);
+
+    size_t First = DA.find("{");
+    size_t Last = DA.find("}");
+    
+    DA.erase(0, First + 1);
+    
+    string LineBreak = "\n";
+    size_t LineStart = 0;
+    int NumRows = 0;
+    bool DirFull = false;
+
+    while (((LineStart = DA.find(LineBreak)) != string::npos) && (NumRows < RowCnt))
+    {
+        DirEntry = DA.substr(0, LineStart);     //Extract one dir entry
+
+        if (!AddCArrayDirEntry(RowLen))
+        {
+            DirFull = true;
+            break;
+        }
+
+        DA.erase(0, LineStart + LineBreak.length());
+        NumRows++;
+    }
+    
+    if (!DirFull)
+    {
+        DirEntry = DA;
+        AddCArrayDirEntry(RowLen);
+    }
+
+/*
+
+    //std::cout << DA << std::endl;
+
     int CharPos = 0;
     int CharRow = 0;
     unsigned char CharCode = 0;
@@ -2358,6 +2615,7 @@ void ConvertCArrayToDirArt() {
     }
 
     delete[] BinFile;
+*/
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
