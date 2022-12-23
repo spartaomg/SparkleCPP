@@ -142,6 +142,7 @@ unsigned char NextID = 255;
 int DirTrack, DirSector, DirPos;
 string DirArtName = "";
 string DirEntry = "";
+bool DirEntryAdded = false;
 
 int BlockPtr;
 int LastBlockCnt = 0;
@@ -2326,6 +2327,8 @@ void ConvertKickassAsmToDirArt() {
 
 bool AddCArrayDirEntry(int RowLen)
 {
+    DirEntryAdded = false;
+
     if (DirEntry.find(0x0d) != string::npos)        //Make sure 0x0d is removed from end of string
     {
         DirEntry = DirEntry.substr(0, DirEntry.find(0x0d));
@@ -2439,6 +2442,9 @@ bool AddCArrayDirEntry(int RowLen)
                     //Very first dir entry, also add loader block count
                     Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0x1c] = LoaderBlockCount;
                 }
+                
+                DirEntryAdded = true;
+
             }
             else
             {
@@ -2531,91 +2537,18 @@ void ConvertCArrayToDirArt() {
         }
 
         DA.erase(0, LineStart + LineBreak.length());
-        NumRows++;
+        
+        if (DirEntryAdded)
+        {
+            NumRows++;
+        }
     }
     
-    if (!DirFull)
+    if ((!DirFull) && (NumRows < RowCnt))
     {
         DirEntry = DA;
         AddCArrayDirEntry(RowLen);
     }
-
-/*
-
-    //std::cout << DA << std::endl;
-
-    int CharPos = 0;
-    int CharRow = 0;
-    unsigned char CharCode = 0;
-    bool NewChar = true;
-
-    for (int i = First + 1; i <= Last; i++)
-    {
-        if ((DA[i] >= '0') && (DA[i] <= '9'))
-        {
-            CharCode = (CharCode * 10) + (DA[i] - 0x30);
-            NewChar = false;
-        }
-        else
-        {
-            if (!NewChar)
-            {
-                if (CharCode == 96)
-                    CharCode = 32;
-
-                BinFile[(CharRow * 16) + CharPos] = CharCode;
-                CharPos++;
-                if (CharPos == 16)
-                {
-                    CharPos = 0;
-                    CharRow++;
-                }
-                NewChar = true;
-                CharCode = 0;
-            }
-        }
-    }
-
-    size_t BinFileLength = (CharRow * 16) + CharPos;
-
-    DirTrack = 18;
-    DirSector = 1;
-
-    for (size_t b = 0; b < BinFileLength; b += 16)
-    {
-        FindNextDirPos();
-
-        if (DirPos != 0)
-        {
-            Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0] = 0x82;      //"PRG" -  all dir entries will point at first file in dir
-            Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 1] = 18;        //Track 18 (track pointer of boot loader)
-            Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 2] = 7;         //Sector 7 (sector pointer of boot loader)
-
-            for (size_t i = 0; i < 16; i++)
-            {
-                if (b + i < BinFileLength)
-                {
-                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Petscii2DirArt[BinFile[b + i]];
-                }
-                else
-                {
-                    break;
-                }
-            }
-            if ((DirTrack == 18) && (DirSector == 1) && (DirPos == 2))
-            {
-                //Very first dir entry, also add loader block count
-                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0x1c] = LoaderBlockCount;
-            }
-        }
-        else
-        {
-            break;
-        }
-    }
-
-    delete[] BinFile;
-*/
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
