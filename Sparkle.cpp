@@ -3,7 +3,7 @@
 #define DEBUG
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR VERSION INFO 221217
+//  COMPILE TIME VARIABLES FOR VERSION INFO 221230
 //--------------------------------------------------------
 
 constexpr unsigned int Year = ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -2225,61 +2225,192 @@ void FindNextDirPos() {
 
 void AddAsmDirEntry(string DirEntry) {
 
-    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0] = 0x82;      //"PRG" -  all dir entries will point at first file in dir
-    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 1] = 18;        //Track 18 (track pointer of boot loader)
-    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 2] = 7;         //Sector 7 (sector pointer of boot loader)
-
-    unsigned char Entry[16]{};
-    //Fill array with 16 SHIFT+SPACE characters
-    for (int i = 0; i < 16; i++)
+    string EntrySegments[5];
+    string delimiter = "\"";        // = "
+    int NumSegments = 0;
+    
+    for (int i = 0; i < 5; i++)
     {
-        Entry[i] = 0xa0;
+        EntrySegments[i] = "";
     }
 
-    string separator = "\\$";
-    int index = 0;
-
-    while (DirEntry.find(separator) != string::npos)
+    while ((DirArt.find(delimiter) != string::npos) && (NumSegments < 4))
     {
-        DirEntry.erase(0, DirEntry.find(separator) + separator.length());
-        for (int i = 0; i < 2; i++)
+        EntrySegments[NumSegments++] = DirEntry.substr(0, DirEntry.find(delimiter));
+        DirEntry.erase(0, DirEntry.find(delimiter) + delimiter.length());
+    }
+    EntrySegments[NumSegments++] = DirEntry;
+
+    //EntrySegments[0] = '[name =' OR '[name = @'
+    //EntrySegments[1] = 'text' OR '\$XX\$XX\$XX'
+    //EntrySegments[2] = 'type ='
+    //EntrySegments[3] = 'del' OR 'prg' etc.
+    //EntrySegments[4] = ']'
+    
+    if (NumSegments > 1)
+    {
+        if ((EntrySegments[0].find("[") != string::npos) && (EntrySegments[0].find("name") != string::npos) && (EntrySegments[0].find("=") != string::npos))
         {
-            unsigned char NextChar = tolower(DirEntry[i]);
-            if ((NextChar >= '0') && (NextChar <= '9'))
+            unsigned char FileType = 0x80;  //DEL default file type
+
+            if (NumSegments > 3)
             {
-                NextChar -='0';
+                if ((EntrySegments[2].find("type") != string::npos) && (EntrySegments[2].find("=") != string::npos))
+                {
+                    if (EntrySegments[3] == "*seq")
+                    {
+                        FileType = 0x01;
+                    }
+                    else if (EntrySegments[3] == "*prg")
+                    {
+                        FileType = 0x02;
+                    }
+                    else if (EntrySegments[3] == "*usr")
+                    {
+                        FileType = 0x03;
+                    }
+                    else if (EntrySegments[3] == "del<")
+                    {
+                        FileType = 0xc0;
+                    }
+                    else if (EntrySegments[3] == "seq<")
+                    {
+                        FileType = 0xc1;
+                    }
+                    else if (EntrySegments[3] == "prg<")
+                    {
+                        FileType = 0xc2;
+                    }
+                    else if (EntrySegments[3] == "usr<")
+                    {
+                        FileType = 0xc3;
+                    }
+                    else if (EntrySegments[3] == "rel<")
+                    {
+                        FileType = 0xc4;
+                    }
+                    else if (EntrySegments[3] == "seq")
+                    {
+                        FileType = 0x81;
+                    }
+                    else if (EntrySegments[3] == "prg")
+                    {
+                        FileType = 0x82;
+                    }
+                    else if (EntrySegments[3] == "usr")
+                    {
+                        FileType = 0x83;
+                    }
+                    else if (EntrySegments[3] == "rel")
+                    {
+                        FileType = 0x84;
+                    }
+                    //else
+                    //{
+                    //    FileType = 0x80;
+                    //}
+                }
             }
-            else if ((NextChar >= 'a') && (NextChar <= 'f'))
+
+            if (Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0] == 0)
             {
-                NextChar -= ('a' - 10);
+                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0] = FileType;      //All dir entries will point at first file in dir
+                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 1] = 18;            //Track 18 (track pointer of boot loader)
+                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 2] = 7;             //Sector 7 (sector pointer of boot loader)
             }
-            if (i == 0)
+
+            if (EntrySegments[0].find("@") != string::npos)
             {
-                Entry[index] = NextChar * 16;
+                //Numeric entry
+                unsigned char Entry[16];
+                string Values[16];
+
+                //Fill array with 16 SHIFT+SPACE characters
+                for (int i = 0; i < 16; i++)
+                {
+                    Entry[i] = 0xa0;
+                    Values[i] = "";
+                }
+
+                int NumValues = 0;
+                delimiter = "\\";
+                while ((EntrySegments[1].find(delimiter) != string::npos) && (NumValues < 15))
+                {
+                    string ThisValue = EntrySegments[1].substr(0, EntrySegments[1].find(delimiter));
+                    if (ThisValue != "")
+                    {
+                        Values[NumValues++] = ThisValue;
+                    }
+                    EntrySegments[1].erase(0, EntrySegments[1].find(delimiter) + delimiter.length());
+                }
+                Values[NumValues++] = EntrySegments[1];
+
+                int Idx = 0;
+
+                for (int v = 0; v < NumValues; v++)
+                {
+                    if (Values[v] != "")
+                    {
+                        unsigned char NextChar = 0x20;          //SPACE default char - if conversion is not possible
+                        if (Values[v].find("$") == 0)
+                        {
+                            //Hex Entry
+                            Values[v].erase(0, 1);
+                            if (IsHexString(Values[v]))
+                            {
+                                NextChar = ConvertHexStringToInt(Values[v]);
+                            }
+                            else
+                            {
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            //Decimal Entry
+                            if (IsNumeric(Values[v]))
+                            {
+                                NextChar = ConvertStringToInt(Values[v]);
+                            }
+                            else
+                            {
+                                break;
+                            }
+                        }
+                        Entry[Idx++] = NextChar;
+                        if (Idx == 16)
+                        {
+                            break;
+                        }
+                    }
+                }
+                for (int i = 0; i < 16; i++)
+                {
+                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Entry[i];
+                }
             }
             else
             {
-                Entry[index] += NextChar;
+                //Text Entry, pad it with inverted space
+                //Fill the slot first with $A0
+                for (int i = 0; i < 16; i++)
+                {
+                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = 0xa0;
+                }
+                string ThisEntry = EntrySegments[1];
+                for (int i = 0; (i < ThisEntry.length()) && (i < 16); i++)
+                {
+                    unsigned char NextChar = toupper(ThisEntry[i]);
+                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Ascii2DirArt[NextChar];
+                }
             }
         }
-
-        index++;
-
-        if (index == 16)
-        {
-            break;
-        }
     }
-
-    for (int i = 0; i < 16; i++)
-    {
-        Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Entry[i];
-    }
-
 
     if ((DirTrack == 18) && (DirSector == 1) && (DirPos == 2))
     {
-        //Very first dir entry, also add loader block count
+        //Very first dir entry MUST be PRG, also add loader block count
+        Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0] = 0x82;
         Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0x1c] = LoaderBlockCount;
     }
 }
@@ -2296,6 +2427,12 @@ void ConvertKickassAsmToDirArt() {
         return;
     }
 
+    //Convert the whole string to lower case for easier processing
+    for (int i = 0; i < DirArt.length(); i++)
+    {
+        DirArt[i] = tolower(DirArt[i]);
+    }
+
     string delimiter = "\n";
     DirTrack = 18;
     DirSector = 1;
@@ -2307,7 +2444,7 @@ void ConvertKickassAsmToDirArt() {
         FindNextDirPos();
         if (DirPos != 0)
         {
-            AddAsmDirEntry(DirEntry);
+            AddAsmDirEntry(DirEntry);   //Convert one line at the time
         }
         else
         {
@@ -2324,6 +2461,8 @@ void ConvertKickassAsmToDirArt() {
         }
     }
 }
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
 
 bool AddCArrayDirEntry(int RowLen)
 {
@@ -2469,6 +2608,7 @@ void ConvertCArrayToDirArt() {
         return;
     }
 
+    //Convert the whole string to lower case for easier processing
     for (int i = 0; i < DA.length(); i++)
     {
         DA[i] = tolower(DA[i]);
