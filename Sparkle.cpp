@@ -1,6 +1,6 @@
 #include "common.h"
 
-#define DEBUG
+//#define DEBUG
 
 //--------------------------------------------------------
 //  COMPILE TIME VARIABLES FOR VERSION INFO 221230
@@ -2228,7 +2228,7 @@ void AddAsmDirEntry(string DirEntry) {
     string EntrySegments[5];
     string delimiter = "\"";        // = "
     int NumSegments = 0;
-    
+
     for (int i = 0; i < 5; i++)
     {
         EntrySegments[i] = "";
@@ -2246,7 +2246,7 @@ void AddAsmDirEntry(string DirEntry) {
     //EntrySegments[2] = 'type ='
     //EntrySegments[3] = 'del' OR 'prg' etc.
     //EntrySegments[4] = ']'
-    
+
     if (NumSegments > 1)
     {
         if ((EntrySegments[0].find("[") != string::npos) && (EntrySegments[0].find("name") != string::npos) && (EntrySegments[0].find("=") != string::npos))
@@ -2400,7 +2400,7 @@ void AddAsmDirEntry(string DirEntry) {
                     Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = 0xa0;
                 }
                 string ThisEntry = EntrySegments[1];
-                for (int i = 0; (i < ThisEntry.length()) && (i < 16); i++)
+                for (size_t i = 0; (i < ThisEntry.length()) && (i < 16); i++)
                 {
                     unsigned char NextChar = toupper(ThisEntry[i]);
                     Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Ascii2DirArt[NextChar];
@@ -2430,7 +2430,7 @@ void ConvertKickassAsmToDirArt() {
     }
 
     //Convert the whole string to lower case for easier processing
-    for (int i = 0; i < DirArt.length(); i++)
+    for (size_t i = 0; i < DirArt.length(); i++)
     {
         DirArt[i] = tolower(DirArt[i]);
     }
@@ -2497,7 +2497,7 @@ bool AddCArrayDirEntry(int RowLen)
 
     if ((NumEntries < 16) && (DirEntry != ""))
     {
-        for (int i = 0; i < DirEntry.length(); i++)
+        for (size_t i = 0; i < DirEntry.length(); i++)
         {
             string S = DirEntry.substr(0, 1);
             DirEntry.erase(0, 1);
@@ -2583,7 +2583,7 @@ bool AddCArrayDirEntry(int RowLen)
                     //Very first dir entry, also add loader block count
                     Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0x1c] = LoaderBlockCount;
                 }
-                
+
                 DirEntryAdded = true;
 
             }
@@ -2611,7 +2611,7 @@ void ConvertCArrayToDirArt() {
     }
 
     //Convert the whole string to lower case for easier processing
-    for (int i = 0; i < DA.length(); i++)
+    for (size_t i = 0; i < DA.length(); i++)
     {
         DA[i] = tolower(DA[i]);
     }
@@ -2619,13 +2619,13 @@ void ConvertCArrayToDirArt() {
     //unsigned char* BinFile = new unsigned char[6*256];
     const char *findmeta = "meta:";
     size_t indexMeta = DA.find(findmeta);
-    
+
     string sRowLen = "0";
     string sRowCnt = "0";
 
     if (indexMeta != string::npos)
     {
-        int i = indexMeta;
+        size_t i = indexMeta;
         while ((i < DA.length()) && (DA[i] != ' '))     //Skip META:
         {
             i++;
@@ -2659,10 +2659,10 @@ void ConvertCArrayToDirArt() {
     int RowCnt = min(ConvertStringToInt(sRowCnt),48);
 
     size_t First = DA.find("{");
-    size_t Last = DA.find("}");
-    
+    //size_t Last = DA.find("}");
+
     DA.erase(0, First + 1);
-    
+
     string LineBreak = "\n";
     size_t LineStart = 0;
     int NumRows = 0;
@@ -2679,13 +2679,13 @@ void ConvertCArrayToDirArt() {
         }
 
         DA.erase(0, LineStart + LineBreak.length());
-        
+
         if (DirEntryAdded)
         {
             NumRows++;
         }
     }
-    
+
     if ((!DirFull) && (NumRows < RowCnt))
     {
         DirEntry = DA;
