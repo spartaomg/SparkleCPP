@@ -2326,11 +2326,13 @@ void AddAsmDirEntry(string DirEntry) {
                 string Values[16];
 
                 //Fill array with 16 SHIFT+SPACE characters
-                for (int i = 0; i < 16; i++)
-                {
-                    Entry[i] = 0xa0;
-                    Values[i] = "";
-                }
+                fill_n(Entry, 16, 0xa0);
+                fill_n(Values, 16, "");
+                //for (int i = 0; i < 16; i++)
+                //{
+                    //Entry[i] = 0xa0;
+                    //Values[i] = "";
+                //}
 
                 int NumValues = 0;
                 delimiter = "\\";
@@ -2812,6 +2814,69 @@ void ConvertTxtToDirArt() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
+void ConvertPetToDirArt() {
+
+    //Binary file With a .pet extension that includes the following information, without any padding:
+    //- 1 byte: screen width in chars (40 for whole C64 screen)
+    //- 1 byte: screen height in chars (25 for whole C64 screen)
+    //- 1 byte: border Color($D020)                              - IGNORED BY SPARKLE
+    //- 1 byte: background Color($D021)                          - IGNORED BY SPARKLE
+    //- 1 byte: 0 for uppercase PETSCII, 1 for lowercase PETSCII - IGNORED BY SPARKLE
+    //- <width * height> bytes: video RAM data
+    //- <width * height> bytes: Color RAM data                   - IGNORED BY SPARKLE
+
+    vector<unsigned char> PetFile;
+
+    if (ReadBinaryFile(DirArtName, PetFile) == -1)
+    {
+        cerr << "***INFO***\tUnable to open the following file: " << DirArtName << "\nThe disk will be built without DirArt.\n";
+        return;
+    }
+
+    unsigned char RowLen = PetFile[0];
+    unsigned char RowCnt = PetFile[1] > 48 ? 48 : PetFile[1];
+
+    DirTrack = 18;
+    DirSector = 1;
+
+    for (int rc = 0; rc < RowCnt; rc++)
+    {
+        FindNextDirPos();
+        if (DirPos != 0)
+        {
+
+            if (Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0] == 0)
+            {
+                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0] = 0x82;  //"PRG" -  all dir entries will point at first file in dir
+                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 1] = 18;    //Track 18 (track pointer of boot loader)
+                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 2] = 7;     //Sector 7
+
+                if ((DirTrack == 18) && (DirSector == 1) && (DirPos == 2))
+                {
+                    //Very first dir entry, also add loader block count
+                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0x1c] = LoaderBlockCount;
+                }
+
+                for (int i = 0; i < 16; i++)
+                {
+                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = 0xa0;
+                }
+
+                for (int i = 0; (i < RowLen) && (i < 16); i++)
+                {
+                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Petscii2DirArt[PetFile[5 + (rc * RowLen) + i]];
+                }
+            }
+        }
+        else
+        {
+            break;
+        }
+    }
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
 void ConvertD64ToDirArt() {
 
     vector<unsigned char> DA;
@@ -2940,13 +3005,17 @@ void AddDirArt() {
     {
         ConvertCArrayToDirArt();
     }
-    else if (DirArtType == "asm")           // Convert Kick Assembler file parameter list to DirArt (assumes hex list!!!)
+    else if (DirArtType == "asm")           // Convert Kick Assembler file parameter list to DirArt
     {
         ConvertKickassAsmToDirArt();
     }
+    else if (DirArtType == "pet")           // Convert PET file to DirArt
+    {
+        ConvertPetToDirArt();
+    }
     else
     {
-        ConvertBinToDirArt("");             // Convert any other binary file to DirArt (same as PRG without header)
+        ConvertBinToDirArt("");     // Convert any other binary file to DirArt (same as PRG without header)
     }
 }
 
