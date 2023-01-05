@@ -3,7 +3,7 @@
 //#define DEBUG
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR VERSION INFO 221230
+//  COMPILE TIME VARIABLES FOR VERSION INFO 230105
 //--------------------------------------------------------
 
 constexpr unsigned int Year = ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -139,7 +139,7 @@ string DirArt = "";
 unsigned char ThisID = 255;
 unsigned char NextID = 255;
 
-int DirTrack, DirSector, DirPos;
+size_t DirTrack, DirSector, DirPos;
 string DirArtName = "";
 string DirEntry = "";
 bool DirEntryAdded = false;
@@ -784,6 +784,11 @@ bool AddHSFile()
         if (ReadBinaryFile(FN, HSFile) == -1)
         {
             cerr << "***CRITICAL***\tUnable to open Hi-score File\n";
+            return false;
+        }
+        else if (HSFile.size() == 0)
+        {
+            cerr << "***CRITICAL***\tHi-score File cannot be 0 bytes long\n";
             return false;
         }
 
@@ -1876,7 +1881,12 @@ bool AddVirtualFile()
         {
             cerr << "***CRITICAL***\tUnable to open the following file: " << FN << "\n";
             return false;
-        };
+        }
+        else if (P.size() == 0)
+        {
+            cerr << "***CRITICAL***\t The following file is 0 bytes long: " << FN << "\n";
+            return false;
+        }
 
         switch (NumParams)
         {
@@ -1884,7 +1894,8 @@ bool AddVirtualFile()
 
             if ((FN[FN.length() - 4] == '.') && (FN[FN.length() - 3] == 's') && (FN[FN.length() - 2] == 'i') && (FN[FN.length() - 1] == 'd'))
             {   //SID file
-                FA = ConvertIntToHextString(P[P[7]] + (P[P[7] + 1] * 256), 4);
+                size_t P7 = P[7];
+                FA = ConvertIntToHextString(P[P7] + (P[P7 + 1] * 256), 4);
                 FO = ConvertIntToHextString(P[7] + 2, 8);
                 FL = ConvertIntToHextString(P.size() - P[7] - 2, 4);
             }
@@ -1933,6 +1944,13 @@ bool AddVirtualFile()
         FAN = ConvertHexStringToInt(FA);
         FON = ConvertHexStringToInt(FO);
         FLN = ConvertHexStringToInt(FL);
+
+        //File length cannot be 0 bytes
+        if (FLN == 0)
+        {
+            cerr << "***CRITICAL***\tInvalid file length detected in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+            return false;
+        }
 
         //Make sure file length is not longer than actual file
         if (FON + FLN > P.size())
@@ -2032,6 +2050,11 @@ bool AddFileToBundle() {
             cerr << "***CRITICAL***\tUnable to open the following file: " << FN << "\n";
             return false;
         }
+        else if (P.size() == 0)
+        {
+            cerr << "***CRITICAL***\t The following file is 0 bytes long: " << FN << "\n";
+            return false;
+        }
 
         switch (NumParams)
         {
@@ -2039,7 +2062,8 @@ bool AddFileToBundle() {
 
             if ((FN[FN.length() - 4] == '.') && (FN[FN.length() - 3] == 's')&& (FN[FN.length() - 2] == 'i')&& (FN[FN.length() - 1] == 'd'))
             {   //SID file
-                FA = ConvertIntToHextString(P[P[7]] + (P[P[7] + 1] * 256), 4);
+                size_t P7 = P[7];
+                FA = ConvertIntToHextString(P[P7] + (P[P7 + 1] * 256), 4);
                 FO = ConvertIntToHextString(P[7] + 2, 8);
                 FL = ConvertIntToHextString(P.size() - P[7] - 2, 4);
             }
@@ -2089,6 +2113,12 @@ bool AddFileToBundle() {
         FON = ConvertHexStringToInt(FO);
         FLN = ConvertHexStringToInt(FL);
 
+        //File length cannot be 0 bytes
+        if (FLN == 0)
+        {
+            cerr << "***CRITICAL***\tInvalid file length detected in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+            return false;
+        }
         //Make sure file length is not longer than actual file
         if(FON + FLN > P.size())
         {
@@ -2386,7 +2416,7 @@ void AddAsmDirEntry(string DirEntry) {
                         }
                     }
                 }
-                for (int i = 0; i < 16; i++)
+                for (size_t i = 0; i < 16; i++)
                 {
                     Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Entry[i];
                 }
@@ -2395,7 +2425,7 @@ void AddAsmDirEntry(string DirEntry) {
             {
                 //Text Entry, pad it with inverted space
                 //Fill the slot first with $A0
-                for (int i = 0; i < 16; i++)
+                for (size_t i = 0; i < 16; i++)
                 {
                     Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = 0xa0;
                 }
@@ -2701,7 +2731,12 @@ void ConvertBinToDirArt(string DirArtType) {
 
     if (ReadBinaryFile(DirArtName, DA)==-1)
     {
-        cerr << "***INFO***\tUnable to open the following file: " << DirArtName << "\nThe disk will be built without DirArt.\n";
+        cerr << "***INFO***\tUnable to open the following DirArt file: " << DirArtName << "\nThe disk will be built without DirArt.\n";
+        return;
+    }
+    else if (DA.size() == 0)
+    {
+        cerr << "***INFO***\t The DirArt file is 0 bytes long.\nThe disk will be built without DirArt.\n";
         return;
     }
 
@@ -2832,6 +2867,11 @@ void ConvertPetToDirArt() {
         cerr << "***INFO***\tUnable to open the following file: " << DirArtName << "\nThe disk will be built without DirArt.\n";
         return;
     }
+    else if (PetFile.size() == 0)
+    {
+        cerr << "***INFO***\t The DirArt file is 0 bytes long: " << DirArtName << "\nThe disk will be built without DirArt.\n";
+        return;
+    }
 
     unsigned char RowLen = PetFile[0];
     unsigned char RowCnt = PetFile[1] > 48 ? 48 : PetFile[1];
@@ -2839,7 +2879,7 @@ void ConvertPetToDirArt() {
     DirTrack = 18;
     DirSector = 1;
 
-    for (int rc = 0; rc < RowCnt; rc++)
+    for (size_t rc = 0; rc < RowCnt; rc++)
     {
         FindNextDirPos();
         if (DirPos != 0)
@@ -2857,12 +2897,12 @@ void ConvertPetToDirArt() {
                     Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0x1c] = LoaderBlockCount;
                 }
 
-                for (int i = 0; i < 16; i++)
+                for (size_t i = 0; i < 16; i++)
                 {
                     Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = 0xa0;
                 }
 
-                for (int i = 0; (i < RowLen) && (i < 16); i++)
+                for (size_t i = 0; (i < RowLen) && (i < 16); i++)
                 {
                     Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Petscii2DirArt[PetFile[5 + (rc * RowLen) + i]];
                 }
@@ -2881,20 +2921,25 @@ void ConvertD64ToDirArt() {
 
     vector<unsigned char> DA;
 
-    if(ReadBinaryFile(DirArtName, DA)==-1)
+    if(ReadBinaryFile(DirArtName, DA) == -1)
     {
         cerr << "***INFO***\tUnable to open the following DirArt file: " << DirArtName << "\n The disk will be built without DirArt.\n";
         return;
     }
+    else if ((DA.size() != 174848) && (DA.size() != 196608))
+    {
+        cerr << "***INFO***\t Invalid D64 DirArt file size.\nThe disk will be built without DirArt.\n";
+        return;
+    }
 
-    int T = 18;
-    int S = 1;
+    size_t T = 18;
+    size_t S = 1;
 
     DirTrack = 18;
     DirSector = 1;
 
     bool DirFull = false;
-    int DAPtr{};
+    size_t DAPtr{};
 
     while ((!DirFull) && (T != 0))
     {
@@ -2933,20 +2978,21 @@ void ConvertD64ToDirArt() {
         S = DA[DAPtr + 1];
     }
 
+    size_t Track18 = Track[18];
 
     if(DiskHeader == "")
     {
-        for (int i = 0; i < 16; i++)
+        for (size_t i = 0; i < 16; i++)
         {
-            Disk[Track[18] + 0x90 + i] = DA[Track[18] + 0x90 + i];
+            Disk[Track18 + 0x90 + i] = DA[Track18 + 0x90 + i];
         }
     }
 
     if (DiskID == "")
     {
-        for (int i = 0; i < 5; i++)
+        for (size_t i = 0; i < 5; i++)
         {
-            Disk[Track[18] + 0xa2 + i] = DA[Track[18] + 0xa2 + i];
+            Disk[Track18 + 0xa2 + i] = DA[Track18 + 0xa2 + i];
         }
     }
 
@@ -3023,7 +3069,7 @@ void AddDirArt() {
 
 void AddDemoNameToDisk(unsigned char T, unsigned char S) {
 
-    int B;
+    size_t B;
     string DN = DemoName;
     unsigned char A{};
 
@@ -3085,9 +3131,9 @@ void AddDemoNameToDisk(unsigned char T, unsigned char S) {
 void AddHeaderAndID() {
 
     //unsigned char B;
-    int BAM = Track[18];
+    size_t BAM = Track[18];
 
-    for (int i = 0x90; i <= 0xaa; i++)
+    for (size_t i = 0x90; i <= 0xaa; i++)
     {
         Disk[BAM + i] = 0xa0;
     }
@@ -3231,7 +3277,8 @@ bool InjectSaverPlugin() {
     SaveCode[0x1a] = (HSAddress - 1) / 0x100;
 
     //Calculate sector pointer on disk
-    int SctPtr = SectorsPerDisk - 2 - ((HSLength / 256) + 1);
+    int SctPtr = SectorsPerDisk - 2;
+    SctPtr -= ((HSLength / 256) + 1);
 
     //Identify first T/S of the saver plugin
     CT = TabT[SctPtr];
