@@ -1951,10 +1951,10 @@ bool CloseBuffer() {
 
     //----------------------------------------------------------------------------------------------------------
     
-    if ((PrgAdd + SI) == 0x55e4)        //729a
-    {
-        PrgAdd += 0;
-    }
+    //if ((PrgAdd + SI) == 0xdedd)        //729a
+    //{
+    //    PrgAdd += 0;
+    //}
 
     AdLoPos = BytePtr;
     Buffer[BytePtr--] = (PrgAdd + SI) % 256;

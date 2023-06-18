@@ -3,7 +3,7 @@
 //#define DEBUG
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR VERSION INFO 230105
+//  COMPILE TIME VARIABLES FOR VERSION INFO 230618
 //--------------------------------------------------------
 
 constexpr unsigned int Year = ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -182,6 +182,11 @@ int TotalOrigSize{}, TotalCompSize{};
 
 unsigned char LoaderBlockCount = 0;
 
+#ifdef INCLEXPRTK
+string ParameterString = "";
+#endif
+
+
 //------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 string ConvertIntToHextString(const int& i, const int& hexlen)
@@ -225,6 +230,13 @@ int ConvertHexStringToInt(const string& s)
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------
 
+string ConvertHexStringToDecimalString(const string& s)
+{
+    return to_string(ConvertHexStringToInt(s));
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------------
+
 bool IsHexString(const string& s)
 {
     return !s.empty() && all_of(s.begin(), s.end(), [](unsigned char c) { return std::isxdigit(c); });
@@ -238,19 +250,19 @@ bool IsNumeric(const string& s)
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-inline bool FileExits(const string& FileName)
+/*
+inline bool FileExists(const string& FileName)
 {
     struct stat buffer;
     return (stat(FileName.c_str(), &buffer) == 0);
 }
-
+*/
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
 int ReadBinaryFile(const string& FileName, vector<unsigned char>& prg)
 {
 
-    if (!FileExits(FileName))
+    if (!exists(FileName))
     {
         return -1;
     }
@@ -280,7 +292,7 @@ int ReadBinaryFile(const string& FileName, vector<unsigned char>& prg)
 string ReadFileToString(const string& FileName)
 {
 
-    if (!FileExits(FileName))
+    if (!exists(FileName))
     {
         return "";
     }
@@ -325,13 +337,13 @@ bool WriteDiskImage(const string& DiskName)
         {
             if (DiskDir[DiskDir.length() - 1] != ':')   //Ignore files in root directory (e.g. c:\disk.d64)
             {
-                if (!filesystem::exists(DiskDir))
+                if (!exists(DiskDir))
                 {
                     cout << "Creating folder: " << DiskDir << "\n";
-                    create_directory(DiskDir);
+                    create_directories(DiskDir);
                 }
 
-                if (!filesystem::exists(DiskDir))
+                if (!exists(DiskDir))
                 {
                     cerr << "***CRITICAL***\tUnable to create the following folder: " << DiskDir << "\n\n";
                     return false;
@@ -650,9 +662,131 @@ bool StringIsNumeric(string NumericString)
     return IsHexString(NumericString);
 
 }
+#ifdef INCLEXPRTK
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
 
+string ExprTK(string expression_string)
+{
+    typedef double T; // numeric type (float, double, mpfr etc...)
+
+    typedef exprtk::symbol_table<T> symbol_table_t;
+    typedef exprtk::expression<T>   expression_t;
+    typedef exprtk::parser<T>       parser_t;
+
+    //string expression_string = "z := 0xa000 + (3 * 256)";
+
+    T z = T(0.0);
+
+    symbol_table_t symbol_table;
+    symbol_table.add_variable("z", z);
+
+    expression_t expression;
+    expression.register_symbol_table(symbol_table);
+
+    parser_t parser;
+
+    if (!parser.compile(expression_string, expression))
+    {
+        //printf("Compilation error...\n");
+        return "";
+    }
+
+    T result = expression.value();
+
+    return "." + to_string((int)result);
+}
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+string CreateExpressionString(int p)
+{
+    
+    string Expr = "";
+    int i = 0;
+    bool IsDecimal = false;
+    string HexString = "";
+
+    while (i < ScriptEntryArray[p].size())
+    {
+        char NextChar = tolower(ScriptEntryArray[p].at(i++));
+
+        if (NextChar == '.')   //Expect decimal number
+        {
+            IsDecimal = true;
+        }
+        else if ((NextChar == 'a') ||
+            (NextChar == 'b') ||
+            (NextChar == 'c') ||
+            (NextChar == 'd') ||
+            (NextChar == 'e') ||
+            (NextChar == 'f'))
+        {
+            IsDecimal = false;
+            HexString += NextChar;
+
+        }
+        else if ((NextChar == '0') ||
+            (NextChar == '1') ||
+            (NextChar == '2') ||
+            (NextChar == '3') ||
+            (NextChar == '4') ||
+            (NextChar == '5') ||
+            (NextChar == '6') ||
+            (NextChar == '7') ||
+            (NextChar == '8') ||
+            (NextChar == '0'))
+        {
+            if (IsDecimal)
+            {
+                Expr += NextChar;
+            }
+            else
+            {
+                HexString += NextChar;
+            }
+        }
+        else
+        {
+            Expr += (HexString != "" ? ConvertHexStringToDecimalString(HexString) : "") + NextChar;
+            IsDecimal = false;
+            HexString = "";
+        }
+    }
+
+    Expr += (HexString != "" ? ConvertHexStringToDecimalString(HexString) : "");
+
+    return Expr;
+}
+
+    //----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+bool EvaluateParameterExpressions()
+{
+
+    for (int i = 1; i <= NumScriptEntries; i++)
+    {
+        if (ScriptEntryArray[i].at(0) == '=')
+        {
+            string Expr = "z :" + CreateExpressionString(i);
+            ParameterString = ExprTK(Expr);
+            if (ParameterString != "")
+            {
+                ScriptEntryArray[i] = ParameterString;
+            }
+            else
+            {
+                cerr <<"***CRITICAL***\tUnable to parse math expression: " << ScriptEntryArray[i] << "\n";
+                return false;
+            }
+        }
+    }
+    
+    return true;
+
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+#endif
 
 bool ParameterIsNumeric(int i)
 {
@@ -778,7 +912,7 @@ bool AddHSFile()
         FN.replace(FN.length() - 1, 1, "");
     }
 
-    if (FileExits(FN))
+    if (exists(FN))
     {
         HSFile.clear();
         if (ReadBinaryFile(FN, HSFile) == -1)
@@ -1305,7 +1439,7 @@ bool InsertScript(string& SubScriptPath)
 
     string sPath = SubScriptPath;
 
-    if (!FileExits(SubScriptPath))
+    if (!exists(SubScriptPath))
     {
         cerr << "***CRITICAL***\tThe following script was not found and could not be processed: " << SubScriptPath << "\n";
         return false;
@@ -1875,7 +2009,7 @@ bool AddVirtualFile()
         FN[i] = tolower(FN[i]);
 
     //Get file variables from script, or get default values if there were none in the script entry
-    if (FileExits(FN))
+    if (exists(FN))
     {
         if (ReadBinaryFile(FN, P) == -1)
         {
@@ -2017,6 +2151,13 @@ bool AddFileToBundle() {
 
     int NumParams = 1;
 
+#ifdef INCLEXPRTK
+    if (!EvaluateParameterExpressions())
+    {
+        return false;
+    }
+#endif
+
     for (int i = 1; i <= NumScriptEntries; i++)
     {
         if (ParameterIsNumeric(i))
@@ -2042,7 +2183,7 @@ bool AddFileToBundle() {
         //FN[i] = tolower(FN[i]);
 
     //Get file variables from script, or get default values if there were none in the script entry
-    if (FileExits(FN))
+    if (exists(FN))
     {
         //P.clear();
         if (ReadBinaryFile(FN, P) == -1)
@@ -3007,7 +3148,7 @@ void AddDirArt() {
         return;
     }
 
-    if (!FileExits(DirArtName))
+    if (!exists(DirArtName))
     {
         cerr << "***INFO***\tThe following DirArt file does not exist: " << DirArtName << "\nThe disk will be built without DirArt.\n";
         return;
@@ -3392,7 +3533,7 @@ bool InjectSaverPlugin() {
         DeleteBit(CT, CS);
 
         memset(Buffer, 0, sizeof(Buffer));
-
+        //fill(Buffer, Buffer + sizeof(Buffer), 0);
 
         Buffer[0] = 0x81;                                   //Bit stream
         Buffer[255] = HSStartAdd % 256;                     //Last byte's address(Lo)
@@ -3443,6 +3584,7 @@ bool InjectSaverPlugin() {
     DeleteBit(CT, CS);
 
     memset(Buffer, 0, sizeof(Buffer));
+    //fill(Buffer, Buffer + sizeof(Buffer), 0);
 
 
     Buffer[0] = 0x81;                                           //Bit stream
@@ -4216,7 +4358,7 @@ bool Build() {
                     ScriptEntryArray[0] = ScriptPath + ScriptEntryArray[0];
                 }
 
-                if (FileExits(ScriptEntryArray[0]))
+                if (exists(ScriptEntryArray[0]))
                 {
                     DirArtName = ScriptEntryArray[0];
 
@@ -4472,7 +4614,15 @@ bool Build() {
 
                     NewBundle = false;
                 }
-            }
+            /*
+                cout << "\n";
+                
+                if (ScriptEntry.size() != 0)
+                {
+                    cout << ScriptEntry << "\n";
+                }
+            */
+}
         }
         //else
         //{
@@ -4576,6 +4726,8 @@ void LoadFileInResource(int name, int type, DWORD& size, const char*& data)
     data = static_cast<const char*>(::LockResource(rcData));
 }
 */
+
+
 int main(int argc, char* argv[])
 {
     auto cstart = std::chrono::system_clock::now();
@@ -4591,7 +4743,9 @@ int main(int argc, char* argv[])
 #ifdef DEBUG
 
         //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\ThePumpkins\\Backup\\221028\\Scripts\\ThePumpkins.sls";
-        string ScriptFileName = "c:\\Users\\Tamas\\source\\repos\\GPMagazine\\Magazine\\Issue33\\Sparkle\\Magazine.sls";
+        //string ScriptFileName = "c:\\Users\\Tamas\\source\\repos\\GPMagazine\\Magazine\\Issue33\\Sparkle\\Magazine.sls";
+        //string ScriptFileName = "c:\\Users\\Tamas\\source\\repos\\DeliriousTwelve\\Parts\\CheckerZoomer\\CheckerZoomer.sls";
+        string ScriptFileName = "c:\\Users\\Tamas\\source\\repos\\NoBounds\\Main\\Sparkle\\NoBounds.sls";
         Script = ReadFileToString(ScriptFileName);
         SetScriptPath(ScriptFileName, AppPath);
 

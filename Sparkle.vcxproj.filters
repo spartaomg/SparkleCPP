@@ -50,6 +50,9 @@
     <ClInclude Include="resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ThirdParty\exprtk.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Sparkle.rc">
@@ -60,5 +63,16 @@
     <Image Include="sparkle.ico">
       <Filter>Resource Files</Filter>
     </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Resources\Sparkle.inc">
+      <Filter>Header Files</Filter>
+    </None>
+    <None Include="text1.bin">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="text2.bin">
+      <Filter>Resource Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

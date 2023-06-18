@@ -1,18 +1,27 @@
 #pragma once
+
+//#define INClEXPRTK;
+
 #include <algorithm>
 #include <iostream>
 #include <string>
+#include <string.h>
 #include <array>
 #include <vector>
 #include <fstream>
-#include <sys/stat.h>
 #include <stdio.h>      /* printf, NULL */
 #include <stdlib.h>     /* srand, rand */
-#include <time.h>       /* time */
 #include <iomanip>
 #include <iostream>
 #include <filesystem>
 #include "resource.h"
+
+#ifdef INCLEXPRTK
+#include "ThirdParty/exprtk.hpp"
+#endif
+
+//#include <sys/stat.h>
+//#include <time.h>       /* time */
 //#include <windows.h>
 
 using namespace std;
@@ -109,3 +118,4 @@ bool CloseBuffer();
 bool CloseFile();
 bool CloseBundle(int NextFileIO, bool LastPartOnDisk);
 unsigned char EORtransform(unsigned char Input);
+//string ExprTK(string expression_string);

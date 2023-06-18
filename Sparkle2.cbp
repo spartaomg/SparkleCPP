@@ -23,6 +23,7 @@
 				<Option compiler="gcc" />
 				<Compiler>
 					<Add option="-O2" />
+					<Add option="-std=c17" />
 				</Compiler>
 				<Linker>
 					<Add option="-s" />
@@ -55,6 +56,7 @@
 		<Unit filename="Sparkle.rc">
 			<Option compilerVar="WINDRES" />
 		</Unit>
+		<Unit filename="ThirdParty/exprtk.hpp" />
 		<Unit filename="resource.h" />
 		<Extensions />
 	</Project>
