@@ -1,6 +1,6 @@
 #pragma once
 
-//#define INClEXPRTK;
+//#define INCLEXPRTK;
 
 #include <algorithm>
 #include <iostream>
@@ -25,7 +25,8 @@
 //#include <windows.h>
 
 using namespace std;
-using namespace std::filesystem;
+
+namespace fs = filesystem;
 
 extern const int StdSectorsPerDisk;                                          //Standard disk
 extern const int StdTracksPerDisk;

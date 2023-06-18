@@ -262,7 +262,7 @@ inline bool FileExists(const string& FileName)
 int ReadBinaryFile(const string& FileName, vector<unsigned char>& prg)
 {
 
-    if (!exists(FileName))
+    if (!fs::exists(FileName))
     {
         return -1;
     }
@@ -292,7 +292,7 @@ int ReadBinaryFile(const string& FileName, vector<unsigned char>& prg)
 string ReadFileToString(const string& FileName)
 {
 
-    if (!exists(FileName))
+    if (!fs::exists(FileName))
     {
         return "";
     }
@@ -337,13 +337,13 @@ bool WriteDiskImage(const string& DiskName)
         {
             if (DiskDir[DiskDir.length() - 1] != ':')   //Ignore files in root directory (e.g. c:\disk.d64)
             {
-                if (!exists(DiskDir))
+                if (!fs::exists(DiskDir))
                 {
                     cout << "Creating folder: " << DiskDir << "\n";
-                    create_directories(DiskDir);
+                    fs::create_directories(DiskDir);
                 }
 
-                if (!exists(DiskDir))
+                if (!fs::exists(DiskDir))
                 {
                     cerr << "***CRITICAL***\tUnable to create the following folder: " << DiskDir << "\n\n";
                     return false;
@@ -912,7 +912,7 @@ bool AddHSFile()
         FN.replace(FN.length() - 1, 1, "");
     }
 
-    if (exists(FN))
+    if (fs::exists(FN))
     {
         HSFile.clear();
         if (ReadBinaryFile(FN, HSFile) == -1)
@@ -1439,7 +1439,7 @@ bool InsertScript(string& SubScriptPath)
 
     string sPath = SubScriptPath;
 
-    if (!exists(SubScriptPath))
+    if (!fs::exists(SubScriptPath))
     {
         cerr << "***CRITICAL***\tThe following script was not found and could not be processed: " << SubScriptPath << "\n";
         return false;
@@ -2009,7 +2009,7 @@ bool AddVirtualFile()
         FN[i] = tolower(FN[i]);
 
     //Get file variables from script, or get default values if there were none in the script entry
-    if (exists(FN))
+    if (fs::exists(FN))
     {
         if (ReadBinaryFile(FN, P) == -1)
         {
@@ -2183,7 +2183,7 @@ bool AddFileToBundle() {
         //FN[i] = tolower(FN[i]);
 
     //Get file variables from script, or get default values if there were none in the script entry
-    if (exists(FN))
+    if (fs::exists(FN))
     {
         //P.clear();
         if (ReadBinaryFile(FN, P) == -1)
@@ -3148,7 +3148,7 @@ void AddDirArt() {
         return;
     }
 
-    if (!exists(DirArtName))
+    if (!fs::exists(DirArtName))
     {
         cerr << "***INFO***\tThe following DirArt file does not exist: " << DirArtName << "\nThe disk will be built without DirArt.\n";
         return;
@@ -4358,7 +4358,7 @@ bool Build() {
                     ScriptEntryArray[0] = ScriptPath + ScriptEntryArray[0];
                 }
 
-                if (exists(ScriptEntryArray[0]))
+                if (fs::exists(ScriptEntryArray[0]))
                 {
                     DirArtName = ScriptEntryArray[0];
 
