@@ -118,6 +118,10 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <PreBuildEvent>
+      <Command>nmake
+Resources/makefile</Command>
+    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -218,7 +222,12 @@
     <Image Include="sparkle.ico" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="Resources\Ascii2DirArt.bin" />
+    <None Include="Resources\Petscii2DirArt.bin" />
+    <None Include="Resources\SD.asm" />
+    <None Include="Resources\SL.asm" />
     <None Include="Resources\Sparkle.inc" />
+    <None Include="Resources\SS.asm" />
     <None Include="text1.bin" />
     <None Include="text2.bin" />
   </ItemGroup>

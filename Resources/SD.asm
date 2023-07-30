@@ -147,6 +147,8 @@
 //		- adding full block ID check to improve reliability and to avoid false data blocks on Star Commander warp disks
 //		- to be released with Sparkle 2.1
 //
+//	v20	- adding sector header check to checksum verification
+//
 //----------------------------------------------------------------------------------------
 //	Memory Layout
 //
@@ -421,14 +423,15 @@ SkipStepDn:	asl					//bc	Y=#$01 is not stored - it is the default value which is
 			lda #CSV			//ca cb
 			sta VerifCtr		//cc cd	Verify track after head movement
 
+			nop #VerifCtr		//ce cf	//lda VerifCtr		//ce cf	If checksum verification needed at disk spin up...
+			nop #$d2			//d0 d1 TabD (CMP izy)
+			nop #FetchData		//d2 d3	//bne FetchData		//d2 d3	...then fetch any data block instead of a Header
+
 //--------------------------------------
 //		Fetch Code
 //--------------------------------------
 FT:
-Fetch:		lda VerifCtr		//ce cf	If checksum verification needed at disk spin up...
-			nop #$d2			//d0 d1 TabD (CMP izy)
-			bne FetchData		//d2 d3	...then fetch any data block instead of a Header
-
+Fetch:
 FetchHeader:
 			ldy #<HeaderJmp		//d4 d5	Checksum verification after GCR loop will jump to Header Code
 FetchSHeader:
@@ -466,16 +469,13 @@ Sync:		bit $1c00			//fd-ff	Wait for sync mark
 			clv					//0b   |07				01010|101(11) for Data
 			beq SkipNOPs		//0c 0d|10
 ReFetch:	jmp (FetchJmp)		//0e-10|..	Wrong block type, refetch everything, vector is modified from SS!!!
-			//bne Sync			//0e 0f|..	
-			//nop				//10   |..
 	.byte	$fa					//11   |..	TabG (NOP)
 			nop					//12   |..
 	.byte	$ea					//13   |..	TabG (NOP) 
 SkipNOPs:	bvc *				//14 15|00-01
 			lda $1c01			//16-18|05*	*Read2 = BBCCCCCCD ->	01|CCCCC|D for Header
-AXS:		axs #$00			//19 1a|07				11|CCCCC|D for Data
+AXS:		axs #$00			//19 1a|07							11|CCCCC|D for Data
 			bne ReFetch			//1b 1c|09	X = BB000000 - X1000000, if X = 0 then proper block type is fetched
-			//bne FetchSHeader	//1b 1c|09
 			ldx #$3e			//1d 1e|11
 			sax.z tC+1			//1f 20|14
 	.byte	$7a					//21   |16	TabG (NOP)
@@ -490,37 +490,35 @@ AXS:		axs #$00			//19 1a|07				11|CCCCC|D for Data
 //		Got Header
 //--------------------------------------
 //042c
+			nop $0103			//2c-2e
 HD:
-Header:		eor $0103			//2c-2e
-BneFetch:	bne Fetch			//2f 30
-	.byte	$6a					//31	ROR
-	.byte 	$4a					//32	LSR
-	.byte	$ca					//33	DEX
-			lda $0103			//34-36
-			jsr ShufToRaw		//37-39
-			tay					//3a
-			ldx WList,y			//3b 3c
-BplFetch:	bpl Fetch			//3d 3e
-			sty cS				//3f 40
-			bmi FetchData		//41 42
+Header:
+BneFetch:	bne Fetch			//2f 30	Checksum mismatch -> fetch next sector header
+	.byte	$6a					//31	TabG (ROR)
+	.byte 	$4a					//32	TabG (LSR)
+	.byte	$ca					//33	TabG (DEX)
+			lda VerifCtr		//34 35	Always fetch sector data if we are verifying the checksum
+			bne FetchData		//36 37
+			lda $0103			//38-3a	Otherwise, only fetch sector data if this is a wanted sector
+			jsr ShufToRaw		//3b-3d
+			tay					//3e
+			ldx WList,y			//3f 40
+BplFetch:	bpl Fetch			//41 42 Sector is not on wanted list -> fetch next sector headed
+			sty cS				//43 44
+			bmi FetchData		//45 46	Sector is on wanted list, save sector number and fetch data
 
-//--------------------------------------
-//		Disk ID Check		//Y=#$00 here
-//--------------------------------------
+//--------------------------------------	Will be changed to JMP CopyDir after Block 3 copied
 
-Track18:	cpx #$10			//43 44	Drive Code Block 3 (Sector 16) or Dir Block (Sectors 17-18)?
-			bcs ToCD			//45 46
-			lda NextID			//47 48	Side is done, check if there is a next side
-			bmi ToReset			//49 4a	Disk ID = #$00 - #$7f, if NextID > #$7f -> no more disks -> reset drive 
+ToCD:		jmp CopyCode		//47-49 Sector 15 (Block 3) - copy it from the Buffer to its place
 
 //--------------------------------------
 //		Flip Detection			//Y=#$00 and X=#$00 here
 //--------------------------------------
 
-			cmp (ZP0101),y		//4b 4c	DiskID, compare it to NextID
-			bne BneFetch		//4d 4e ID mismatch, fetch again until flip detected
-			ldy #$03			//4f 50
-	.byte	$ba					//51	TabG (TSX) (X=#$00)
+FlipDtct:	cmp (ZP0101),y		//4a 4b	DiskID, compare it to NextID
+			bne BneFetch		//4c 4d ID mismatch, fetch again until flip detected
+			ldy #$03			//4e 4f
+			nop #$ba			//50 51 Skipping TabG value $ba (TSX)	//.byte	$ba					//51	TabG (TSX) (X=#$00)
 	.byte	$8a					//52	TabG (TXA) (A=#$00)
 	.byte	$aa					//53	TabG (TAX)
 ProdIDLoop:	lda BAM_ProdID-1,y	//54-56	Also compare Product ID, only continue if same
@@ -529,7 +527,7 @@ ProdIDLoop:	lda BAM_ProdID-1,y	//54-56	Also compare Product ID, only continue if
 			dey					//5b
 			bne ProdIDLoop		//5c 5d
 			ldy #$05			//5e 5f
-			nop #$3a			//60 61	Skipping TabG
+			nop #$3a			//60 61	Skipping TabG (NOP)
 	.byte	$1a					//62	TabG (NOP)
 	.byte	$9a					//63	TabG (TXS) no effect X=SP=#$00
 			sty DirSector		//64 65	Invalid value to trigger reload of the directory of the new disk side
@@ -544,16 +542,23 @@ CopyBAM:	lda (ZP0101),y		//66 67	= LDA $0101,y
 	.byte	$0a					//72	TabG (ASL) no effect
 			tya					//73
 			jmp CheckDir		//74-76	Y=A=#$00 - Reload first directory sector
+
 //--------------------------------------
-ToCD:		jmp CopyCode		//77-79 Sector 15 (Block 3) - copy it from the Buffer to its place
-//--------------------------------------	Will be changed to JMP CopyDir after Block 3 copied
-ToReset:	jmp ($fffc)			//7a-7c
+//		Disk ID Check		//Y=#$00 here
+//--------------------------------------
+
+Track18:	cpx #$10			//77 78	Drive Code Block 3 (Sector 16) or Dir Block (Sectors 17-18)?
+			bcs ToCD			//79 7a
+			lda NextID			//7b 7c	Side is done, check if there is a next side
+			bpl FlipDtct		//7d 7e	//bmi ToReset		//49 4a	Disk ID = #$00 - #$7f, if NextID > #$7f -> no more disks -> reset drive 
+
+			jmp ($fffc)			//7f-81
 
 //--------------------------------------
 //		Got Data
 //--------------------------------------
 DT:
-Data:		ldx cT				//7d 7e
+Data:		ldx cT				//82 83
 			cpx #$12
 			bcs SkipCSLoop  
 			ldx #$7e			//CSLoop takes 851 cycles (33 bytes passing under R/W head in zone 3)
@@ -568,7 +573,8 @@ CSLoopEntry:
 			dex
 			dex
 			bne CSLoop
-SkipCSLoop:	eor $0103			//Calculate rest of checksum for all 4 zones here
+SkipCSLoop:	//eor $0103			//Calculate rest of checksum for all 4 zones here
+			tax
 ToBneFetch:	bne BneFetch		//Checksum mismatch, fetch header again
 
 			lsr VerifCtr		//Checksum Verification Counter
@@ -1272,7 +1278,8 @@ GCREntry:	bne GCRLoop0_2		//We start on Track 18	32								e1 e2
 			tay					//Y=DDDDD000			05								ee
 			txa					//Return checksum to A	07								ef
 			eor TabD,y			//Checksum (D)/ID1 (H)	11								f0-f2
-			nop $1c01			//Y=EFFFFFGG			15 (no longer needed...)		f3-f5
+			//nop $1c01			//Y=EFFFFFGG			15 (no longer needed...)		f3-f5
+			eor $0103			//						15								f3-f5
 			ldx tC+1			//X=00CCCCC0			18 (...left here for timing)	f6 f7
 			eor TabC,x			//(ZP)					22								f8 f9
 			eor $0102			//						26								fa-fc

@@ -292,8 +292,9 @@ SFetch:	ldy #<SHeaderJmp
 //--------------------------------------
 		//jmp (SaveJmp)	//31
 SHeader:
-		cmp $0103		//35	Header byte #10 (GGGHHHHH) = $55, skipped (cycles 32-63)
-		bne SFetch		//37	We are on Track 35/40 here, so it is ALWAYS Speed Zone 0 (32 cycles per byte)
+		//cmp $0103		//35	Header byte #10 (GGGHHHHH) = $55, skipped (cycles 32-63)
+		bne SFetch		//33	We are on Track 35/40 here, so it is ALWAYS Speed Zone 0 (32 cycles per byte)
+		lda $0103		//37
 		jsr ShufToRaw	//57
 								//jsr ShufToRaw		43
 								//ldx #$09			45

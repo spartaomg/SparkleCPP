@@ -2,8 +2,10 @@
 
 //#define DEBUG
 
+//#defnie NEWIO
+
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR VERSION INFO 230618
+//  COMPILE TIME VARIABLES FOR VERSION INFO 230730
 //--------------------------------------------------------
 
 constexpr unsigned int Year = ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -175,6 +177,10 @@ size_t PartialFileOffset;
 
 int PrgAdd, PrgLen;
 bool FileUnderIO = false;
+
+#ifdef NEWIO
+bool BundleUnderIO = false;
+#endif
 
 bool SaverSupportsIO = false;
 
@@ -700,7 +706,7 @@ string ExprTK(string expression_string)
 
 string CreateExpressionString(int p)
 {
-    
+
     string Expr = "";
     int i = 0;
     bool IsDecimal = false;
@@ -780,7 +786,7 @@ bool EvaluateParameterExpressions()
             }
         }
     }
-    
+
     return true;
 
 }
@@ -1150,6 +1156,9 @@ bool ResetBundleVariables() {
 
     UncompBundleSize = 0;
 
+#ifdef NEWIO
+    BundleUnderIO = false;
+#endif
     return true;
 }
 
@@ -1894,12 +1903,26 @@ bool SortBundle() {
                         break;
                 }
             }
-            //Sort files by length (short files first, thus, last block will more likely contain 1 file only = faster depacking)
+            //Sort files by address
             sort(tmpPrgs.begin(), tmpPrgs.end(), CompareFileAddress);
             //for (auto x : tmpPrgs)
             //    cout << x.FileName << "\t" << x.FileAddr << "\n";
        }
-        //Once Bundle is sorted, calculate the I/O status of the last byte of the first file and the number of bits that will be needed
+#ifdef NEWIO
+
+       if (BundleUnderIO)
+       {
+           vector<unsigned char> IOOff;
+           IOOff.push_back(0x34);
+           tmpPrgs.insert(tmpPrgs.begin(), FileStruct(IOOff, "IOOff", "02fe", "00", "01", false));
+
+           vector<unsigned char> IOOn;
+           IOOn.push_back(0x35);
+           tmpPrgs.push_back(FileStruct(IOOn, "IOOn", "02fe", "00", "01", false));
+       }
+#endif
+       
+       //Once Bundle is sorted, calculate the I/O status of the last byte of the first file and the number of bits that will be needed
         //to finish the last block of the previous bundle (when the I/O status of the just sorted bundle needs to be known)
         //This is used in CloseBuffer
 
@@ -2174,6 +2197,9 @@ bool AddFileToBundle() {
     //Get file variables from script, or get default values if there were none in the script entry
     if (FN.find("*") == FN.length() - 1)
     {
+#ifdef NEWIO
+        BundleUnderIO = true;
+#endif
         FUIO = true;
         FN.replace(FN.length() - 1, 1, "");
     }
@@ -4616,7 +4642,7 @@ bool Build() {
                 }
             /*
                 cout << "\n";
-                
+
                 if (ScriptEntry.size() != 0)
                 {
                     cout << ScriptEntry << "\n";
