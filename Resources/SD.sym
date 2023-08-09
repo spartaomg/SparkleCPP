@@ -22,7 +22,7 @@
 .label CSLoop=$48c
 .label ShufToRaw=$372
 .label StartTr=$666
-.label SkipStepDn=$3bc
+.label SkipStepDn=$3be
 .label SkipUsed=$641
 .label BlockCtr=$3
 .label DelayIn=$5c3

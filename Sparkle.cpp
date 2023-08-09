@@ -5,7 +5,7 @@
 //#defnie NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR VERSION INFO 230730
+//  COMPILE TIME VARIABLES FOR VERSION INFO 230809
 //--------------------------------------------------------
 
 constexpr unsigned int Year = ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
