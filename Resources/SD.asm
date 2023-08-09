@@ -381,7 +381,7 @@ RBLoop:		cpy $1800			//7f-81	4
 //----------------------------------------------
 
 //0392
-FetchBAM:	sty LastS			//92 93		Y=#$00
+FetchBAM:	sty LastS			//92 93	Y=#$00
 FetchDir:	jsr ClearList		//94-96 C=0 after this
 			bcc *+3				//97 98 SKIPPING TabD value
 	.byte	$db					//99	TabD
@@ -391,7 +391,7 @@ FetchDir:	jsr ClearList		//94-96 C=0 after this
 			sta LastT			//a0 a1	A=X=#$12
 
 //--------------------------------------
-//		Fetching any T:S	//A=X=wanted track, Y=#$00
+//		Fetching any T:S		//A=X=wanted track, Y=#$00
 //--------------------------------------
 
 GotoTrack:	iny					//a2
@@ -401,16 +401,16 @@ ContCode:	sty WantedCtr		//a3 a4	Y=#$01 here
 			nop #$de			//a8 a9 TabD
 			sbc cT				//aa ab	Calculate Stepper Direction and number of Steps
 			beq Fetch			//ac ad	We are staying on the same Track, skip track change
-			bcs SkipStepDn		//ae af
+			sty StepTmrRet		//ae af	->#$01 - signal need for RTS 
 			nop #$d7			//b0 b1 TabD
-			eor #$ff			//b2 b3
-			adc #$01			//b4 b5
-			ldy #$03			//b6 b7	Y=#$03 -> Stepper moves Down/Outward
+			bcs SkipStepDn		//b2 b3
+			eor #$ff			//b4 b5
+			adc #$01			//b6 b7
 			nop #$df			//b8 b9 TabD
-			sty StepDir			//ba bb	Store stepper direction UP/INWARD (Y=#$01) or DOWN/OUTWARD (Y=#$03)
-SkipStepDn:	asl					//bc	Y=#$01 is not stored - it is the default value which is restored after every step
-			tay					//bd	Y=Number of half-track changes
-			inc StepTmrRet		//be bf	#$00->#$01 - signal need for RTS 
+			ldy #$03			//ba bb	Y=#$03 -> Stepper moves Down/Outward
+			sty StepDir			//bc bd	Store stepper direction UP/INWARD (Y=#$01) or DOWN/OUTWARD (Y=#$03)
+SkipStepDn:	asl					//be	Y=#$01 is not stored - it is the default value which is restored after every step
+			tay					//bf	Y=Number of half-track changes
 			jsr StepTmr			//c0-c2	Move head to track and update bitrate (also stores new Track number to cT and calculates SCtr)
 			
 //--------------------------------------
@@ -666,11 +666,14 @@ PrepStep:	sec					//Signal to use JMP instead of RTS -> returns to NextTrack
 ToCATN:		jmp CheckATN
 
 //--------------------------------------
+//		Mark wanted sectors
+//--------------------------------------
 
 NxtSct:		inx
 Build:		iny					//Temporary increase as we will have an unwanted decrease after BNE
 			lda #$ff			//Needed if nS = last sector of track and it is already fetched
 			bne MaxSct1			//Branch ALWAYS
+
 ChainLoop:	lda WList,x			//Check if sector is unfetched (=00)
 			bne NxtSct			//If sector is not unfetched (it is either fetched or wanted), go to next sector
 
@@ -707,7 +710,7 @@ ChkDir:		cpx #$12			//next track = Track 18?, if yes, we need to skip it
 			ldy #$83			//1.5-track seek, set timer at start
 
 //--------------------------------------
-//		Stepper Code		//X=Wanted Track
+//		Stepper Code			//X=Wanted Track
 //--------------------------------------
 
 StepTmr:	lda #$98
@@ -911,7 +914,7 @@ DirLoop:	lda $0700,x
 			tay					//Y=already fetched sectors on track
 			beq SkipUsed		//Y=0, we start with the first sector, skip marking used sectors
 			dec MarkSct			//Change STA ZP,x to STY ZP,x ($95 -> $94) (A=$ff - wanted, Y>#$00 - used)
-			jsr Build			//Mark all sectors as USED before first sector to be fetched
+			jsr Build			//Mark all sectors as USED -before- first sector to be fetched
 			inc MarkSct			//Restore Build loop
 
 SkipUsed:	iny					//Mark the first sector of the new bundle as WANTED
@@ -1278,11 +1281,10 @@ GCREntry:	bne GCRLoop0_2		//We start on Track 18	32								e1 e2
 			tay					//Y=DDDDD000			05								ee
 			txa					//Return checksum to A	07								ef
 			eor TabD,y			//Checksum (D)/ID1 (H)	11								f0-f2
-			//nop $1c01			//Y=EFFFFFGG			15 (no longer needed...)		f3-f5
-			eor $0103			//						15								f3-f5
-			ldx tC+1			//X=00CCCCC0			18 (...left here for timing)	f6 f7
-			eor TabC,x			//(ZP)					22								f8 f9
-			eor $0102			//						26								fa-fc
+			ldx tC+1			//X=00CCCCC0			14								f3 f4
+			eor TabC,x			//(ZP)					18								f5 f6
+			eor $0102			//						22								f7-f9
+			eor $0103			//						26								fa-fc
 ModJmp:		jmp (HeaderJmp)		//Calc final checksum	31								fd-ff
 
 //------------------------------------------------------------------------------------------------------
