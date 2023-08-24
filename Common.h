@@ -28,11 +28,11 @@ using namespace std;
 
 namespace fs = filesystem;
 
-extern const int StdSectorsPerDisk;                                          //Standard disk
+extern const int StdSectorsPerDisk;                 //Standard disk
 extern const int StdTracksPerDisk;
-extern const int StdBytesPerDisk;                 //including track 18
+extern const int StdBytesPerDisk;                   //including track 18
 
-extern const int ExtSectorsPerDisk;                       //Exnteded disk
+extern const int ExtSectorsPerDisk;                 //Exnteded disk
 extern const int ExtTracksPerDisk;
 extern const int ExtBytesPerDisk;                   //Including track 18
 
@@ -53,6 +53,8 @@ extern const int SS_size;
 extern unsigned char SS[];
 extern const int SSIO_size;
 extern unsigned char SSIO[];
+extern const int SF_size;
+extern unsigned char SF[];
 extern const int Ascii2DirArt_size;
 extern unsigned char Ascii2DirArt[];
 extern const int Petscii2DirArt_size;

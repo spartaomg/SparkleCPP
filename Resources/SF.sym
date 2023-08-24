@@ -1,3 +1,4 @@
+.label Ctr=$24f
 .label LastS=$21
 .label LastT=$20
 .label ReFetch=$40e
@@ -40,6 +41,7 @@
 .label tG=$bc
 .label tH=$bf
 .label SH=$12f
+.label GoodBlock=$26a
 .label StepDir=$28
 .label RateDone=$565
 .label DataJmp=$357
@@ -61,6 +63,7 @@
 .label BplFetch=$443
 .label UpdatePatch=$5a3
 .label CopyCode=$73a
+.label SF_CSLoopEntry=$238
 .label DO=$2
 .label Fetch=$3d4
 .label DT=$482
@@ -71,6 +74,7 @@
 .label DelayOut=$5bd
 .label NextTrack=$519
 .label Sync=$3fd
+.label SF_CSLoop=$230
 .label SeqLoad=$64f
 .label Mod2a=$7f
 .label Mod2b=$7c
@@ -115,14 +119,17 @@
 .label Tab300=$300
 .label FlipDtct=$44a
 .label Track18=$477
+.label SF_CopyLoop=$216
 .label CCLoop=$73a
 .label NBC=$5c
 .label SkipSub=$513
 .label CSum=$9f
 .label HeaderJmp=$347
 .label ChainLoop=$4fc
+.label SectorTable=$2d0
 .label Frames=$5bb
 .label IL=$506
+.label ToTrack18=$221
 .label BitRateRet=$6c
 .label XX1=$c3
 .label XX3=$e5
@@ -153,12 +160,14 @@
 .label RegBlockRet=$4a5
 .label ToFetchBAM=$64c
 .label FetchJmp=$318
+.label MetaBlock=$29c
 .label WList=$3e
 .label FetchHeader=$3d4
 .label ToBneFetch=$49f
 .label StepWait=$544
 .label BAM_NextID=$105
 .label BAM_DiskID=$101
+.label SF_SkipCSLoop=$242
 .label NextID=$63
 .label ZPProdID=$78
 .label Random=$18
@@ -177,6 +186,7 @@
 .label GotoTrack=$3a2
 .label ZP0200=$7a
 .label Mod2=$7c
+.label DTF=$224
 .label ClrJmp=$30b
 .label ClearList=$300
 .label SFetchJmp=$36f

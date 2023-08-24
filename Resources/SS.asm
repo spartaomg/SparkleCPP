@@ -1,4 +1,4 @@
-//TAB=8
+//TAB=4
 //----------------------------
 //	Sparkle 2
 //	Hi-Score File Saver
@@ -7,15 +7,15 @@
 //	Version history
 //
 //	v1.0 	- initial version
-//		  tested on real hardware
-//		  high score file size: $0100-$0f00
+//			  tested on real hardware
+//			  high score file size: $0100-$0f00
 //
 //	v1.1	- added support for loading/saving under the I/O space
-//		- escape without saving
-//		  calling the function with X=0 will allow to return without saving
+//			- escape without saving
+//			  calling the function with X=0 will allow to return without saving
 //
 //	v1.2	- simplified Send function in C64 code
-//		  relying on Sparkle_SendCmd
+//			  relying on Sparkle_SendCmd
 //
 //	v1.3	- adjusting drive code to new Tab8 layout and trailing 0 check 
 //

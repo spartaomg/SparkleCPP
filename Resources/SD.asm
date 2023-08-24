@@ -497,7 +497,17 @@ BneFetch:	bne Fetch			//2f 30	Checksum mismatch -> fetch next sector header
 	.byte	$6a					//31	TabG (ROR)
 	.byte 	$4a					//32	TabG (LSR)
 	.byte	$ca					//33	TabG (DEX)
-			lda VerifCtr		//34 35	Always fetch sector data if we are verifying the checksum
+			lda $0103			//34-36
+			jsr ShufToRaw		//37-39
+			sta cS				//3a-3b
+			tay					//3c
+			lda VerifCtr		//3d 3e
+			bne FetchData		//3f 40	Always fetch sector data if we are verifying the checksum
+			ldx WList,y			//41 42	Otherwise, only fetch sector data if this is a wanted sector
+BplFetch:	bpl Fetch			//43 44 Sector is not on wanted list -> fetch next sector headed
+			bmi FetchData		//45 46	Sector is on wanted list, save sector number and fetch data
+
+/*			lda VerifCtr		//34 35	Always fetch sector data if we are verifying the checksum
 			bne FetchData		//36 37
 			lda $0103			//38-3a	Otherwise, only fetch sector data if this is a wanted sector
 			jsr ShufToRaw		//3b-3d
@@ -506,7 +516,7 @@ BneFetch:	bne Fetch			//2f 30	Checksum mismatch -> fetch next sector header
 BplFetch:	bpl Fetch			//41 42 Sector is not on wanted list -> fetch next sector headed
 			sty cS				//43 44
 			bmi FetchData		//45 46	Sector is on wanted list, save sector number and fetch data
-
+*/
 //--------------------------------------	Will be changed to JMP CopyDir after Block 3 copied
 
 ToCD:		jmp CopyCode		//47-49 Sector 15 (Block 3) - copy it from the Buffer to its place
@@ -573,14 +583,13 @@ CSLoopEntry:
 			dex
 			dex
 			bne CSLoop
-SkipCSLoop:	//eor $0103			//Calculate rest of checksum for all 4 zones here
-			tax
+SkipCSLoop:	tay
 ToBneFetch:	bne BneFetch		//Checksum mismatch, fetch header again
-
+			
 			lsr VerifCtr		//Checksum Verification Counter
 			bcs BplFetch		//If counter<>0, go to verification loop (use BPL Fetch as trampoline, VerifCtr is always positive)
 
-			tay					//Y=#$00 here
+RegBlockRet:
 			ldx cS				//Current Sector in Buffer
 			lda cT
 			cmp #$12			//If this is Track 18 then we are fetching Block 3 or a Dir Block or checking Flip Info
@@ -829,7 +838,7 @@ CheckATN:	lda $1c00			//Fetch Motor and LED status
 			ora #$08			//Make sure LED will be on when we restart
 			tax					//This needs to be done here, so that we do not affect Z flag at Restart
 
-			ldy #$64			//100 frames (2 seconds) delay before turning motor off (#$fa for 5 sec)
+Frames:		ldy #$64			//100 frames (2 seconds) delay before turning motor off (#$fa for 5 sec)
 DelayOut:	lda #$4f			//Approx. 1 frame delay (20000 cycles = $4e20 -> $4e+$01=$4f)
 			sta $1c05			//Start timer, wait 2 seconds before turning motor off
 DelayIn:	lda $1c05
@@ -867,7 +876,7 @@ GetByte:	lda #$80			//$dd00=#$9b, $1800=#$94
 			beq Reset			//C64 requests drive reset
 
 			ldy #$00			//Needed later (for FetchBAM if this is a flip request, and FetchDir too)
-			sty EoD				//EoD needs to be cleared here
+TestRet:	sty EoD				//EoD needs to be cleared here
 			sty NewBundle		//So does NewBundle
 			sty ScndBuff		//And ScndBuff as well
 
@@ -1102,12 +1111,13 @@ EndOfDriveCode:
 //--------------------------------------
 
 CodeStart:	sei
+
 //--------------------------------------
 //		Copy ZP code and tabs
 //--------------------------------------
 
 			ldx #$00			//Technically, this is not needed - X=$00 after loading all 5 blocks
-ZPCopyLoop:	lda ZPTab,x			//Copy Tables C, E & F and GCR Loop from $0600 to ZP
+ZPCopyLoop:	lda ZPTab,x			//Copy Tables C, E, F and GCR Loop from $0600 to ZP
 			sta $00,x
 			inx
 			bne ZPCopyLoop
@@ -1126,6 +1136,19 @@ ZPCopyLoop:	lda ZPTab,x			//Copy Tables C, E & F and GCR Loop from $0600 to ZP
 			lda #busy
 			sta $1800			//0  0  0  1  0  0  1  0  CO=0, DO=1, AA=1 This reads as #$43 on $dd00
 								//AI|DN|DN|AA|CO|CI|DO|DI This also signals that the drive code has been installed
+
+
+			lda #$01			//Shift register disabled, Port A ($1c01) latching enabled, Port B ($1c00) latching disabled
+			sta $1c0b
+
+			lda #$00			//Clear VIA #2 Timer 1 low byte
+			sta $1c04
+
+			lda #$7f			//Disable all interrupts
+			sta $180e
+			sta $1c0e
+			lda $180d			//Acknowledge all pending interrupts
+			lda $1c0d
 
 			jmp Fetch			//Fetching block 3 (track 18, sector 16) WList+$10=#$ff, WantedCtr=1
 								//A, X, Y can be anything here

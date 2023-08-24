@@ -5,7 +5,7 @@
 //#defnie NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR VERSION INFO 230809
+//  COMPILE TIME VARIABLES FOR VERSION INFO 230823
 //--------------------------------------------------------
 
 constexpr unsigned int Year = ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -84,6 +84,7 @@ string EntryTypeScript = "script:";
 string EntryTypeFile = "file:";
 string EntryTypeMem = "mem:";
 string EntryTypeAlign = "align";
+string EntryTypeFetchTest = "fetchtest";
 
 unsigned long int ProductID = 0;
 unsigned int LineStart, LineEnd;    //LastSS, LastSE;
@@ -117,7 +118,9 @@ vector<unsigned char> HSFile;
 size_t HSAddress = 0;
 size_t HSOffset = 0;
 size_t HSLength = 0;
-bool bSaverPlugin =false;
+bool bSaverPlugin = false;
+
+bool bFetchTest = false;
 
 //Interleave constants and variables
 const unsigned char DefaultIL0 = 4;
@@ -163,7 +166,7 @@ string FirstFileStart = "";
 double UncompBundleSize = 0;
 
 int BitsNeededForNextBundle = 0;
-int BlocksUsedBySaver = 0;
+int BlocksUsedByPlugin = 0;
 
 //VARIABLES ALSO USED BY PACKER
 
@@ -1262,7 +1265,10 @@ bool ResetDiskVariables() {
     HSOffset = 0;
     HSLength = 0;
 
-    //'Reset interleave
+    //Not a fetch test disk
+    bFetchTest = false;
+
+    //Reset interleave
     IL0 = DefaultIL0;
     IL1 = DefaultIL1;
     IL2 = DefaultIL2;
@@ -3340,6 +3346,49 @@ void AddHeaderAndID() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
+bool InjectFetchTestPlugin() {
+
+    //Calculate sector pointer on disk (FT.cpp takes one block)
+
+    int SctPtr = SectorsPerDisk - 1;
+
+    //Identify first T/S of the saver plugin
+    CT = TabT[SctPtr];
+    CS = TabS[SctPtr];
+
+    unsigned char FTCode[256]{};
+
+    for (int i = 0; i < SF_size; i++)
+    {
+        FTCode[i] = SF[i];
+    }
+
+    //Copy first block of saver plugin to disk
+    for (int i = 0; i < SF_size; i++)
+    {
+        int j = 0 - i;
+        if (j < 0)
+            j += 256;
+        Disk[Track[CT] + (CS * 256) + j] = EORtransform(FTCode[i]);
+    }
+
+    //Mark sector off in BAM
+    DeleteBit(CT, CS);
+
+    //Add plugin to directory
+    Disk[Track[18] + (18 * 256) + 8] = EORtransform(CT);              //DirBlocks(0) = EORtransform(Track) = 35
+    Disk[Track[18] + (18 * 256) + 7] = EORtransform(TabStartS[CT]);   //DirBlocks(1) = EORtransform(Sector) = First sector of Track(35) (not first sector of file!!!)
+    Disk[Track[18] + (18 * 256) + 6] = EORtransform(TabSCnt[SctPtr]); //DirBlocks(2) = EORtransform(Remaining sectors on track)
+    Disk[Track[18] + (18 * 256) + 5] = 0xfe;                                //DirBlocks(3) = BitPtr
+
+    BlocksUsedByPlugin = 1;
+
+    return true;
+
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
 bool InjectSaverPlugin() {
 
     if (HSFile.size() == 0)
@@ -3362,9 +3411,9 @@ bool InjectSaverPlugin() {
     //  Add SaveCode
     //-----------------
 
-    BlocksUsedBySaver = (HSLength / 0x100) + 1 + 2;
+    BlocksUsedByPlugin = (HSLength / 0x100) + 1 + 2;
 
-    if (BlocksFree < BlocksUsedBySaver)
+    if (BlocksFree < BlocksUsedByPlugin)
     {
         cerr << "***CRITICAL***\tThe Hi-Score File and the Saver Plugin cannot be added because there is not enough free space on the disk!\n";
         return false;
@@ -3707,11 +3756,30 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
     //Add NextID and IL0-IL3 to ZP
     int ZPILTabLoc = 0x60;
 
+    if (bFetchTest)
+        idcNextID = 0x00;
+
     Drive[(3 * 256) + ZPILTabLoc + 0] = 256 - IL3;
     Drive[(3 * 256) + ZPILTabLoc + 1] = 256 - IL2;
     Drive[(3 * 256) + ZPILTabLoc + 2] = 256 - IL1;
     Drive[(3 * 256) + ZPILTabLoc + 3] = idcNextID % 256;
     Drive[(3 * 256) + ZPILTabLoc + 4] = 256 - IL0;
+
+    //Add PlugIn to ZP (IncSaver = $74)
+    int ZPIncPluginLoc = 0x74;
+
+    if (bFetchTest)
+    {
+        Drive[(3 * 256) + ZPIncPluginLoc] = 1;
+    }
+    else if (bSaverPlugin)
+    {
+        Drive[(3 * 256) + ZPIncPluginLoc] = 2;
+    }
+    else
+    {
+        Drive[(3 * 256) + ZPIncPluginLoc] = 0;
+    }
 
     CT = 18;
     CS = 11;
@@ -3736,10 +3804,19 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
     Disk[BAM + 251] = EORtransform(idcNextID % 256);
     Disk[BAM + 250] = EORtransform(256 - IL0);
 
-    //Add IncludeSaveCode flag and Saver plugin if required
-    BlocksUsedBySaver = 0;
-    if (bSaverPlugin)
+    BlocksUsedByPlugin = 0;
+    if (bFetchTest)
     {
+        bSaverPlugin = false;   //Can't have Saver and FetchTest at the same time
+        
+        //Add "IncludeFetchTest" flag and FetchTest plugin
+        Disk[BAM + 249] = EORtransform(1);
+        if (!InjectFetchTestPlugin())
+            return false;
+    }
+    else if (bSaverPlugin)
+    {
+        //Add "IncludeSaveCode" flag and Saver plugin
         Disk[BAM + 249] = EORtransform(2);
         if(!InjectSaverPlugin())
             return false;
@@ -3748,6 +3825,7 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
     {
         Disk[BAM + 249] = EORtransform(0);
     }
+
 
     //Also add Product ID to BAM, EOR-transformed
     Disk[BAM + 248] = EORtransform((ProductID / 0x10000) & 0xff);
@@ -4138,7 +4216,7 @@ void UpdateBlocksFree() {
 
     if (TracksPerDisk == ExtTracksPerDisk)
     {
-        unsigned char ExtBlocksFree = (BlocksFree > ExtSectorsPerDisk - StdSectorsPerDisk) ? ExtSectorsPerDisk - StdSectorsPerDisk - BlocksUsedBySaver : BlocksFree;
+        unsigned char ExtBlocksFree = (BlocksFree > ExtSectorsPerDisk - StdSectorsPerDisk) ? ExtSectorsPerDisk - StdSectorsPerDisk - BlocksUsedByPlugin : BlocksFree;
         Disk[Track[18] + 4] += ExtBlocksFree;
     }
 
@@ -4592,6 +4670,18 @@ bool Build() {
                     }
                 }
 
+                NewBundle = true;
+            }
+            else if (ScriptEntryType == EntryTypeFetchTest)
+            {
+                if (!NewD)
+                {
+                    NewD = true;
+                    if ((!FinishDisk(false)) || (!ResetDiskVariables()))
+                        return false;
+                }
+
+                bFetchTest = true;
                 NewBundle = true;
             }
             else if (ScriptEntryType == EntryTypeScript)

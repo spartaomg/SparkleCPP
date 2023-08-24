@@ -8,8 +8,8 @@ DIR_ZIP = $(DIR_TOOLS)\Zip
 ZIP = $(DIR_ZIP)\zip.exe -j -X
 STRIPZIP = $(DIR_ZIP)\stripzip.exe
 
-cpp.zip: Ascii2DirArt.cpp Petscii2DirArt.cpp Loader.cpp SD.cpp SS.cpp SSIO.cpp
-	$(ZIP) cpp.zip Ascii2DirArt.cpp Petscii2DirArt.cpp Loader.cpp SD.cpp SS.cpp SSIO.cpp
+cpp.zip: Ascii2DirArt.cpp Petscii2DirArt.cpp Loader.cpp SD.cpp SS.cpp SSIO.cpp SF.cpp
+	$(ZIP) cpp.zip Ascii2DirArt.cpp Petscii2DirArt.cpp Loader.cpp SD.cpp SS.cpp SSIO.cpp SF.cpp
 	$(STRIPZIP) cpp.zip
 
 
@@ -27,11 +27,19 @@ Loader.cpp: Resources\Loader.prg
 Resources\Loader.prg: Resources\SL.asm
 	$(KICKASS) Resources\SL.asm -o Resources\Loader.prg -afo
 
+
 SD.cpp: Resources\SD.prg
 	$(B2A) Resources\SD.prg 2 0 SD.cpp
 
 Resources\SD.prg: Resources\SD.asm
 	$(KICKASS) Resources\SD.asm -o Resources\SD.prg
+
+
+SF.cpp: Resources\SF.prg
+	$(B2A) Resources\SF.prg 2 0 SF.cpp
+
+Resources\SF.prg: Resources\SF.asm Resources\SD.sym
+	$(KICKASS) Resources\SF.asm -o Resources\SF.prg -afo
 
 
 SS.cpp: Resources\SS.prg
