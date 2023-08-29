@@ -10,6 +10,7 @@
 .const OPC_NOP_IMM	= $80
 .const OPC_NOP_ABS	= $0c
 .const ZPSum		= $68		//Save checksum on ZP
+.const ZPTmp		= $69
 
 *=$2b00	"Drive Save Code"
 
@@ -101,20 +102,36 @@ Ctr:		ldx #$00
 //------------------------------
 
 TransferBlock:
-			lda Ctr+1
-			clc
-			adc #$05
-			tax
+			//lda Ctr+1
+			//clc
+			//adc #$06
+			//tax
+			lax Ctr+1
+			axs #$fa
 X:			lda TabC
 Y:			ldy #$00
-			eor TabD,y			//CSum Stack     BCnt Ctr  Trck Sctr list
-!:			eor $0100,x			//0100|0101-0102|0103|0104|0105|0106...
+			eor TabD,y			//CSum Stack     BCnt Ctr  Trck CVer|Sctr list
+			sta ZPTmp
+!:			eor $0100,x			//0100|0101-0102|0103|0104|0105|0106|0107......
 			dex
 			bpl !-
 			sta ZPSum
 
-			ldx #$02
+			lda ZPTmp			//X=#$ff here
+			cmp #$7f
+			bne DEX
+!:			txa
+			eor $0100,x
+			bne !+
+DEX:		dex
+			bne !-
+			lda $0100
+
+!:			ldx #$02
 			txs					//Change stack pointer to avoid overwriting important data in block
+
+			jsr ShufToRaw		//could be omitted and done on the C64 side...
+			sta $0106			//30 bytes total
 
 			lda cT
 			jsr ShufToRaw
@@ -127,7 +144,7 @@ Y:			ldy #$00
 
 !:			lda SectorTable-1,y
 			jsr ShufToRaw
-			sta $0106-1,y		//Sector Table ($03fa, $03f9, ..)
+			sta $0107-1,y		//Sector Table ($03fa, $03f9, ..)
 			dey
 			bne !-
 
@@ -139,9 +156,11 @@ Y:			ldy #$00
 			sta $0103			//Block count ($03fd)
 
 			tya
-			clc
-			adc #$04
 			tax
+			axs #$fb
+			//clc
+			//adc #$04
+			//tax
 			lda ZPSum
 !:			eor $0101,x
 			dex
@@ -166,6 +185,9 @@ MetaBlock:	jmp CheckATN
 
 
 /*
+			ldx #$02
+			txs					//Change stack pointer to avoid overwriting important data in block
+
 DTF:		ldx cT				//A=checksum (partial in tracks 1-17)
 			cpx #$12
 			beq ToTrack18

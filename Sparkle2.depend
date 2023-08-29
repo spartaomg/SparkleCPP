@@ -36,12 +36,12 @@
 1693276407 source:c:\users\tamas\onedrive\c64\c++\sparkle\ssio.cpp
 	"common.h"
 
-1693284228 source:c:\users\tamas\onedrive\c64\c++\sparkle\sparkle.cpp
+1693319941 source:c:\users\tamas\onedrive\c64\c++\sparkle\sparkle.cpp
 	"common.h"
 
 1667511155 c:\users\tamas\onedrive\c64\c++\sparkle\resource.h
 
-1693253719 source:c:\users\tamas\onedrive\c64\c++\sparkle\sparkle.rc
+1693288620 source:c:\users\tamas\onedrive\c64\c++\sparkle\sparkle.rc
 	"resource.h"
 	"winres.h"
 
@@ -74,6 +74,6 @@
 	<sys/types.h>
 	<fstream>
 
-1693285321 source:c:\users\tamas\onedrive\c64\c++\sparkle\sf.cpp
+1693317717 source:c:\users\tamas\onedrive\c64\c++\sparkle\sf.cpp
 	"common.h"
 

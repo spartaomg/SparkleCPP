@@ -3364,10 +3364,18 @@ bool InjectFetchTestPlugin() {
     int TestBundleSize = BlocksForTest / NumTestBundles;
     if (TestBundleSize * NumTestBundles < BlocksForTest)
         TestBundleSize++;
-
+    unsigned char v = 0;
     for (int b = 0; b < 256; b++)
     {
-        Buffer[b] = b;
+        Buffer[b] = EORtransform(v);
+        if (v == 0)
+        {
+            v = 255;
+        }
+        else
+        {
+            v--;
+        }
     }
 
     for (int i = 1; i <= NumTestBundles; i++)
@@ -3392,7 +3400,7 @@ bool InjectFetchTestPlugin() {
             }
             else
             {
-                Buffer[1] = 1;
+                Buffer[1] = EORtransform(255);
             }
 
             memcpy(&ByteSt[BufferCnt * 256], &Buffer[0], 256 * sizeof(Buffer[0]));

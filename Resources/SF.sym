@@ -41,9 +41,9 @@
 .label tG=$bc
 .label tH=$bf
 .label SH=$12f
-.label X=$256
-.label Y=$258
-.label GoodBlock=$2b1
+.label X=$254
+.label Y=$256
+.label GoodBlock=$2c8
 .label StepDir=$28
 .label RateDone=$565
 .label DataJmp=$357
@@ -130,7 +130,7 @@
 .label CSum=$9f
 .label HeaderJmp=$347
 .label ChainLoop=$4fc
-.label SectorTable=$2b7
+.label SectorTable=$2ce
 .label Frames=$5bb
 .label IL=$506
 .label ToTrack18=$200
@@ -167,7 +167,7 @@
 .label RegBlockRet=$4a5
 .label ToFetchBAM=$64c
 .label FetchJmp=$318
-.label MetaBlock=$2b4
+.label MetaBlock=$2cb
 .label WList=$3e
 .label FetchHeader=$3d4
 .label ToBneFetch=$49f
@@ -213,5 +213,6 @@
 .label ZPCopyLoop=$703
 .label CheckDir=$5ff
 .label CompareDir=$610
+.label DEX=$271
 .label ScndBuff=$29
 .label ZP12=$3b
