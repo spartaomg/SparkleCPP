@@ -49,6 +49,7 @@
 		<Unit filename="Packer.cpp" />
 		<Unit filename="Petscii2DirArt.cpp" />
 		<Unit filename="SD.cpp" />
+		<Unit filename="SF.cpp" />
 		<Unit filename="SS.cpp" />
 		<Unit filename="SSIO.cpp" />
 		<Unit filename="Sparkle.cpp" />

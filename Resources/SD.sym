@@ -51,6 +51,7 @@
 .label CO=$8
 .label GCRLoop=$277c
 .label FetchDir=$394
+.label ResetVerif=$3ca
 .label ChkLines=$5d3
 .label OPC_RTS=$57d
 .label MaxSct1=$508
@@ -96,7 +97,7 @@
 .label StepTmr=$529
 .label VerifCtr=$19
 .label NewBundle=$54
-.label TestRet=$5f2
+.label TestRet=$5f0
 .label Loop=$66e
 .label WantedCtr=$8
 .label JmpClrList=$301
@@ -130,8 +131,11 @@
 .label BAM_ProdID=$108
 .label XX4=$67
 .label PrepStep=$4ef
+.label NOP3=$4dd
 .label StoreLoop=$4b8
+.label NOP1=$4d2
 .label RBLoop=$37f
+.label NOP2=$4d8
 .label TabD=$301
 .label TabC=$0
 .label TabB=$300

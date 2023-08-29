@@ -5,7 +5,7 @@
 //#defnie NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR VERSION INFO 230823
+//  COMPILE TIME VARIABLES FOR VERSION INFO 230829
 //--------------------------------------------------------
 
 constexpr unsigned int Year = ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -84,7 +84,7 @@ string EntryTypeScript = "script:";
 string EntryTypeFile = "file:";
 string EntryTypeMem = "mem:";
 string EntryTypeAlign = "align";
-string EntryTypeFetchTest = "fetchtest";
+string EntryTypeTestDisk = "testdisk";
 
 unsigned long int ProductID = 0;
 unsigned int LineStart, LineEnd;    //LastSS, LastSE;
@@ -120,7 +120,7 @@ size_t HSOffset = 0;
 size_t HSLength = 0;
 bool bSaverPlugin = false;
 
-bool bFetchTest = false;
+bool bTestDisk = false;
 
 //Interleave constants and variables
 const unsigned char DefaultIL0 = 4;
@@ -1266,7 +1266,7 @@ bool ResetDiskVariables() {
     HSLength = 0;
 
     //Not a fetch test disk
-    bFetchTest = false;
+    bTestDisk = false;
 
     //Reset interleave
     IL0 = DefaultIL0;
@@ -3350,6 +3350,94 @@ bool InjectFetchTestPlugin() {
 
     //Calculate sector pointer on disk (FT.cpp takes one block)
 
+    //cout << BufferCnt << "\n";      //3
+    
+    //cout << BundleCnt << "\n";      //1
+
+    //cout << BlocksFree-1 << "\n";   //660
+
+    BlocksUsedByPlugin = 1;
+
+    int FirstBuffer = BufferCnt;
+    int BlocksForTest = BlocksFree - BlocksUsedByPlugin;
+    int NumTestBundles = 12;
+    int TestBundleSize = BlocksForTest / NumTestBundles;
+    if (TestBundleSize * NumTestBundles < BlocksForTest)
+        TestBundleSize++;
+
+    for (int b = 0; b < 256; b++)
+    {
+        Buffer[b] = b;
+    }
+
+    for (int i = 1; i <= NumTestBundles; i++)
+    {
+
+        DirBlocks[(BundleNo * 4) + 3] = 0;
+        DirPtr[BundleNo] = BufferCnt;
+        BundleNo++;
+
+        for (int n = 0; n < TestBundleSize; n++)
+        {
+            if (n == 0)
+            {
+                if (i != NumTestBundles)
+                {
+                    Buffer[1] = EORtransform(TestBundleSize);
+                }
+                else
+                {
+                    Buffer[1] = EORtransform(TestBundleSize-1);
+                }
+            }
+            else
+            {
+                Buffer[1] = 1;
+            }
+
+            memcpy(&ByteSt[BufferCnt * 256], &Buffer[0], 256 * sizeof(Buffer[0]));
+            BufferCnt++;
+            //BlocksFree--; //Not needed - DeleteBit will update BlocksFree
+
+        }
+
+        BlocksForTest -= TestBundleSize;
+        if (BlocksForTest < TestBundleSize)
+            TestBundleSize = BlocksForTest;
+
+    }
+
+    InjectDirBlocks();
+
+    for (int i = FirstBuffer; i < BufferCnt; i++)
+    {
+        CT = TabT[i];
+        CS = TabS[i];
+        for (int j = 0; j < 256; j++)
+        {
+            Disk[Track[CT] + (256 * CS) + j] = ByteSt[(i * 256) + j];
+        }
+
+        DeleteBit(CT, CS);
+    }
+
+    if (BufferCnt < SectorsPerDisk)
+    {
+        NextTrack = TabT[BufferCnt];
+        NextSector = TabS[BufferCnt];
+    }
+    else
+    {
+        NextTrack = 18;
+        NextSector = 0;
+    }
+
+    if (BlocksFree < BlocksUsedByPlugin)
+    {
+        cerr << "***CRITICAL***\tThe Disk Test Plugin cannot be added because there is not enough free space on the disk!\n";
+        return false;
+    }
+
     int SctPtr = SectorsPerDisk - 1;
 
     //Identify first T/S of the saver plugin
@@ -3380,8 +3468,6 @@ bool InjectFetchTestPlugin() {
     Disk[Track[18] + (18 * 256) + 7] = EORtransform(TabStartS[CT]);   //DirBlocks(1) = EORtransform(Sector) = First sector of Track(35) (not first sector of file!!!)
     Disk[Track[18] + (18 * 256) + 6] = EORtransform(TabSCnt[SctPtr]); //DirBlocks(2) = EORtransform(Remaining sectors on track)
     Disk[Track[18] + (18 * 256) + 5] = 0xfe;                                //DirBlocks(3) = BitPtr
-
-    BlocksUsedByPlugin = 1;
 
     return true;
 
@@ -3756,7 +3842,7 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
     //Add NextID and IL0-IL3 to ZP
     int ZPILTabLoc = 0x60;
 
-    if (bFetchTest)
+    if (bTestDisk)
         idcNextID = 0x00;
 
     Drive[(3 * 256) + ZPILTabLoc + 0] = 256 - IL3;
@@ -3768,7 +3854,7 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
     //Add PlugIn to ZP (IncSaver = $74)
     int ZPIncPluginLoc = 0x74;
 
-    if (bFetchTest)
+    if (bTestDisk)
     {
         Drive[(3 * 256) + ZPIncPluginLoc] = 1;
     }
@@ -3805,7 +3891,7 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
     Disk[BAM + 250] = EORtransform(256 - IL0);
 
     BlocksUsedByPlugin = 0;
-    if (bFetchTest)
+    if (bTestDisk)
     {
         bSaverPlugin = false;   //Can't have Saver and FetchTest at the same time
         
@@ -4181,8 +4267,8 @@ bool AddCompressedBundlesToDisk() {
     }
 
     //CalcTabs();
-
-    InjectDirBlocks();
+    if (!bTestDisk)
+        InjectDirBlocks();
 
     for (int i = 0; i < BufferCnt; i++)
     {
@@ -4672,7 +4758,7 @@ bool Build() {
 
                 NewBundle = true;
             }
-            else if (ScriptEntryType == EntryTypeFetchTest)
+            else if (ScriptEntryType == EntryTypeTestDisk)
             {
                 if (!NewD)
                 {
@@ -4681,7 +4767,7 @@ bool Build() {
                         return false;
                 }
 
-                bFetchTest = true;
+                bTestDisk = true;
                 NewBundle = true;
             }
             else if (ScriptEntryType == EntryTypeScript)

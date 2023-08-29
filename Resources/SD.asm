@@ -400,7 +400,7 @@ ContCode:	sty WantedCtr		//a3 a4	Y=#$01 here
 			sec					//a7
 			nop #$de			//a8 a9 TabD
 			sbc cT				//aa ab	Calculate Stepper Direction and number of Steps
-			beq Fetch			//ac ad	We are staying on the same Track, skip track change
+			beq ResetVerif		//ac ad	We are staying on the same Track, skip track change
 			sty StepTmrRet		//ae af	->#$01 - signal need for RTS 
 			nop #$d7			//b0 b1 TabD
 			bcs SkipStepDn		//b2 b3
@@ -420,7 +420,7 @@ SkipStepDn:	asl					//be	Y=#$01 is not stored - it is the default value which is
 			lda Spartan+1		//c3-c5
 			sta $1c00			//c6-c8	Store bitrate
 	.byte	$d8					//c9	TabD = CLD
-			lda #CSV			//ca cb
+ResetVerif:	lda #CSV			//ca cb
 			sta VerifCtr		//cc cd	Verify track after head movement
 
 			nop #VerifCtr		//ce cf	//lda VerifCtr		//ce cf	If checksum verification needed at disk spin up...
@@ -637,14 +637,14 @@ ChkLastBlock:
 			lda (ZP01ff),y		//Save new block count for later use
 			sta NBC
 			lda #$7f			//And delete it from the block
-			sta (ZP01ff),y		//So that it does not confuse the depacker...
+NOP1:		sta (ZP01ff),y		//So that it does not confuse the depacker...
 
 			lsr Random			//Check if this is also the first block of a randomly accessed bundle
 			bcc ChkScnd
 
-			sta $0100			//This is the first block of a random bundle, delete first byte
+NOP2:		sta $0100			//This is the first block of a random bundle, delete first byte
 			lda BPtr			//Last byte of bundle will be pointer to first byte of new Bundle
-			sta (ZP0101),y
+NOP3:		sta (ZP0101),y
 
 ChkScnd:	lda WantedCtr
 			bne StoreLoop
@@ -875,8 +875,8 @@ GetByte:	lda #$80			//$dd00=#$9b, $1800=#$94
 			cmp #$ff
 			beq Reset			//C64 requests drive reset
 
-			ldy #$00			//Needed later (for FetchBAM if this is a flip request, and FetchDir too)
-TestRet:	sty EoD				//EoD needs to be cleared here
+TestRet:	ldy #$00			//Needed later (for FetchBAM if this is a flip request, and FetchDir too)
+			sty EoD				//EoD needs to be cleared here
 			sty NewBundle		//So does NewBundle
 			sty ScndBuff		//And ScndBuff as well
 

@@ -66,7 +66,7 @@
 .label BitRate=$54f
 .label Sp=$52
 .label EndOfBundle=$1e7
-.label BplFetch=$441
+.label BplFetch=$443
 .label UpdatePatch=$5a3
 .label Start=$810
 .label LitCopy=$275
@@ -150,6 +150,7 @@
 .label HeaderJmp=$347
 .label ChainLoop=$4fc
 .label MidLitSeq=$2be
+.label Frames=$5bb
 .label IL=$506
 .label StoreBits=$210
 .label BitRateRet=$6c
@@ -163,9 +164,12 @@
 .label PrepStep=$4ef
 .label Bits=$4
 .label ShortMHi=$2de
+.label NOP3=$4dd
 .label Warning=$90c
 .label StoreLoop=$4b8
+.label NOP1=$4d2
 .label RBLoop=$37f
+.label NOP2=$4d8
 .label TabD=$301
 .label TabC=$0
 .label TabB=$300
