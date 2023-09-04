@@ -1,7 +1,7 @@
 //TAB=4
 //----------------------------
 //	Sparkle 2
-//	Fetch Test
+//	Fetch and Transfer Test
 //	DRIVE CODE
 //----------------------------
 
@@ -24,7 +24,7 @@
 			lda #<OPC_NOP_ABS
 			sta NOP2
 
-			lda #$05			//Motor delay down to 0.1 seconds
+			lda #$05			//Motor off delay down to 0.1 seconds
 			sta Frames+1
 
 			lda #<DTF			//Redirect indirect JMP from DT to DTF after fetching data block
@@ -52,8 +52,8 @@ ToTrack18:	jmp SkipCSLoop		//Track 18 - return to drive code to fetch dir sector
 
 //--------------------------
 
-DTF:		stx X+1
-			sty Y+1
+DTF:		stx X+1				//Save X - will be used to retrieve checksum (final read in GCR loop)
+			sty Y+1				//Save Y - will be used to retrieve checksum (final read in GCR loop)
 			ldx cT				//A=checksum (partial in tracks 1-17)
 			cpx #$12
 			beq ToTrack18
@@ -76,62 +76,60 @@ SF_SkipCSLoop:
 
 			tay					//Final checksum in Y
 			beq !+
-			lda #$40
+			lda #$40			//Bad checksum - mark sector with %01000000
 !:			ora cS
 			ldx VerifCtr
 			beq Ctr
-			ora #$80
+			ora #$80			//Sector check during spinup - mark sector with %10000000
 Ctr:		ldx #$00
 			sta SectorTable,x	//Add current sector to Sector Table: $0x = RegGood, #$4x = RegBad, $8x = VerifGood, $cx = VerifBad
 			inx
 			stx Ctr+1
 
 			tya
-			ora VerifCtr
+			ora VerifCtr		//ORA must be done before LSR!!!
 			beq TransferBlock	//If (checksum == 0) && (VerifCtr == 0) -> transfer regular block
 
 			tya
-			bne !+
-			lsr VerifCtr		//If (checksum == 0) -> decrement VerifCtr
+			bne !+				//Bad checksum -> fetch next sector
+			lsr VerifCtr		//Good checksum -> decrement VerifCtr
 
-			cpx MaxSct2+1
+!:			cpx MaxSct2+1
 			beq TransferBlock	//SectorTable is full -> transfer meta block
 
-!:			jmp Fetch			//Otherwise just fetch next block
+			jmp Fetch			//Otherwise just fetch next sector
 
 //------------------------------
 
 TransferBlock:
-			//lda Ctr+1
-			//clc
-			//adc #$06
-			//tax
 			lax Ctr+1
-			axs #$fa
+			axs #$fa			//X=(sector count in SectorTable)+6, number of bytes we need to "un-EOR" from final checksum ($0100-$0106 + sector list)
+
 X:			lda TabC
 Y:			ldy #$00
-			eor TabD,y			//CSum Stack     BCnt Ctr  Trck CVer|Sctr list
-			sta ZPTmp
+			eor TabD,y			//Retrieve original checksum (read #257 in GCR loop)
+			tay					//Save GCR loop checksum to Y
+
+								//CSum|Stack    |BCnt|Ctr |Trck|CVer|Sctr list
 !:			eor $0100,x			//0100|0101-0102|0103|0104|0105|0106|0107......
 			dex
 			bpl !-
 			sta ZPSum
 
-			lda ZPTmp			//X=#$ff here
-			cmp #$7f
-			bne DEX
+			cpy #$7f
+			bne DEX				//If original checksum != #$7f then last byte of buffer is block count, skip it in the loop to avoid false positives
 !:			txa
 			eor $0100,x
 			bne !+
 DEX:		dex
 			bne !-
-			lda $0100
+			lda $0100			//Value should be #$00 (EOR check is not needed)
 
 !:			ldx #$02
 			txs					//Change stack pointer to avoid overwriting important data in block
 
-			jsr ShufToRaw		//could be omitted and done on the C64 side...
-			sta $0106			//30 bytes total
+			jsr ShufToRaw
+			sta $0106			//Data block verification = $00 -> checksum is OK, any other values -> false positive checksum ($03fa)
 
 			lda cT
 			jsr ShufToRaw
@@ -158,9 +156,6 @@ DEX:		dex
 			tya
 			tax
 			axs #$fb
-			//clc
-			//adc #$04
-			//tax
 			lda ZPSum
 !:			eor $0101,x
 			dex
@@ -168,7 +163,7 @@ DEX:		dex
 			sta $0100			//Final checksum
 
 			inx
-			stx Ctr+1
+			stx Ctr+1			//Clear Sector Counter
 			cpy MaxSct2+1
 			beq MetaBlock
 
@@ -182,138 +177,5 @@ MetaBlock:	jmp CheckATN
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-
-
-/*
-			ldx #$02
-			txs					//Change stack pointer to avoid overwriting important data in block
-
-DTF:		ldx cT				//A=checksum (partial in tracks 1-17)
-			cpx #$12
-			beq ToTrack18
-			bcs SF_SkipCSLoop  
-			ldx #$7e			//Tracks 1-17 - complete checksum here
-			bne SF_CSLoopEntry
-SF_CSLoop:	eor $0102,x
-			eor $0103,x
-			dex
-			dex
-SF_CSLoopEntry:
-			eor $0180,x
-			eor $0181,x
-			dex
-			dex
-			bne SF_CSLoop
-SF_SkipCSLoop:
-
-//------------------------------
-
-			tay					//Final checksum in Y
-			beq !+
-			lda #$40
-!:			ora cS
-			ldx VerifCtr
-			beq Ctr
-			ora #$80
-Ctr:		ldx #$00
-			sta SectorTable,x	//Add current sector to Sector Table: $0x = RegGood, #$4x = RegBad, $8x = VerifGood, $cx = VerifBad
-			inx
-			stx Ctr+1
-
-			tya
-			ora VerifCtr
-			beq GoodBlock		//If (checksum == 0) && (VerifCtr == 0) -> transfer regular block
-
-			cpx MaxSct2+1
-			beq MetaBlock		//SectorTable is full -> transfer meta block
-
-			tya
-			bne !+
-			lsr VerifCtr		//If (checksum == 0) -> decrement VerifCtr
-
-!:			jmp Fetch			//Fetch next block
-
-//------------------------------
-
-GoodBlock:	ldx #$10
-			txs					//Change stack pointer to avoid overwriting important data in block
-
-			jsr Sub
-
-			sec
-			sbc #01				//Decrement block count
-			
-			jsr SumBlockCnt
-			
-			jmp RegBlockRet		//Continue with regular block - will be transferred normally
-								//TODO: only transfer 4 bytes if there is a checksum error???
-
-//------------------------------
-
-MetaBlock:
-			tya
-			bne !+
-			lsr VerifCtr		//Decrement VerifCtr if checksum is good
-			
-			ldx #$10
-			txs					//Change stack pointer to avoid overwriting important data in block
-
-!:			jsr Sub
-
-			jsr SumBlockCnt
-
-			jmp CheckATN		//TODO: only transfer 4 bytes???
-
-//------------------------------
-
-Sub:
-			lda cT
-			jsr ShufToRaw
-			sta $0180			//Current Track	($0380)
-
-			ldy Ctr+1
-			tya
-			jsr ShufToRaw
-			sta $017f			//Sector Table Counter	($0381)
-
-!:			lda SectorTable-1,y
-			jsr ShufToRaw
-			sta $01c0-1,y		//Sector Table ($0340, $033f, ..)
-			dey
-			bne !-
-			sty Ctr+1			//Reset Ctr
-
-			lda BlockCtr
-			rts
-
-SumBlockCnt:
-			jsr ShufToRaw
-			sta $017e			//Block count ($0382)
-
-			ldx #$0f
-			lda #$00
-!:			eor $0100,x
-			eor $0120,x
-			eor $0140,x
-			eor $0160,x
-			eor $0180,x
-			eor $01a0,x
-			eor $01c0,x
-			eor $01e0,x
-			eor $0110,x
-			eor $0130,x
-			eor $0150,x
-			eor $0170,x
-			eor $0190,x
-			eor $01b0,x
-			eor $01d0,x
-			eor $01f0,x
-			dex
-			bpl !-
-			eor $0100
-			sta $0100
-
-			rts
-*/
 SectorTable:
 }

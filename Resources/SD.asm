@@ -216,6 +216,8 @@
 //----------------------------------------------------------------------------------------
 
 //Constants:
+.const VerifSctHdrs	= true
+
 .label	CSV			=$07		//Checksum Verification Counter Default Value (3 1-bits, 3 data blocks to be verified)
 
 .label	DO			=$02
@@ -423,15 +425,23 @@ SkipStepDn:	asl					//be	Y=#$01 is not stored - it is the default value which is
 ResetVerif:	lda #CSV			//ca cb
 			sta VerifCtr		//cc cd	Verify track after head movement
 
-			nop #VerifCtr		//ce cf	//lda VerifCtr		//ce cf	If checksum verification needed at disk spin up...
-			nop #$d2			//d0 d1 TabD (CMP izy)
-			nop #FetchData		//d2 d3	//bne FetchData		//d2 d3	...then fetch any data block instead of a Header
-
 //--------------------------------------
 //		Fetch Code
 //--------------------------------------
 FT:
 Fetch:
+.if (VerifSctHdrs)
+{
+			nop #VerifCtr		//ce cf
+			nop #$d2			//d0 d1 TabD (CMP izy)
+			nop #FetchData		//d2 d3
+}
+else
+{
+			lda VerifCtr		//ce cf	If checksum verification needed at disk spin up...
+			nop #$d2			//d0 d1 TabD (CMP izy)
+			bne FetchData		//d2 d3...then fetch any data block instead of a Header
+}
 FetchHeader:
 			ldy #<HeaderJmp		//d4 d5	Checksum verification after GCR loop will jump to Header Code
 FetchSHeader:
@@ -484,7 +494,7 @@ AXS:		axs #$00			//19 1a|07							11|CCCCC|D for Data
 			lsr					//24   |22
 			ldx #$00			//25 26|24
 			lda #$7f			//27 28|26	Z=0, needed for BNE in GCR loop
-			jmp GCREntry		//29-2b|29	Same number of cycles as in GCR loop before BNE
+			jmp GCREntry		//29-2b|29	Same cycle count as in GCR loop before BNE
 
 //--------------------------------------
 //		Got Header
@@ -500,23 +510,21 @@ BneFetch:	bne Fetch			//2f 30	Checksum mismatch -> fetch next sector header
 			lda $0103			//34-36
 			jsr ShufToRaw		//37-39
 			sta cS				//3a-3b
-			tay					//3c
-			lda VerifCtr		//3d 3e
-			bne FetchData		//3f 40	Always fetch sector data if we are verifying the checksum
+.if (VerifSctHdrs)
+{
+			ldx VerifCtr		//3c 3d
+			bne FetchData		//3e 3f	Always fetch sector data if we are verifying the checksum
+}
+else
+{
+			nop #VerifCtr		//3c 3d
+			nop #FetchData		//3e 3f
+}
+			tay					//40
 			ldx WList,y			//41 42	Otherwise, only fetch sector data if this is a wanted sector
 BplFetch:	bpl Fetch			//43 44 Sector is not on wanted list -> fetch next sector headed
 			bmi FetchData		//45 46	Sector is on wanted list, save sector number and fetch data
 
-/*			lda VerifCtr		//34 35	Always fetch sector data if we are verifying the checksum
-			bne FetchData		//36 37
-			lda $0103			//38-3a	Otherwise, only fetch sector data if this is a wanted sector
-			jsr ShufToRaw		//3b-3d
-			tay					//3e
-			ldx WList,y			//3f 40
-BplFetch:	bpl Fetch			//41 42 Sector is not on wanted list -> fetch next sector headed
-			sty cS				//43 44
-			bmi FetchData		//45 46	Sector is on wanted list, save sector number and fetch data
-*/
 //--------------------------------------	Will be changed to JMP CopyDir after Block 3 copied
 
 ToCD:		jmp CopyCode		//47-49 Sector 15 (Block 3) - copy it from the Buffer to its place
@@ -1137,8 +1145,8 @@ ZPCopyLoop:	lda ZPTab,x			//Copy Tables C, E, F and GCR Loop from $0600 to ZP
 			sta $1800			//0  0  0  1  0  0  1  0  CO=0, DO=1, AA=1 This reads as #$43 on $dd00
 								//AI|DN|DN|AA|CO|CI|DO|DI This also signals that the drive code has been installed
 
-
-			lda #$01			//Shift register disabled, Port A ($1c01) latching enabled, Port B ($1c00) latching disabled
+.if (VerifSctHdrs)
+{			lda #$01			//Shift register disabled, Port A ($1c01) latching enabled, Port B ($1c00) latching disabled
 			sta $1c0b
 
 			lda #$00			//Clear VIA #2 Timer 1 low byte
@@ -1149,7 +1157,7 @@ ZPCopyLoop:	lda ZPTab,x			//Copy Tables C, E, F and GCR Loop from $0600 to ZP
 			sta $1c0e
 			lda $180d			//Acknowledge all pending interrupts
 			lda $1c0d
-
+}
 			jmp Fetch			//Fetching block 3 (track 18, sector 16) WList+$10=#$ff, WantedCtr=1
 								//A, X, Y can be anything here
 //--------------------------------------
