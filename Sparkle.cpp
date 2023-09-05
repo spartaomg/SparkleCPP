@@ -5,8 +5,10 @@
 //#defnie NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR VERSION INFO 230904
+//  COMPILE TIME VARIABLES FOR VERSION INFO 230905
 //--------------------------------------------------------
+
+constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
 
 constexpr unsigned int Year = ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
 
@@ -20,6 +22,7 @@ constexpr unsigned int Month = (__DATE__[0] == 'J') ? ((__DATE__[1] == 'a') ? 1 
                              : (__DATE__[0] == 'D') ? 12                                                             // Dec
                              : 0;
 constexpr unsigned int Day = (__DATE__[4] == ' ') ? (__DATE__[5] - '0') : (__DATE__[4] - '0') * 10 + (__DATE__[5] - '0');
+
 constexpr unsigned long int VersionBuild = ((Year / 10) * 0x100000) + ((Year % 10) * 0x10000) + ((Month / 10) * 0x1000) + ((Month % 10) * 0x100) + ((Day / 10) * 0x10) + (Day % 10);
 
 constexpr int VersionMajor = 2;
@@ -1633,7 +1636,9 @@ bool CompressBundle() {             //NEEDS PackFile() and CloseFile()
 
         OrigSize += (Prgs[i].iFileLen + 253) / 254;
 
-        PackFile(i);
+        if (!PackFile(i))
+            return false;
+
         if (i < Prgs.size() - 1)
         {
             //WE NEED TO USE THE NEXT FILE'S ADDRESS, LENGTH AND I/O STATUS HERE
@@ -3346,7 +3351,7 @@ void AddHeaderAndID() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool InjectFetchTestPlugin() {
+bool InjectTestPlugin() {
 
     //Calculate sector pointer on disk (FT.cpp takes one block)
 
@@ -3402,6 +3407,8 @@ bool InjectFetchTestPlugin() {
             {
                 Buffer[1] = EORtransform(255);
             }
+
+            Buffer[0] = EORtransform(TabS[BufferCnt]);
 
             memcpy(&ByteSt[BufferCnt * 256], &Buffer[0], 256 * sizeof(Buffer[0]));
             BufferCnt++;
@@ -3905,7 +3912,7 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
         
         //Add "IncludeFetchTest" flag and FetchTest plugin
         Disk[BAM + 249] = EORtransform(1);
-        if (!InjectFetchTestPlugin())
+        if (!InjectTestPlugin())
             return false;
     }
     else if (bSaverPlugin)
@@ -4943,7 +4950,7 @@ int main(int argc, char* argv[])
     auto cstart = std::chrono::system_clock::now();
 
     cout << "\n**************************************\n";
-    cout << "Sparkle " << VersionMajor <<"." << VersionMinor << "." << hex << VersionBuild << dec << " by Sparta 2019-2022\n";
+    cout << "Sparkle " << VersionMajor <<"." << VersionMinor << "." << hex << VersionBuild << dec << " by Sparta 2019-" << FullYear << "\n";
     cout << "**************************************\n\n";
 
     string AppPath{filesystem::current_path().string() + "\\"};

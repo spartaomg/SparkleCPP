@@ -36,6 +36,9 @@ extern const int ExtSectorsPerDisk;                 //Exnteded disk
 extern const int ExtTracksPerDisk;
 extern const int ExtBytesPerDisk;                   //Including track 18
 
+extern int SectorsPerDisk;
+extern int BlocksUsedByPlugin;
+
 extern int BytePtr, BitPtr, NibblePtr, BitPos, BitsLeft;
 
 //extern vector<array<unsigned char, 256>> ByteSt;
@@ -115,7 +118,7 @@ extern const unsigned char EndOfBundleTag;      //= 0x00;
 //Functions
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void PackFile(int Index);
+bool PackFile(int Index);
 void ResetBuffer();
 bool CloseBuffer();
 bool CloseFile();

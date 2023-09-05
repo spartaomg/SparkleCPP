@@ -425,18 +425,18 @@ SkipStepDn:	asl					//be	Y=#$01 is not stored - it is the default value which is
 ResetVerif:	lda #CSV			//ca cb
 			sta VerifCtr		//cc cd	Verify track after head movement
 
-//--------------------------------------
-//		Fetch Code
-//--------------------------------------
-FT:
-Fetch:
 .if (VerifSctHdrs)
 {
 			nop #VerifCtr		//ce cf
 			nop #$d2			//d0 d1 TabD (CMP izy)
 			nop #FetchData		//d2 d3
 }
-else
+//--------------------------------------
+//		Fetch Code
+//--------------------------------------
+FT:
+Fetch:
+.if (!VerifSctHdrs)
 {
 			lda VerifCtr		//ce cf	If checksum verification needed at disk spin up...
 			nop #$d2			//d0 d1 TabD (CMP izy)

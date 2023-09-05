@@ -124,6 +124,7 @@ Y:			ldy #$00
 DEX:		dex
 			bne !-
 			lda $0100			//Value should be #$00 (EOR check is not needed)
+			eor cS
 
 !:			ldx #$02
 			txs					//Change stack pointer to avoid overwriting important data in block

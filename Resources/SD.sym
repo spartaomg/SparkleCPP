@@ -63,7 +63,7 @@
 .label UpdatePatch=$5a3
 .label CopyCode=$73a
 .label DO=$2
-.label Fetch=$3ce {
+.label Fetch=$3d4 {
 }
 .label DT=$482
 .label BR20=$563
@@ -94,7 +94,7 @@
 .label MarkSct=$502
 .label ChkPt=$6aa
 .label FetchData=$3e1
-.label FT=$3ce
+.label FT=$3d4
 .label StepTmr=$529
 .label VerifCtr=$19
 .label NewBundle=$54

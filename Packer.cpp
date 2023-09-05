@@ -91,8 +91,14 @@ void WriteBinaryFile(const string& FileName, unsigned char* Buffer, streamsize S
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void UpdateByteStream()
+bool UpdateByteStream()
 {
+    if (BufferCnt >= (SectorsPerDisk - BlocksUsedByPlugin))
+    {
+        cerr << "***CRITICAL***\tUnable to build disk. Disk is full!!!\n";
+        return false;
+    }
+
     memcpy(&ByteSt[(BufferCnt - 1) * 256], &Buffer[0], 256 * sizeof(Buffer[0]));
 
     //for (int i = 0; i < 256; i++)
@@ -100,6 +106,7 @@ void UpdateByteStream()
         //ByteSt[((BufferCnt - 1) * 256) + i] = Buffer[i];
     //}
 
+    return true;  
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -610,7 +617,8 @@ bool CloseFile() {
     else
     {
         //Next File Info does not fit, so close buffer, next file will start in new block
-        CloseBuffer();
+        if (!CloseBuffer())
+            return false;
     }
 
     return true;
@@ -703,7 +711,8 @@ bool CloseBundle(int NextFileIO, bool LastPartOnDisk)
     {
 NewB:
         //Next File Info DOES NOT fit, so close buffer
-        CloseBuffer();               //Adds EndTag and starts new buffer
+        if (!CloseBuffer())         //Adds EndTag and starts new buffer
+            return false;
         //Then add 1 dummy literal byte to new block (blocks must start with 1 literal, next bundle tag is a match tag)
         Buffer[255] = 0xFD;         //Dummy Address ($03fd* - first literal's address in buffer... (*NextPart above, will reserve BlockCnt)
         Buffer[254] = 0x03;         //...we are overwriting it with the same value
@@ -1430,7 +1439,7 @@ void CalcBestSequence(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void Pack()
+bool Pack()
 {
     //Packing is done backwards
 
@@ -1478,7 +1487,8 @@ Restart:
             if (BufferFull)
             {
                 AddLitSequence();
-                CloseBuffer();      //The whole literal sequence did not fit, buffer is full, close it
+                if (!CloseBuffer())      //The whole literal sequence did not fit, buffer is full, close it
+                    return false;
             }
         }
         else
@@ -1671,7 +1681,8 @@ Restart:
             if (BufferFull)
             {
                 AddLitSequence();
-                CloseBuffer();
+                if (!CloseBuffer())
+                    return false;
             }
         }   //Lit vs match
     }
@@ -1710,6 +1721,7 @@ Restart:
             goto Restart;
         }
     }
+    return true;
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1795,7 +1807,8 @@ bool CloseBuffer() {
     //GoTo NoDisk
     //End If
 
-    UpdateByteStream();
+    if (!UpdateByteStream())
+        return false;
 
     ResetBuffer();                      //Resets buffer variables
 
@@ -1977,7 +1990,7 @@ bool CloseBuffer() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void PackFile(int Index) {
+bool PackFile(int Index) {
 
     //----------------------------------------------------------------------------------------------------------
     //PROCESS FILE
@@ -2081,7 +2094,7 @@ void PackFile(int Index) {
     //COMPRESS FILE
     //----------------------------------------------------------------------------------------------------------
 
-    Pack();
+    bool bSuccess = Pack();
 
     delete[] SL;
     delete[] SO;
@@ -2097,6 +2110,15 @@ void PackFile(int Index) {
     delete[] FFO;
 
     delete[] Seq;
+
+    if (bSuccess)
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------

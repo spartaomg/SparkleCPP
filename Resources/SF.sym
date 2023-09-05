@@ -43,7 +43,7 @@
 .label SH=$12f
 .label X=$254
 .label Y=$256
-.label GoodBlock=$2c5
+.label GoodBlock=$2c7
 .label StepDir=$28
 .label RateDone=$565
 .label DataJmp=$357
@@ -68,7 +68,7 @@
 .label CopyCode=$73a
 .label SF_CSLoopEntry=$21d
 .label DO=$2
-.label Fetch=$3ce {
+.label Fetch=$3d4 {
 }
 .label DT=$482
 .label BR20=$563
@@ -101,7 +101,7 @@
 .label MarkSct=$502
 .label ChkPt=$6aa
 .label FetchData=$3e1
-.label FT=$3ce
+.label FT=$3d4
 .label StepTmr=$529
 .label VerifCtr=$19
 .label NewBundle=$54
@@ -131,7 +131,7 @@
 .label CSum=$9f
 .label HeaderJmp=$347
 .label ChainLoop=$4fc
-.label SectorTable=$2cb
+.label SectorTable=$2cd
 .label Frames=$5bb
 .label IL=$506
 .label ToTrack18=$200
@@ -168,7 +168,7 @@
 .label RegBlockRet=$4a5
 .label ToFetchBAM=$64c
 .label FetchJmp=$318
-.label MetaBlock=$2c8
+.label MetaBlock=$2ca
 .label WList=$3e
 .label FetchHeader=$3d4
 .label ToBneFetch=$49f

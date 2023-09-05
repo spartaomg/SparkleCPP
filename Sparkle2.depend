@@ -1,11 +1,11 @@
 # depslib dependency file v1.0
-1693276404 source:c:\users\tamas\onedrive\c64\c++\sparkle\ascii2dirart.cpp
+1693941551 source:c:\users\tamas\onedrive\c64\c++\sparkle\ascii2dirart.cpp
 	"common.h"
 
-1693276405 source:c:\users\tamas\onedrive\c64\c++\sparkle\loader.cpp
+1693941552 source:c:\users\tamas\onedrive\c64\c++\sparkle\loader.cpp
 	"common.h"
 
-1692731980 c:\users\tamas\onedrive\c64\c++\sparkle\common.h
+1693941014 c:\users\tamas\onedrive\c64\c++\sparkle\common.h
 	<algorithm>
 	<iostream>
 	<string>
@@ -21,27 +21,27 @@
 	"resource.h"
 	"ThirdParty/exprtk.hpp"
 
-1686874813 source:c:\users\tamas\onedrive\c64\c++\sparkle\packer.cpp
+1693941446 source:c:\users\tamas\onedrive\c64\c++\sparkle\packer.cpp
 	"common.h"
 
-1693276404 source:c:\users\tamas\onedrive\c64\c++\sparkle\petscii2dirart.cpp
+1693941551 source:c:\users\tamas\onedrive\c64\c++\sparkle\petscii2dirart.cpp
 	"common.h"
 
-1693844840 source:c:\users\tamas\onedrive\c64\c++\sparkle\sd.cpp
+1693943702 source:c:\users\tamas\onedrive\c64\c++\sparkle\sd.cpp
 	"common.h"
 
-1693276406 source:c:\users\tamas\onedrive\c64\c++\sparkle\ss.cpp
+1693941553 source:c:\users\tamas\onedrive\c64\c++\sparkle\ss.cpp
 	"common.h"
 
-1693276407 source:c:\users\tamas\onedrive\c64\c++\sparkle\ssio.cpp
+1693941554 source:c:\users\tamas\onedrive\c64\c++\sparkle\ssio.cpp
 	"common.h"
 
-1693319941 source:c:\users\tamas\onedrive\c64\c++\sparkle\sparkle.cpp
+1693943983 source:c:\users\tamas\onedrive\c64\c++\sparkle\sparkle.cpp
 	"common.h"
 
 1667511155 c:\users\tamas\onedrive\c64\c++\sparkle\resource.h
 
-1693288620 source:c:\users\tamas\onedrive\c64\c++\sparkle\sparkle.rc
+1693942313 source:c:\users\tamas\onedrive\c64\c++\sparkle\sparkle.rc
 	"resource.h"
 	"winres.h"
 
@@ -74,6 +74,6 @@
 	<sys/types.h>
 	<fstream>
 
-1693856185 source:c:\users\tamas\onedrive\c64\c++\sparkle\sf.cpp
+1693943702 source:c:\users\tamas\onedrive\c64\c++\sparkle\sf.cpp
 	"common.h"
 

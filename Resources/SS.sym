@@ -58,6 +58,7 @@
 .label CO=$8
 .label GCRLoop=$277c
 .label FetchDir=$394
+.label ResetVerif=$3ca
 .label ChkLines=$5d3
 .label OPC_RTS=$57d
 .label MaxSct1=$508
@@ -73,7 +74,8 @@
 .label LongMatch=$1de
 .label CopyCode=$73a
 .label DO=$2
-.label Fetch=$3d4
+.label Fetch=$3ce {
+}
 .label DT=$482
 .label BR20=$563
 .label CDLoop=$30e
@@ -111,14 +113,14 @@
 .label ChkPt=$6aa
 .label FarMatch=$1d6
 .label FetchData=$3e1
-.label FT=$3d4
+.label FT=$3ce
 .label BusLock=$17c
 .label MatchHi=$254
 .label StepTmr=$529
 .label VerifCtr=$19
 .label NewBundle=$54
 .label DriveLoop=$81a
-.label TestRet=$5f2
+.label TestRet=$5f0
 .label Loop=$66e
 .label WantedCtr=$8
 .label JmpClrList=$301
