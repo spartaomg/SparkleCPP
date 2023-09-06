@@ -794,15 +794,38 @@ bool EvaluateParameterExpressions()
 
                 double r = tep.evaluate(Expr);
 
-                if (isnan(r))
+                if ((isnan(r)) ||(r < 0))
                 {
-                    cerr << "***CRITICAL***\t Bundle #" << BundleCnt << "\tUnable to parse the following math expression : " << ScriptEntryArray[i] << "\n";
+                    cerr << "***CRITICAL***\t Bundle #" << BundleCnt << " File #" << (FileCnt + 1) << "\tError the following file parameter expression: '" << ScriptEntryArray[i] << "'\n";
                     return false;
                 }
 
-                int Result = (int)r;
+                unsigned int Result = (unsigned int)r;
 
-                ParameterString = ConvertIntToHextString(Result, 4);
+                if ((i == 2) && (Result > 0xffff))
+                {
+                    if (Result > 0xffffffff)
+                    {
+                        cerr << "***CRITICAL***\t Bundle #" << BundleCnt << " File #" << (FileCnt + 1) << "\tError in the following file parameter expression: '" << ScriptEntryArray[i] << "'\n";
+                        return false;
+                    }
+                    else
+                    {
+                        ParameterString = ConvertIntToHextString(Result, 8);
+                    }
+                }
+                else
+                {
+                    if (Result > 0xffff)
+                    {
+                        cerr << "***CRITICAL***\t Bundle #" << BundleCnt << " File #" << (FileCnt + 1) << "\tError in the following file parameter expression: '" << ScriptEntryArray[i] << "'\n";
+                        return false;
+                    }
+                    else
+                    {
+                        ParameterString = ConvertIntToHextString(Result, 4);
+                    }
+                }
 
                 //cout << "Result: " << ParameterString << "\n";
 
@@ -813,7 +836,7 @@ bool EvaluateParameterExpressions()
                 }
                 else
                 {
-                    cerr << "***CRITICAL***\t Bundle #" << BundleCnt << "\tUnable to parse the following math expression: " << ScriptEntryArray[i] << "\n";
+                    cerr << "***CRITICAL***\t Bundle #" << BundleCnt << " File #" << (FileCnt + 1) << "\tError in the following file parameter expression: '" << ScriptEntryArray[i] << "'\n";
                     return false;
                 }
             }
