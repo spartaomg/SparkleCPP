@@ -93,9 +93,9 @@ void WriteBinaryFile(const string& FileName, unsigned char* Buffer, streamsize S
 
 bool UpdateByteStream()
 {
-    if (BufferCnt >= (SectorsPerDisk - BlocksUsedByPlugin))
+    if (BufferCnt > (SectorsPerDisk - BlocksUsedByPlugin))
     {
-        cerr << "***CRITICAL***\tUnable to build disk. Disk is full!!!\n";
+        cerr << "***CRITICAL***\tUnable to add bundle. Disk is full!!!\n";
         return false;
     }
 
@@ -106,7 +106,7 @@ bool UpdateByteStream()
         //ByteSt[((BufferCnt - 1) * 256) + i] = Buffer[i];
     //}
 
-    return true;  
+    return true;
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------------

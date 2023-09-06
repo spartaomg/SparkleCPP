@@ -42,6 +42,9 @@
     <ClCompile Include="SF.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="ThirdParty\tinyexpr.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Common.h">
@@ -53,7 +56,7 @@
     <ClInclude Include="resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="ThirdParty\exprtk.hpp">
+    <ClInclude Include="ThirdParty\tinyexpr.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

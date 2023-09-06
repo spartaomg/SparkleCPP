@@ -5,7 +5,7 @@
 //#defnie NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR VERSION INFO 230905
+//  COMPILE TIME VARIABLES FOR VERSION INFO 230906
 //--------------------------------------------------------
 
 constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -194,10 +194,12 @@ int TotalOrigSize{}, TotalCompSize{};
 
 unsigned char LoaderBlockCount = 0;
 
-#ifdef INCLEXPRTK
+#ifdef INCLTINYEXPR
 string ParameterString = "";
+te_parser tep;
+bool bEntryHasExpression = false;
+string ParsedEntries = "";
 #endif
-
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -674,57 +676,64 @@ bool StringIsNumeric(string NumericString)
     return IsHexString(NumericString);
 
 }
-#ifdef INCLEXPRTK
-//----------------------------------------------------------------------------------------------------------------------------------------------------------
-
-string ExprTK(string expression_string)
-{
-    typedef double T; // numeric type (float, double, mpfr etc...)
-
-    typedef exprtk::symbol_table<T> symbol_table_t;
-    typedef exprtk::expression<T>   expression_t;
-    typedef exprtk::parser<T>       parser_t;
-
-    //string expression_string = "z := 0xa000 + (3 * 256)";
-
-    T z = T(0.0);
-
-    symbol_table_t symbol_table;
-    symbol_table.add_variable("z", z);
-
-    expression_t expression;
-    expression.register_symbol_table(symbol_table);
-
-    parser_t parser;
-
-    if (!parser.compile(expression_string, expression))
-    {
-        //printf("Compilation error...\n");
-        return "";
-    }
-
-    T result = expression.value();
-
-    return "." + to_string((int)result);
-}
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+#ifdef INCLTINYEXPR
 
 string CreateExpressionString(int p)
 {
 
+    //Remove unwanted spaces
+    while (ScriptEntryArray[p].find(" ") != string::npos)
+    {
+        int Pos = ScriptEntryArray[p].find(" ");
+        ScriptEntryArray[p].replace(Pos, 1, "");
+    }
+
     string Expr = "";
-    int i = 0;
     bool IsDecimal = false;
     string HexString = "";
+    size_t i = 0;
 
     while (i < ScriptEntryArray[p].size())
     {
         char NextChar = tolower(ScriptEntryArray[p].at(i++));
 
-        if (NextChar == '.')   //Expect decimal number
+        if (NextChar == '.')        //Expect decimal number
         {
             IsDecimal = true;
+        }
+        else if (NextChar == '$')   //Identify '$' hex prefix
+        {
+            IsDecimal = false;
+        }
+        else if ((NextChar == '&') && (i < ScriptEntryArray[p].size()))         //Identify '&H' hex prefix
+        {
+            if (tolower(ScriptEntryArray[p].at(i) == 'h'))
+            {
+                i++;
+                IsDecimal = false;
+            }
+        }
+        else if ((NextChar == '0') && (i < ScriptEntryArray[p].size()))         //Identify '0x' hex prefix
+        {
+            if (tolower(ScriptEntryArray[p].at(i) == 'x'))
+            {
+                i++;
+                IsDecimal = false;
+            }
+            else
+            {
+                if (IsDecimal)
+                {
+                    Expr += NextChar;
+                }
+                else
+                {
+                    HexString += NextChar;
+                }
+            }
         }
         else if ((NextChar == 'a') ||
             (NextChar == 'b') ||
@@ -735,7 +744,6 @@ string CreateExpressionString(int p)
         {
             IsDecimal = false;
             HexString += NextChar;
-
         }
         else if ((NextChar == '0') ||
             (NextChar == '1') ||
@@ -747,7 +755,7 @@ string CreateExpressionString(int p)
             (NextChar == '7') ||
             (NextChar == '8') ||
             (NextChar == '0'))
-        {
+        {   
             if (IsDecimal)
             {
                 Expr += NextChar;
@@ -770,26 +778,46 @@ string CreateExpressionString(int p)
     return Expr;
 }
 
-    //----------------------------------------------------------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
 
 bool EvaluateParameterExpressions()
 {
-
     for (int i = 1; i <= NumScriptEntries; i++)
     {
-        if (ScriptEntryArray[i].at(0) == '=')
+        if (ScriptEntryArray[i].length() > 0)
         {
-            string Expr = "z :" + CreateExpressionString(i);
-            ParameterString = ExprTK(Expr);
-            if (ParameterString != "")
+            if (ScriptEntryArray[i].at(0) == '=')
             {
-                ScriptEntryArray[i] = ParameterString;
+                string Expr = CreateExpressionString(i);
+
+                //cout << "Expression: " << Expr << "\n";
+
+                double r = tep.evaluate(Expr);
+
+                if (isnan(r))
+                {
+                    cerr << "***CRITICAL***\t Bundle #" << BundleCnt << "\tUnable to parse the following math expression : " << ScriptEntryArray[i] << "\n";
+                    return false;
+                }
+
+                int Result = (int)r;
+
+                ParameterString = ConvertIntToHextString(Result, 4);
+
+                //cout << "Result: " << ParameterString << "\n";
+
+                if (ParameterString != "")
+                {
+                    ScriptEntryArray[i] = ParameterString;
+                    bEntryHasExpression = true;
+                }
+                else
+                {
+                    cerr << "***CRITICAL***\t Bundle #" << BundleCnt << "\tUnable to parse the following math expression: " << ScriptEntryArray[i] << "\n";
+                    return false;
+                }
             }
-            else
-            {
-                cerr <<"***CRITICAL***\tUnable to parse math expression: " << ScriptEntryArray[i] << "\n";
-                return false;
-            }
+
         }
     }
 
@@ -813,7 +841,6 @@ bool ParameterIsNumeric(int i)
     {
         return false;
     }
-
 
     //Remove HEX prefix
     if (ScriptEntryArray[i].at(0) == '$')
@@ -1298,6 +1325,8 @@ bool ResetDiskVariables() {
 
     ThisID = 255;
     NextID = 255;
+
+    ParsedEntries = "";
 
     //Reset Disk image
     NewDisk();
@@ -2185,10 +2214,22 @@ bool AddFileToBundle() {
 
     int NumParams = 1;
 
-#ifdef INCLEXPRTK
+#ifdef INCLTINYEXPR
+
+    bEntryHasExpression = false;
+
     if (!EvaluateParameterExpressions())
     {
         return false;
+    }
+    if (bEntryHasExpression)
+    {
+        ParsedEntries += "Bundle #" + to_string(BundleCnt) + " File #" + to_string(FileCnt + 1) + ":";
+        for (int i = 0; i <= NumScriptEntries; i++)
+        {
+            ParsedEntries += "\t" + ScriptEntryArray[i];
+        }
+        ParsedEntries +=  "\n";
     }
 #endif
 
@@ -4380,6 +4421,11 @@ bool FinishDisk(bool LastDisk) {
     cout << "\nFinal disk: " << TotalOrigSize << " block" << (TotalOrigSize == 1 ? "" : "s") << " compressed to " << BlocksUsed << " block" << (BlocksUsed == 1 ? ", " : "s, ")
         << BlocksFree << " block" << (BlocksFree == 1 ? "" : "s") << " remaining free. Overall compression ratio : " << setprecision(2) << fixed << CompRatio << " %\n\n";
 
+    if (ParsedEntries != "")
+    {
+        cout << "File entries with parameter expressions after evaluation:\n" << ParsedEntries << "\n";
+    }
+
     if (!WriteDiskImage(D64Name))
     {
         return false;
@@ -4962,7 +5008,8 @@ int main(int argc, char* argv[])
         //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\ThePumpkins\\Backup\\221028\\Scripts\\ThePumpkins.sls";
         //string ScriptFileName = "c:\\Users\\Tamas\\source\\repos\\GPMagazine\\Magazine\\Issue33\\Sparkle\\Magazine.sls";
         //string ScriptFileName = "c:\\Users\\Tamas\\source\\repos\\DeliriousTwelve\\Parts\\CheckerZoomer\\CheckerZoomer.sls";
-        string ScriptFileName = "c:\\Users\\Tamas\\source\\repos\\NoBounds\\Main\\Sparkle\\NoBounds.sls";
+        //string ScriptFileName = "c:\\Users\\Tamas\\source\\repos\\NoBounds\\Main\\Sparkle\\NoBounds.sls";
+        string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\SparkleFetchTest\\ExprTest.sls";
         Script = ReadFileToString(ScriptFileName);
         SetScriptPath(ScriptFileName, AppPath);
 

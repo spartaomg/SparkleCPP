@@ -1,11 +1,11 @@
 # depslib dependency file v1.0
-1693960884 source:c:\users\tamas\onedrive\c64\c++\sparkle\ascii2dirart.cpp
+1694016121 source:c:\users\tamas\onedrive\c64\c++\sparkle\ascii2dirart.cpp
 	"common.h"
 
-1693960884 source:c:\users\tamas\onedrive\c64\c++\sparkle\loader.cpp
+1694016122 source:c:\users\tamas\onedrive\c64\c++\sparkle\loader.cpp
 	"common.h"
 
-1693941014 c:\users\tamas\onedrive\c64\c++\sparkle\common.h
+1694022342 c:\users\tamas\onedrive\c64\c++\sparkle\common.h
 	<algorithm>
 	<iostream>
 	<string>
@@ -19,9 +19,9 @@
 	<iostream>
 	<filesystem>
 	"resource.h"
-	"ThirdParty/exprtk.hpp"
+	"ThirdParty/tinyexpr.h"
 
-1693941446 source:c:\users\tamas\onedrive\c64\c++\sparkle\packer.cpp
+1694017734 source:c:\users\tamas\onedrive\c64\c++\sparkle\packer.cpp
 	"common.h"
 
 1693960884 source:c:\users\tamas\onedrive\c64\c++\sparkle\petscii2dirart.cpp
@@ -36,12 +36,12 @@
 1693960887 source:c:\users\tamas\onedrive\c64\c++\sparkle\ssio.cpp
 	"common.h"
 
-1693943983 source:c:\users\tamas\onedrive\c64\c++\sparkle\sparkle.cpp
+1694017603 source:c:\users\tamas\onedrive\c64\c++\sparkle\sparkle.cpp
 	"common.h"
 
 1667511155 c:\users\tamas\onedrive\c64\c++\sparkle\resource.h
 
-1693942313 source:c:\users\tamas\onedrive\c64\c++\sparkle\sparkle.rc
+1694033417 source:c:\users\tamas\onedrive\c64\c++\sparkle\sparkle.rc
 	"resource.h"
 	"winres.h"
 
@@ -76,4 +76,26 @@
 
 1693960888 source:c:\users\tamas\onedrive\c64\c++\sparkle\sf.cpp
 	"common.h"
+
+1694014785 c:\users\tamas\onedrive\c64\c++\sparkle\thirdparty\tinyexpr.h
+	<vector>
+	<variant>
+	<string>
+	<limits>
+	<initializer_list>
+	<algorithm>
+	<random>
+	<string_view>
+	<cstdlib>
+	<cstring>
+	<cmath>
+	<cstdio>
+	<cassert>
+	<stdexcept>
+	<cctype>
+	<set>
+	<utility>
+
+1694014770 source:c:\users\tamas\onedrive\c64\c++\sparkle\thirdparty\tinyexpr.cpp
+	"tinyexpr.h"
 

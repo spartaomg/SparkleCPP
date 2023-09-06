@@ -57,7 +57,8 @@
 		<Unit filename="Sparkle.rc">
 			<Option compilerVar="WINDRES" />
 		</Unit>
-		<Unit filename="ThirdParty/exprtk.hpp" />
+		<Unit filename="ThirdParty/tinyexpr.cpp" />
+		<Unit filename="ThirdParty/tinyexpr.h" />
 		<Unit filename="resource.h" />
 		<Extensions />
 	</Project>

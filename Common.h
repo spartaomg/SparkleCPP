@@ -1,6 +1,6 @@
 #pragma once
 
-//#define INCLEXPRTK;
+#define INCLTINYEXPR
 
 #include <algorithm>
 #include <iostream>
@@ -16,13 +16,9 @@
 #include <filesystem>
 #include "resource.h"
 
-#ifdef INCLEXPRTK
-#include "ThirdParty/exprtk.hpp"
+#ifdef INCLTINYEXPR
+#include "ThirdParty/tinyexpr.h"
 #endif
-
-//#include <sys/stat.h>
-//#include <time.h>       /* time */
-//#include <windows.h>
 
 using namespace std;
 
