@@ -590,6 +590,7 @@ Sparkle_RestoreIRQ:
 			sta	$ffff
 			rts						//20 bytes
 */
+
 //----------------------------
 //		FALLBACK IRQ
 //		Address: $02e5
@@ -627,7 +628,7 @@ EndLoader:
 
 .var myFile = createFile("Sparkle.inc")
 .eval myFile.writeln("//--------------------------------")
-.eval myFile.writeln("//	Sparkle loader constants	")
+.eval myFile.writeln("//	Sparkle loader addresses	")
 .eval myFile.writeln("//	KickAss format		")
 .eval myFile.writeln("//--------------------------------")
 .eval myFile.writeln("#importonce")

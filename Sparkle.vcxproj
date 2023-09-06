@@ -120,7 +120,7 @@
     </Link>
     <PreBuildEvent>
       <Command>nmake
-Resources/makefile</Command>
+ /F "Resources/makefile"</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -148,7 +148,7 @@ Resources/makefile</Command>
     </Link>
     <PreBuildEvent>
       <Message>make cpp arrays</Message>
-      <Command>nmake -a</Command>
+      <Command>nmake /a /f "Resources\makefile"</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>

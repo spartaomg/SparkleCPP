@@ -1,5 +1,5 @@
 //--------------------------------
-//	Sparkle loader constants	
+//	Sparkle loader addresses	
 //	KickAss format		
 //--------------------------------
 #importonce

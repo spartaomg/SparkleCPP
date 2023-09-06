@@ -74,7 +74,7 @@
 .label LongMatch=$1de
 .label CopyCode=$73a
 .label DO=$2
-.label Fetch=$3ce {
+.label Fetch=$3d4 {
 }
 .label DT=$482
 .label BR20=$563
@@ -113,7 +113,7 @@
 .label ChkPt=$6aa
 .label FarMatch=$1d6
 .label FetchData=$3e1
-.label FT=$3ce
+.label FT=$3d4
 .label BusLock=$17c
 .label MatchHi=$254
 .label StepTmr=$529

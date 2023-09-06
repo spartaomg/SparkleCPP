@@ -7,50 +7,40 @@ B2A = $(DIR_B2A)\Bin2Array.exe
 DIR_ZIP = $(DIR_TOOLS)\Zip
 ZIP = $(DIR_ZIP)\zip.exe -j -X
 STRIPZIP = $(DIR_ZIP)\stripzip.exe
+DIR_OBJ = Obj\Release
+#DIR_GPP = $(DIR_TOOLS)\GPP
+#GPP: $(DIR_GPP)\g++.exe
 
-cpp.zip: Ascii2DirArt.cpp Petscii2DirArt.cpp Loader.cpp SD.cpp SS.cpp SSIO.cpp SF.cpp
-	$(ZIP) cpp.zip Ascii2DirArt.cpp Petscii2DirArt.cpp Loader.cpp SD.cpp SS.cpp SSIO.cpp SF.cpp
-	$(STRIPZIP) cpp.zip
+Sparkle.exe: Obj\Release\Ascii2DirArt.o Obj\Release\Loader.o Obj\Release\Packer.o Obj\Release\Petscii2DirArt.o Obj\Release\SD.o Obj\Release\SF.o Obj\Release\Sparkle.o Obj\Release\SS.o Obj\Release\SSIO.o Obj\Release\Sparkle.res
+	g++.exe -s -std=c++17 -lstdc++fs -o bin\Release\Sparkle2.exe obj\Release\Ascii2DirArt.o obj\Release\Loader.o obj\Release\Packer.o obj\Release\Petscii2DirArt.o obj\Release\SD.o obj\Release\SF.o obj\Release\Sparkle.o obj\Release\SS.o obj\Release\SSIO.o  obj\Release\Sparkle.res
 
+#$(GPP) -o Sparkle.exe Obj\Release\Ascii2DirArt.o Obj\Release\Loader.o Obj\Release\Packer.o Obj\Release\Petscii2DirArt.o Obj\Release\SD.o Obj\Release\SF.o Obj\Release\Sparkle.o Obj\Release\SS.o Obj\Release\SSIO.o Obj\Release\Sparkle.res
 
-Ascii2DirArt.cpp: Resources\Ascii2DirArt.bin Resources\Petscii2DirArt.bin Resources\Loader.prg
-	$(B2A) Resources\Ascii2DirArt.bin 0 0 Ascii2DirArt.cpp
+#Obj\Release\Ascii2DirArt.o: Ascii2DirArt.cpp Common.h
+#	g++.exe -O3 -Wall -std=c++17 -fexceptions -c C:\Users\Tamas\OneDrive\C64\C++\Sparkle\Ascii2DirArt.cpp -o obj\Release\Ascii2DirArt.o
 
+#$(GPP) Ascii2DirArt.cpp -o Obj\Release\Ascii2DirArt.o
 
-Petscii2DirArt.cpp: Resources\Petscii2DirArt.bin
-	$(B2A) Resources\Petscii2DirArt.bin 0 0 Petscii2DirArt.cpp
+#Obj\Release\Loader.o: Loader.cpp Common.h
+#	$(GPP) Loader.cpp -o Obj\Release\Loader.o
 
+#Obj\Release\Packer.o: Packer.cpp Common.h
+#	$(GPP) Packer.cpp -o Obj\Release\Packer.o
 
-Loader.cpp: Resources\Loader.prg
-	$(B2A) Resources\Loader.prg 0 0 Loader.cpp
+#Obj\Release\Petscii2DirArt.o: Petscii2DirArt.cpp Common.h
+#	$(GPP) Petscii2DirArt.cpp -o Obj\Release\Petscii2DirArt.o
 
-Resources\Loader.prg: Resources\SL.asm
-	$(KICKASS) Resources\SL.asm -o Resources\Loader.prg -afo
+#Obj\Release\SD.o: SD.cpp Common.h
+#	$(GPP) SD.cpp -o Obj\Release\SD.o
 
+#Obj\Release\SF.o: SF.cpp Common.h
+#	$(GPP) SF.cpp -o Obj\Release\SF.o
 
-SD.cpp: Resources\SD.prg
-	$(B2A) Resources\SD.prg 2 0 SD.cpp
+#Obj\Release\Sparkle.o: Sparkle.cpp Common.h
+#	$(GPP) Sparkle.cpp -o Obj\Release\Sparkle.o
 
-Resources\SD.prg: Resources\SD.asm
-	$(KICKASS) Resources\SD.asm -o Resources\SD.prg
+#Obj\Release\SS.o: SS.cpp Common.h
+#	$(GPP) SS.cpp -o Obj\Release\SS.o
 
-
-SF.cpp: Resources\SF.prg
-	$(B2A) Resources\SF.prg 2 0 SF.cpp
-
-Resources\SF.prg: Resources\SF.asm Resources\SD.sym
-	$(KICKASS) Resources\SF.asm -o Resources\SF.prg -afo
-
-
-SS.cpp: Resources\SS.prg
-	$(B2A) Resources\SS.prg 2 0 SS.cpp
-
-Resources\SS.prg: Resources\SS.asm
-	$(KICKASS) Resources\SS.asm -o Resources\SS.prg  :io=false
-
-
-SSIO.cpp: Resources\SSIO.prg
-	$(B2A) Resources\SSIO.prg 2 0 SSIO.cpp
-
-Resources\SSIO.prg: Resources\SS.asm
-	$(KICKASS) Resources\SS.asm -o Resources\SSIO.prg  :io=true
+#Obj\Release\SSIO.o: SSIO.cpp Common.h
+#	$(GPP) SSIO.cpp -o Obj\Release\SSIO.o
