@@ -134,10 +134,10 @@ int CheckIO(int Offset, int NextFileUnderIO) {
 
 void ResetBuffer()
 {
-    Buffer.fill(0);     //Reset Buffer
+    //Buffer.fill(0);     //Reset Buffer
 
     //Both of these would work:
-    //memset(Buffer.data(), 0, Buffer.size() * sizeof(Buffer[0]));    //memset() is faster than fill()
+    memset(Buffer.data(), 0, Buffer.size() * sizeof(Buffer[0]));    //memset() is faster than fill()
     //fill(Buffer.begin(), Buffer.end(), 0);  //New empty buffer
 
     //Initialize variables

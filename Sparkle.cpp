@@ -5,7 +5,7 @@
 //#defnie NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR VERSION INFO 230906
+//  COMPILE TIME VARIABLES FOR VERSION INFO 230908
 //--------------------------------------------------------
 
 constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -208,11 +208,11 @@ string ConvertIntToHextString(const int& i, const int& hexlen)
     char hexchar[8]{};
     sprintf_s(hexchar, "%X", i);
     string hexstring = "";
-    for (int j = 0; j < hexlen; j ++)
+    for (int j = 0; j < hexlen; j++)
     {
         if (hexchar[j] != 0)
         {
-            hexstring += hexchar[j]; //+hexstring;
+            hexstring += tolower(hexchar[j]); //+hexstring;
         }
         else
         {
@@ -953,6 +953,25 @@ bool AddHSFile()
     }
 
     int NumParams = 1;
+
+#ifdef INCLTINYEXPR
+
+    bEntryHasExpression = false;
+
+    if (!EvaluateParameterExpressions())
+    {
+        return false;
+    }
+    if (bEntryHasExpression)
+    {
+        ParsedEntries += "Hi-score File:\t";
+        for (int i = 0; i <= NumScriptEntries; i++)
+        {
+            ParsedEntries += "\t" + ScriptEntryArray[i];
+        }
+        ParsedEntries += "\n";
+    }
+#endif
 
     for (int i = 1; i <= NumScriptEntries; i++)
     {
@@ -3715,39 +3734,39 @@ bool InjectSaverPlugin() {
 
     DeleteBit(CT, CS);
 
-    unsigned char Buffer[256]{};
+    unsigned char SBuffer[256]{};
     int HSStartAdd = HSAddress + HSLength - 1;
     unsigned char BlockCnt = HSLength / 256;
 
 
     //First block
-    Buffer[0] = 0;
-    Buffer[1] = EORtransform((HSLength / 256));                //Remaining block count (EOR transformed)
-    Buffer[255] = 0xfe;                                             //First byte of block
-    Buffer[254] = 0x81;                                             //Bit stream
-    Buffer[253] = HSStartAdd % 256;                                 //Last byte's address(Lo)
+    SBuffer[0] = 0;
+    SBuffer[1] = EORtransform((HSLength / 256));                //Remaining block count (EOR transformed)
+    SBuffer[255] = 0xfe;                                             //First byte of block
+    SBuffer[254] = 0x81;                                             //Bit stream
+    SBuffer[253] = HSStartAdd % 256;                                 //Last byte's address(Lo)
     if (SaverSupportsIO)
     {
-        Buffer[252] = 0;                                            //I/O flag
-        Buffer[251] = HSStartAdd / 256;                             //Last byte's address(Hi)
-        Buffer[250] = 0;                                            //LongLit flag
-        Buffer[249] = 0xf6;                                         //Number of literals - 1
+        SBuffer[252] = 0;                                            //I/O flag
+        SBuffer[251] = HSStartAdd / 256;                             //Last byte's address(Hi)
+        SBuffer[250] = 0;                                            //LongLit flag
+        SBuffer[249] = 0xf6;                                         //Number of literals - 1
     }
     else
     {
-        Buffer[252] = HSStartAdd / 256;                             //Last byte's address(Hi)
-        Buffer[251] = 0;                                            //LongLit flag
-        Buffer[250] = 0xf7;                                         //Number of literals - 1
+        SBuffer[252] = HSStartAdd / 256;                             //Last byte's address(Hi)
+        SBuffer[251] = 0;                                            //LongLit flag
+        SBuffer[250] = 0xf7;                                         //Number of literals - 1
     }
 
     for (int i = 2; i <= (SaverSupportsIO ? 248 : 249); i++)
     {
-        Buffer[i] = HSFile[HSLength - 1 - (SaverSupportsIO ? 248 : 249) + i];
+        SBuffer[i] = HSFile[HSLength - 1 - (SaverSupportsIO ? 248 : 249) + i];
     }
 
     for (int i = 0; i < 256; i++)
     {
-        Disk[Track[CT] + (CS * 256) + i] = Buffer[i];
+        Disk[Track[CT] + (CS * 256) + i] = SBuffer[i];
     }
 
     if (SaverSupportsIO)
@@ -3772,34 +3791,34 @@ bool InjectSaverPlugin() {
 
         DeleteBit(CT, CS);
 
-        memset(Buffer, 0, sizeof(Buffer));
-        //fill(Buffer, Buffer + sizeof(Buffer), 0);
+        memset(SBuffer, 0, sizeof(SBuffer));
+        //fill(SBuffer, SBuffer + sizeof(SBuffer), 0);
 
-        Buffer[0] = 0x81;                                   //Bit stream
-        Buffer[255] = HSStartAdd % 256;                     //Last byte's address(Lo)
+        SBuffer[0] = 0x81;                                   //Bit stream
+        SBuffer[255] = HSStartAdd % 256;                     //Last byte's address(Lo)
         if (SaverSupportsIO)
         {
-            Buffer[254] = 0;                                //I/O flag
-            Buffer[253] = HSStartAdd / 256;                 //Last byte's address(hi)
-            Buffer[252] = 0;                                //LongLit flag
-            Buffer[251] = 0xf9;                             //Number of literals - 1
+            SBuffer[254] = 0;                                //I/O flag
+            SBuffer[253] = HSStartAdd / 256;                 //Last byte's address(hi)
+            SBuffer[252] = 0;                                //LongLit flag
+            SBuffer[251] = 0xf9;                             //Number of literals - 1
         }
         else
         {
-            Buffer[254] = HSStartAdd / 256;                 //Last byte's address(hi)
-            Buffer[253] = 0;                                //LongLit flag
-            Buffer[252] = 0xfa;                             //Number of literals - 1
+            SBuffer[254] = HSStartAdd / 256;                 //Last byte's address(hi)
+            SBuffer[253] = 0;                                //LongLit flag
+            SBuffer[252] = 0xfa;                             //Number of literals - 1
 
         }
 
         for (int j = 1; j <= (SaverSupportsIO ? 250 : 251); j++)
         {
-            Buffer[j] = HSFile[HSLength - 1 - (SaverSupportsIO ? 250 : 251) + j];
+            SBuffer[j] = HSFile[HSLength - 1 - (SaverSupportsIO ? 250 : 251) + j];
         }
 
         for (int j = 0; j < 256; j++)
         {
-            Disk[Track[CT] + (CS * 256) + j] = Buffer[j];
+            Disk[Track[CT] + (CS * 256) + j] = SBuffer[j];
         }
 
         if (SaverSupportsIO)
@@ -3823,41 +3842,41 @@ bool InjectSaverPlugin() {
 
     DeleteBit(CT, CS);
 
-    memset(Buffer, 0, sizeof(Buffer));
-    //fill(Buffer, Buffer + sizeof(Buffer), 0);
+    memset(SBuffer, 0, sizeof(SBuffer));
+    //fill(SBuffer, SBuffer + sizeof(SBuffer), 0);
 
 
-    Buffer[0] = 0x81;                                           //Bit stream
-    Buffer[1] = EORtransform(0);                           //New block count = 0 (eor transformed)
-    Buffer[255] = HSStartAdd % 256;                             //Last byte's address(Lo)
+    SBuffer[0] = 0x81;                                           //Bit stream
+    SBuffer[1] = EORtransform(0);                           //New block count = 0 (eor transformed)
+    SBuffer[255] = HSStartAdd % 256;                             //Last byte's address(Lo)
     if (SaverSupportsIO)
     {
-        Buffer[254] = 0;                                        //I/O flag
-        Buffer[253] = HSStartAdd / 256;                         //Last byte's address(Hi)
-        Buffer[252] = 0;                                        //LongLit flag
-        Buffer[251] = HSLength - 1;                             //Number of remaining literals - 1
+        SBuffer[254] = 0;                                        //I/O flag
+        SBuffer[253] = HSStartAdd / 256;                         //Last byte's address(Hi)
+        SBuffer[252] = 0;                                        //LongLit flag
+        SBuffer[251] = HSLength - 1;                             //Number of remaining literals - 1
 
     }
     else
     {
-        Buffer[254] = HSStartAdd / 256;                         //Last byte's address(Hi)
-        Buffer[253] = 0;                                        //LongLit flag
-        Buffer[252] = HSLength - 1;                             //Number of remaining literals - 1
+        SBuffer[254] = HSStartAdd / 256;                         //Last byte's address(Hi)
+        SBuffer[253] = 0;                                        //LongLit flag
+        SBuffer[252] = HSLength - 1;                             //Number of remaining literals - 1
 
     }
 
     for (size_t i = 0; i < HSLength; i++)
     {
-        Buffer[(SaverSupportsIO ? 251 : 252) - HSLength + i] = HSFile[i];
+        SBuffer[(SaverSupportsIO ? 251 : 252) - HSLength + i] = HSFile[i];
     }
 
-    Buffer[(SaverSupportsIO ? 251 : 252) - HSLength - 1] = NearLongMatchTag;    //End of Bundle: 0x84
-    Buffer[(SaverSupportsIO ? 251 : 252) - HSLength - 2] = EndOfBundleTag;      //End of Bundle: 0x00
+    SBuffer[(SaverSupportsIO ? 251 : 252) - HSLength - 1] = NearLongMatchTag;    //End of Bundle: 0x84
+    SBuffer[(SaverSupportsIO ? 251 : 252) - HSLength - 2] = EndOfBundleTag;      //End of Bundle: 0x00
 
 
     for (int i = 0; i < 256; i++)
     {
-        Disk[Track[CT] + (CS * 256) + i] = Buffer[i];
+        Disk[Track[CT] + (CS * 256) + i] = SBuffer[i];
     }
 
     return true;
