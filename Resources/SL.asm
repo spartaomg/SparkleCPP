@@ -245,6 +245,38 @@ LoaderCode:
 
 .pseudopc $0160	{
 
+//----------------------------
+//		FALLBACK IRQ
+//		Address: $02e5
+//----------------------------
+
+Sparkle_IRQ:
+			pha
+			txa
+			pha
+			tya
+			pha
+			lda	$01
+			pha
+
+			jsr	Set01
+			inc	$d019
+Sparkle_IRQ_JSR:
+			jsr	Done				//Music player or IRQ subroutine, installer @ $02d1
+
+			pla
+			sta	$01
+			pla
+			tay
+			pla
+			tax
+			pla
+Sparkle_IRQ_RTI:
+			rti
+
+			nop
+//----------------------------
+
 Sparkle_SendCmd:
 			sta	Bits				//Store Bundle Number on ZP
 			jsr	Set01				//$dd00=#$3b, $1800=#$95, Bus Lock, A=#$35
@@ -269,6 +301,9 @@ BusLock:	lda	#busy				//2	(A=#$f8) worst case, last bit is read by the drive on 
 
 Sparkle_LoadA:
 			jsr	Sparkle_SendCmd
+
+//----------------------------
+
 Sparkle_LoadFetched:
 			jsr	Set01				//17
 			ldx	#$00				//2
@@ -365,7 +400,8 @@ SpSDelay:	lda	#<RcvLoop-<ChgJmp	//2	20	Restore Receive loop
 			sta	SpComp+1			//4	32	SpComp+1=(#$2a <-> #$ff)
 			bmi	RcvLoop				//3	(35) (Drive loop takes 33 cycles)
 
-			jsr	BusLock
+			lda #busy				//BusLock
+			sta $dd00
 
 //------------------------------------------------------------
 //		BLOCK STRUCTURE FOR DEPACKER
@@ -425,8 +461,8 @@ SkipIO:		sta	ZPDst+1				//Hi Byte of Dest Address
 //	END OF FILE:							10000000
 //	END OF BUNDLE:				   00000000 10000100	(USE 00001000 instead??? far mid length of $02 is not used)
 //														(far match check would take 4 more cycles...)
-//														 Not worth it - would save max 64 bytes per disk side...
-//													 ...and lose 4 cycles per far match (thousands per disk side)
+//														Not worth it - would save max 64 bytes per disk side...
+//														...and lose 4 cycles per far match (thousands per disk side)
 //	L - length
 //	o - Offset LO
 //	H - Offset HI
@@ -571,6 +607,7 @@ ShortLHi:	dec	ZPDst+1
 ShortMHi:	dec	ZPDst+1
 			bcc	ShortMCont
 
+/*
 //----------------------------
 //		IRQ INSTALLER
 //		Call:	jsr $02d1
@@ -578,7 +615,6 @@ ShortMHi:	dec	ZPDst+1
 //		A=Raster
 //----------------------------
 
-/*
 Sparkle_InstallIRQ:
 			sty	Sparkle_IRQ_JSR+1	//Installs a subroutine vector
 			stx	Sparkle_IRQ_JSR+2
@@ -590,35 +626,6 @@ Sparkle_RestoreIRQ:
 			sta	$ffff
 			rts						//20 bytes
 */
-
-//----------------------------
-//		FALLBACK IRQ
-//		Address: $02e5
-//----------------------------
-
-Sparkle_IRQ:
-			pha
-			txa
-			pha
-			tya
-			pha
-			lda	$01
-			pha
-
-			jsr	Set01
-			inc	$d019
-Sparkle_IRQ_JSR:
-			jsr	Done				//Music player or IRQ subroutine, installer @ $02d1
-
-			pla
-			sta	$01
-			pla
-			tay
-			pla
-			tax
-			pla
-Sparkle_IRQ_RTI:
-			rti
 
 //----------------------------
 

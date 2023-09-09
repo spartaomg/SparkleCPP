@@ -203,7 +203,24 @@ ToNext:
 
 Send:	sta Bits
 		lda #$31
-		jmp SS_Send
+		ldx	#sendbyte			//CO=1, AO=1 => C64 is ready to send a byte, X=#$18
+		stx	$dd00				//Signal to Drive that we want to send Bundle Index
+		bit	$dd00				//$dd00=#$9b, $1800=#$94
+		bmi	*-3					//Wait for Drive response ($1800->00 => $dd00=#$1b, $1800=#$85)
+		
+								//Sending bits via AO, flipping CO to signal new bit, C can be anything at start
+!:		adc	#$e7				//2	A=#$31+#$e7+C=#$18/#$19 A&X=#$18 and C=1 after addition in first pass, C=0 in all other passes
+		sax	$dd00				//4	subsequent passes: A&X=#$00/#$08/#$10/#$18 and C=0
+		and	#$10				//2	Clear AO
+		eor	#$10				//2	A=#$18 in first pass (CO=1, AO=1) reads #$85 on $1800 - no change, first pass falls through
+		ror	Bits				//5	C=1 in first pass before ROR, C=0 in all other passes
+		bne	!-					//3
+								//18 cycles/bit - drive loop needs 17 cycles/bit (should work for both PAL and NTSC)
+
+		lda	#c64busy				//2	(A=#$f8) worst case, last bit is read by the drive on the first cycle of LDA
+		sta	$dd00				//4	Bus lock
+
+		rts						//6
 
 ByteConv:
 .byte $7f,$77,$7d,$75,$7b,$73,$79,$71,$7e,$76,$7c,$74,$7a,$72,$78,$70
