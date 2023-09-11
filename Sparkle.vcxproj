@@ -227,6 +227,7 @@
     <Image Include="sparkle.ico" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="makefile" />
     <None Include="Resources\Ascii2DirArt.bin" />
     <None Include="Resources\Petscii2DirArt.bin" />
     <None Include="Resources\SD.asm" />

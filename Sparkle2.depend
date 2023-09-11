@@ -1,8 +1,8 @@
 # depslib dependency file v1.0
-1694444417 source:c:\users\tamas\onedrive\c64\c++\sparkle\ascii2dirart.cpp
+1694446497 source:c:\users\tamas\onedrive\c64\c++\sparkle\ascii2dirart.cpp
 	"common.h"
 
-1694442090 source:c:\users\tamas\onedrive\c64\c++\sparkle\loader.cpp
+1694446498 source:c:\users\tamas\onedrive\c64\c++\sparkle\loader.cpp
 	"common.h"
 
 1694022342 c:\users\tamas\onedrive\c64\c++\sparkle\common.h
@@ -21,7 +21,7 @@
 	"resource.h"
 	"ThirdParty/tinyexpr.h"
 
-1694293327 source:c:\users\tamas\onedrive\c64\c++\sparkle\packer.cpp
+1694446461 source:c:\users\tamas\onedrive\c64\c++\sparkle\packer.cpp
 	"common.h"
 
 1693960884 source:c:\users\tamas\onedrive\c64\c++\sparkle\petscii2dirart.cpp

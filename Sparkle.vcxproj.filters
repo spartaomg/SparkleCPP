@@ -95,5 +95,6 @@
     <None Include="Resources\SS.asm">
       <Filter>Source Files</Filter>
     </None>
+    <None Include="makefile" />
   </ItemGroup>
 </Project>

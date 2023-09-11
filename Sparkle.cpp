@@ -330,14 +330,14 @@ string ReadFileToString(const string& FileName)
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
-
+/*
 void WriteTextToFile(const string& DiskName)
 {
     ofstream out(DiskName);
     out << Script;
     out.close();
 }
-
+*/
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
 bool WriteDiskImage(const string& DiskName)
@@ -463,33 +463,6 @@ void DeleteBit(unsigned char T, unsigned char S)
         if (T != 18)
             BlocksFree--;
     }
-
-/*    If(Disk(BitPtr) And BitToDelete) < > 0 Then
-        Disk(BitPtr) = Disk(BitPtr) And(255 - BitToDelete)
-
-        Dim NumUnusedSectors As Byte = 0
-        For I As Integer = NumSectorPtr + 1 To NumSectorPtr + 3
-        Dim B As Byte = Disk(I)
-        For J As Integer = 0 To 7
-        If B Mod 2 = 1 Then
-        NumUnusedSectors += 1
-        End If
-        B = Int(B / 2)
-        Next
-        Next
-        Disk(NumSectorPtr) = NumUnusedSectors
-        End If
-*/
-        //int BAMPos = Track[18] + (T * 4) + 1 + (S / 8) + ((T > 35) ? (7 * 4) : 0);
-        //int BAMBit = 255 - (1 << (S % 8));
-
-
-        //int BAMPos = Track[18] + (T * 4) + + ((T > 35) ? (7 * 4) : 0);
-
-        //Disk[BAMPos]--;
-
-        //if (UpdateFreeBlocks)
-        //BlocksFree--;
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
