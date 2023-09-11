@@ -406,9 +406,9 @@ SpSDelay:	lda	#<RcvLoop-<ChgJmp	//2	20	Restore Receive loop
 //------------------------------------------------------------
 //		BLOCK STRUCTURE FOR DEPACKER
 //------------------------------------------------------------
-//		$00	- First Bitstream byte -> will be changed to #$00 (end of block)
-//		$01	- last data byte vs #$00 (block count on drive side)
-//		$ff	- Dest Address Lo
+//		$00		- First Bitstream byte -> will be changed to #$00 (end of block)
+//		$01		- last data byte vs #$00 (block count on drive side)
+//		$ff		- Dest Address Lo
 //		($fe	- IO Flag)
 //		$fe/$fd	- Dest Address Hi
 //		$fd/$fc	- Bytestream backwards with Bitstream interleaved
@@ -417,35 +417,64 @@ SpSDelay:	lda	#<RcvLoop-<ChgJmp	//2	20	Restore Receive loop
 Sparkle_LoadNext:
 			ldx	#$ff
 			stx	MidLitSeq+1			//Entry point for next bundle in block
+/*
+//----------------------------------
+			inx						//1				NEW LoadNext and NextFile ENTRY POINTS
+			ldy Buffer				//3				- EACH BUNDLE STARTS WITH AN I/O BIT (1 = NO IO $01=#$35, 0 = IO $01=#$34)
+			bne	StoreBits			//2				- SAVES 1 BYTE PER IO BLOCK, ADDS 1 BIT TO NON-IO BLOCKS
+			ldx Buffer+$ff			//3				- FIRST SECTOR OF DISK MUST START WITH ($0300=#$00, $03FF = #$FE)
+			lda Buffer,x			//3 12			- NO NEED TO SKIP RANDOM FLAG FOR FIRST BUNDLE IN DRIVE CODE
+			lsr						//1				- NEEDS NEW IO HANDLING IN CPP CODE: SINGLE BIT PER EACH BUNDLE
+			tay						//1				- DstHi/DstLo MUST BE STORED IN REVERSE ORDER
+			lda #$1a				//2
+			ror						//1
+			sta Store01+1			//3 20
+StoreBits:	sty Bits				//2
 
-			inx
-GetBits:	lda	Buffer,x			//First bitstream value
-			bne	StoreBits
-			ldx	Buffer+$ff			//=LastX
-			bne	GetBits				//BRA
-StoreBits:	sta	Bits				//Store it on ZP for faster processing
+NextFile:	dex						//1
+			ldy #$02				//2
+DstLoop:	lda Buffer,x			//3
+			sta ZPDst-1,y			//3 31
+			dex						//1
+			dey						//1
+			bne DstLoop				//2
+			
+			sty Buffer				//3
+Store01:	lda #$35				//2
+			sta $01					//2
 
-NextFile:	dex						//Entry point for next file in block, C must be 0 here for subsequent files	
-			lda	Buffer,x			//Lo Byte of Dest Address
-			sta	ZPDst
+			jmp LitCheck			//3 45
+//----------------------------------
+*/
 
-			ldy	#$35				//Default value for $01, IO=on
-			dex
-			lda	Buffer,x			//Hi Byte vs IO Flag=#$00
-			bne	SkipIO
-			dey						//Y=#$34, turn IO off
-			dex
-			lda	Buffer,x			//This version can also load to zeropage!!!
+			inx						//1
+GetBits:	lda	Buffer,x			//3	First bitstream value
+			bne	StoreBits			//2
+			ldx	Buffer+$ff			//3	=LastX
+			bne	GetBits				//2	BRA
+StoreBits:	sta	Bits				//2	Store it on ZP for faster processing
 
-SkipIO:		sta	ZPDst+1				//Hi Byte of Dest Address
-			sty	$01					//Update $01
+NextFile:	dex						//1	Entry point for next file in block, C must be 0 here for subsequent files	
+			lda	Buffer,x			//3	Lo Byte of Dest Address
+			sta	ZPDst				//2
 
-			dex
+			ldy	#$35				//2	Default value for $01, IO=on
+			dex						//1
+			lda	Buffer,x			//3	Hi Byte vs IO Flag=#$00
+			bne	SkipIO				//2
+			dey						//1	Y=#$34, turn IO off
+			dex						//1
+			lda	Buffer,x			//3	This version can also load to zeropage!!!
 
-			ldy	#$00				//Needed for Literals
-			sty	Buffer
+SkipIO:		sta	ZPDst+1				//2	Hi Byte of Dest Address
+			sty	$01					//2	Update $01
 
-			jmp	LitCheck
+			dex						//1
+
+			ldy	#$00				//2	Needed for Literals
+			sty	Buffer				//3
+
+			jmp	LitCheck			//3	45 total
 
 //----------------------------
 //	DECODING MATCH BYTES
@@ -553,7 +582,7 @@ MatchCopy:	lda	$10ad,y				//Y=#$02-#$04 (short) vs #$02-#$1f (mid) vs #$20-#$ff 
 //		BITCHECK		//Y=#$00 here
 //----------------------------
 
-BitCheck:	asl	Bits				//C=0 here
+BitCheck:	asl	Bits
 			bcc	LitCheck			//C=0, literals
 			bne	Match				//C=1, Z=0, this is a match (Bits: 1)
 
@@ -567,7 +596,7 @@ BitCheck:	asl	Bits				//C=0 here
 
 //----------------------------
 
-LitCheck:	asl	Bits				//C=1, for first check in block, C=0 for any other cases
+LitCheck:	asl	Bits
 			bcc	ShortLit			//C=0, we have 1 literal (Bits: 00)
 			beq	NextBit				//C=1, Z=1, this is the token bit in C (Bits=#$00), get next bit stream byte
 

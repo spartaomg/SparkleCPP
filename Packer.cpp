@@ -29,6 +29,9 @@ unsigned char AdLoPos{}, AdHiPos{};
 
 const int MatchSelector = 1;
 const int LitSelector = 0;
+const int ShortLitSelector = 0;
+const int MidLitSelector = 1;
+
 
 //Match offsets - stored 0-based
 const int MaxFarOffset = 65536;                     //0-based (257-65536, stored as 256-65535)
@@ -227,16 +230,16 @@ void AddLitBits(int Lits)
 
     if (Lits == 0)
     {
-        AddBits(0, 1);              //Add Literal Length Selector 0 - read no more bits
+        AddBits(ShortLitSelector, 1);              //Add Literal Length Selector 0 - read no more bits
     }
     else if (Lits < MaxLitsPerNibble)
     {   //(Lits == 1 -> (MaxLitsPerNibble-1))
-        AddBits(1, 1);              //Add Literal Length Selector 1 - read 4 more bits
+        AddBits(MidLitSelector, 1);              //Add Literal Length Selector 1 - read 4 more bits
         AddNibble(Lits);                //Add Literal Length: 01-0f, 4 bits (0001-1111)
     }
     else
     {   //(Lits == MaxLitsPerNibble)
-        AddBits(1, 1);              //Add Literal Length Selector 1 - read 4 more bits
+        AddBits(MidLitSelector, 1);              //Add Literal Length Selector 1 - read 4 more bits
         AddNibble(0);                   //Add Literal Length: 0, 4 bits (0000) - we will have a longer literal sequence
     }
 
