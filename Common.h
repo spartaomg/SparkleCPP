@@ -13,11 +13,12 @@
 #include <stdlib.h>     /* srand, rand */
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <filesystem>
 #include "resource.h"
 
 #ifdef INCLTINYEXPR
-#include "ThirdParty/tinyexpr.h"
+#include "thirdparty/tinyexpr.h"
 #endif
 
 using namespace std;

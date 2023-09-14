@@ -40,9 +40,6 @@
 			<Add option="-std=c++17" />
 			<Add option="-fexceptions" />
 		</Compiler>
-		<Linker>
-			<Add library="stdc++fs" />
-		</Linker>
 		<Unit filename="Ascii2DirArt.cpp" />
 		<Unit filename="Common.h" />
 		<Unit filename="Loader.cpp" />

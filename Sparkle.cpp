@@ -5,7 +5,7 @@
 //#defnie NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR VERSION INFO 230911
+//  COMPILE TIME VARIABLES FOR VERSION INFO 230914
 //--------------------------------------------------------
 
 constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -205,6 +205,12 @@ string ParsedEntries = "";
 
 string ConvertIntToHextString(const int& i, const int& hexlen)
 {
+    std::stringstream hexstream;
+    hexstream << setfill('0') << setw(hexlen) << hex << i;
+    //cout << dec << i << "\t\t" << hex << hexstream.str() << "\n";
+    return hexstream.str();
+
+    /*
     char hexchar[8]{};
     sprintf_s(hexchar, "%X", i);
     string hexstring = "";
@@ -226,6 +232,7 @@ string ConvertIntToHextString(const int& i, const int& hexlen)
     }
 
     return hexstring;
+    */
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -303,7 +310,7 @@ int ReadBinaryFile(const string& FileName, vector<unsigned char>& prg)
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-string ReadFileToString(const string& FileName)
+string ReadFileToString(const string& FileName, bool CorrectFilePath)
 {
 
     if (!fs::exists(FileName))
@@ -326,6 +333,18 @@ string ReadFileToString(const string& FileName)
 
     str.assign((istreambuf_iterator<char>(t)), istreambuf_iterator<char>());
 
+    for (size_t i = 0; i < str.size(); i++)
+    {
+        if (str[i] == '\r')
+        {
+            str.replace(i, 1, "");      //Windows does this automatically, remove '\r' (0x0d) chars if string contains any
+        }
+        else if ((str[i] == '\\') && (CorrectFilePath))
+        {
+            str.replace(i, 1, "/");     //Replace '\' with '/' in file paths, Windows can also handle this
+        }
+    }
+
     return str;
 }
 
@@ -340,6 +359,24 @@ void WriteTextToFile(const string& DiskName)
 */
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
+bool CreateDirectory(const string& DiskDir)
+{
+    if (!fs::exists(DiskDir))
+    {
+        cout << "Creating folder: " << DiskDir << "\n";
+        fs::create_directories(DiskDir);
+    }
+
+    if (!fs::exists(DiskDir))
+    {
+        cerr << "***CRITICAL***\tUnable to create the following folder: " << DiskDir << "\n\n";
+        return false;
+    }
+    return true;
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
 bool WriteDiskImage(const string& DiskName)
 {
 
@@ -347,23 +384,28 @@ bool WriteDiskImage(const string& DiskName)
 
     for (size_t i = 0; i <= DiskName.length() - 1; i++)
     {
+#if _WIN32
         if ((DiskName[i] == '\\') || (DiskName[i] == '/'))
         {
-            if (DiskDir[DiskDir.length() - 1] != ':')   //Ignore files in root directory (e.g. c:\disk.d64)
+            if (DiskDir[DiskDir.length() - 1] != ':')   //Don't try to create root directory
             {
-                if (!fs::exists(DiskDir))
-                {
-                    cout << "Creating folder: " << DiskDir << "\n";
-                    fs::create_directories(DiskDir);
-                }
-
-                if (!fs::exists(DiskDir))
-                {
-                    cerr << "***CRITICAL***\tUnable to create the following folder: " << DiskDir << "\n\n";
+                if (!CreateDirectory(DiskDir))
                     return false;
-                }
             }
         }
+#elif __linux__
+        if ((DiskName[i] == '/') && (DiskDir.size() > 0))   //Don't try to create root directory
+        {
+            if (!CreateDirectory(DiskDir))
+                return false;
+        }
+#elif __APPLE__
+        if ((DiskName[i] == '/') && (DiskDir.size() > 0))   //Don't try to create root directory
+        {
+            if (!CreateDirectory(DiskDir))
+                return false;
+        }
+#endif
         DiskDir += DiskName[i];
     }
 
@@ -708,27 +750,13 @@ string CreateExpressionString(int p)
                 }
             }
         }
-        else if ((NextChar == 'a') ||
-            (NextChar == 'b') ||
-            (NextChar == 'c') ||
-            (NextChar == 'd') ||
-            (NextChar == 'e') ||
-            (NextChar == 'f'))
+        else if ((NextChar >= 'a') && (NextChar <= 'f'))
         {
             IsDecimal = false;
             HexString += NextChar;
         }
-        else if ((NextChar == '0') ||
-            (NextChar == '1') ||
-            (NextChar == '2') ||
-            (NextChar == '3') ||
-            (NextChar == '4') ||
-            (NextChar == '5') ||
-            (NextChar == '6') ||
-            (NextChar == '7') ||
-            (NextChar == '8') ||
-            (NextChar == '0'))
-        {   
+        else if ((NextChar >= '0') && (NextChar <= '9'))
+        {
             if (IsDecimal)
             {
                 Expr += NextChar;
@@ -918,12 +946,27 @@ bool AddHSFile()
     size_t FLN = 0;
     bool FUIO = false;
 
-    //vector<unsigned char> P;
-
-    if (FN.find(":") == string::npos)
+#if _WIN32
+    if ((FN.size() < 3) || ((FN.substr(1, 2) != ":\\") && (FN.substr(1, 2) != ":/")))
     {
-        FN = ScriptPath + FN;
+        FN = ScriptPath + FN;                          //FN is relative - make it a full path
     }
+#elif __linux__
+    if (FN[0] != '/')
+    {
+        FN = ScriptPath + FN;                           //FN is relative - make it a full path
+    }
+#elif __APPLE__
+    if (FN[0] != '/')
+    {
+        FN = ScriptPath + FN;                           //FN is relative - make it a full path
+    }
+#endif
+
+    //if (FN.find(":") == string::npos)
+    //{
+    //    FN = ScriptPath + FN;
+    //}
 
     int NumParams = 1;
 
@@ -1409,15 +1452,15 @@ bool SplitScriptEntry() {
         if (NumScriptEntries == -1)
             NumScriptEntries++;
 
-        if (ScriptEntryType == EntryTypePath)
-        {
+        //if (ScriptEntryType == EntryTypePath)
+        //{
 
             ThisChar = ScriptEntry[Pos++];                  //Keep original D64 path
-        }
-        else
-        {
-            ThisChar = tolower(ScriptEntry[Pos++]);     //Lower case everything else
-        }
+        //}
+        //else
+        //{
+            //ThisChar = tolower(ScriptEntry[Pos++]);     //Lower case everything else
+        //}
 
         if (ThisChar != '\t') {
             ScriptEntryArray[NumScriptEntries] += ThisChar;
@@ -1443,6 +1486,29 @@ bool SplitScriptEntry() {
 
 bool FindNextScriptEntry() {
 
+    LineEnd = Script.find("\n",LineStart);
+
+    while (LineEnd == LineStart)
+    {
+        NewBundle = true;
+        //LineStart++;
+        LineEnd = Script.find("\n", ++LineStart);
+    }
+    
+    if (LineEnd != string::npos)
+    {
+        ScriptEntry = Script.substr(LineStart, LineEnd - LineStart);
+    }
+    else
+    {
+        ScriptEntry = Script.substr(LineStart);
+        LineEnd = Script.length() - 1;
+    }
+    LineStart = LineEnd + 1;
+
+    return SplitScriptEntry();
+    
+    /*
     LineStart = LineEnd;
 
     if (LineStart > 0)
@@ -1467,7 +1533,7 @@ bool FindNextScriptEntry() {
     while ((S != 13) && (S != 10) && (LineEnd <= Script.length() - 1)) {
         //OrigScriptEntry += S;
         ScriptEntry += S;// tolower(S);
-            S = Script[LineEnd++];
+        S = Script[LineEnd++];
     }
 
     if (LineEnd == Script.length())
@@ -1484,7 +1550,7 @@ bool FindNextScriptEntry() {
     }
 
     return SplitScriptEntry();
-
+    */
 }
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -1494,10 +1560,27 @@ bool InsertScript(string& SubScriptPath)
 
     //Calculate full path
 
-    if (SubScriptPath.find(":") == string::npos)
+#if _WIN32
+    if ((SubScriptPath.size() < 3) || ((SubScriptPath.substr(1, 2) != ":\\") && (SubScriptPath.substr(1, 2) != ":/")))
     {
-        SubScriptPath = ScriptPath + SubScriptPath;
+        SubScriptPath = ScriptPath + SubScriptPath;                          //Subscript path is relative
     }
+#elif __linux__
+    if (SubScriptPath[0] != '/')
+    {
+        SubScriptPath = ScriptPath + SubScriptPath;                         //SubScript Path is relative
+    }
+#elif __APPLE__
+    if (SubScriptPath[0] != '/')
+    {
+        SubScriptPath = ScriptPath + SubScriptPath;                         //SubScript Path is relative
+    }
+#endif
+
+    //if (SubScriptPath.find(":") == string::npos)
+    //{
+    //    SubScriptPath = ScriptPath + SubScriptPath;
+    //}
 
     string sPath = SubScriptPath;
 
@@ -1510,7 +1593,17 @@ bool InsertScript(string& SubScriptPath)
     //Find relative path of subscript
     for (int i = sPath.length() - 1; i > 0; i--)
     {
+#if _WIN32
         if ((sPath[i] != '\\') && (sPath[i] != '/'))
+        {
+            sPath.replace(i, 1, "");
+    }
+        else
+        {
+            break;
+        }
+#elif __linux__
+        if (sPath[i] != '/')
         {
             sPath.replace(i, 1, "");
         }
@@ -1518,10 +1611,20 @@ bool InsertScript(string& SubScriptPath)
         {
             break;
         }
+#elif __APPLE__
+        if (sPath[i] != '/')
+        {
+            sPath.replace(i, 1, "");
+        }
+        else
+        {
+            break;
+        }
+#endif
     }
 
     //Read subscript file
-    string SubScript = ReadFileToString(SubScriptPath);
+    string SubScript = ReadFileToString(SubScriptPath, true);
 
     //Count line breakes
     //int NumLines = std::count(SubScript.begin(), SubScript.end(), '\n') + 1;
@@ -1575,21 +1678,12 @@ bool InsertScript(string& SubScriptPath)
     }
 
     string SS1 = Script.substr(0, LineStart);
-    string SS2 = (LineEnd < Script.length())? Script.substr(LineEnd, Script.length() - (LineEnd)) : "";
-    Script = SS1 + S + SS2;
-
-
-    //ofstream out1("C:\\Tmp\\SS1.sls");
-    //out1 << SS1;
-    //out1.close();
-    //ofstream out2("C:\\Tmp\\SS2.sls");
-    //out2 << SS2;
-    //out2.close();
-    //WriteTextToFile("C:\\Tmp\\TestScript.sls");
-
+    string SS2 = (LineEnd < Script.length()) ? Script.substr(LineEnd, Script.length() - (LineEnd)) : "";
+    Script = SS1 + "\n" + S + SS2;          //Add an extre line break after the Script entry type before the subscript is inserted
+                                            //In case the script entry type was the last entry and was not followed by a line break
     Lines.clear();
 
-    LineEnd = (LineStart > 0) ? LineStart - 1 : LineStart;
+    LineEnd = LineStart++;
 
     return true;
 
@@ -1976,7 +2070,7 @@ bool SortBundle() {
            tmpPrgs.push_back(FileStruct(IOOn, "IOOn", "02fe", "00", "01", false));
        }
 #endif
-       
+
        //Once Bundle is sorted, calculate the I/O status of the last byte of the first file and the number of bits that will be needed
         //to finish the last block of the previous bundle (when the I/O status of the just sorted bundle needs to be known)
         //This is used in CloseBuffer
@@ -2055,10 +2149,27 @@ bool AddVirtualFile()
 
     vector<unsigned char> P;
 
-    if (FN.find(":") == string::npos)
+#if _WIN32
+    if ((FN.size() < 3) || ((FN.substr(1, 2) != ":\\") && (FN.substr(1, 2) != ":/")))
     {
-        FN = ScriptPath + FN;
+        FN = ScriptPath + FN;                           //FN is relative - make it a full path
     }
+#elif __linux__
+    if (FN[0] != '/')
+    {
+        FN = ScriptPath + FN;                           //FN is relative - make it a full path
+    }
+#elif __APPLE__
+    if (FN[0] != '/')
+    {
+        FN = ScriptPath + FN;                           //FN is relative - make it a full path
+    }
+#endif
+
+    //if (FN.find(":") == string::npos)
+    //{
+    //    FN = ScriptPath + FN;
+    //}
 
     int NumParams = 1;
 
@@ -2083,8 +2194,8 @@ bool AddVirtualFile()
     }
 
     //Convert string to lowercase
-    for (size_t i = 0; i < FN.length(); i++)
-        FN[i] = tolower(FN[i]);
+    //for (size_t i = 0; i < FN.length(); i++)
+        //FN[i] = tolower(FN[i]);
 
     //Get file variables from script, or get default values if there were none in the script entry
     if (fs::exists(FN))
@@ -2104,7 +2215,7 @@ bool AddVirtualFile()
         {
         case 1:  //No parameters in script
 
-            if ((FN[FN.length() - 4] == '.') && (FN[FN.length() - 3] == 's') && (FN[FN.length() - 2] == 'i') && (FN[FN.length() - 1] == 'd'))
+            if ((FN[FN.length() - 4] == '.') && (tolower(FN[FN.length() - 3]) == 's') && (tolower(FN[FN.length() - 2]) == 'i') && (tolower(FN[FN.length() - 1]) == 'd'))
             {   //SID file
                 size_t P7 = P[7];
                 FA = ConvertIntToHextString(P[P7] + (P[P7 + 1] * 256), 4);
@@ -2222,10 +2333,27 @@ bool AddFileToBundle() {
 
     vector<unsigned char> P;
 
-    if (FN.find(":") == string::npos)
+#if _WIN32
+    if ((FN.size() < 3) || ((FN.substr(1, 2) != ":\\") && (FN.substr(1, 2) != ":/")))
     {
-        FN = ScriptPath + FN;
+        FN = ScriptPath + FN;                       //FN is relative - make it a full path
     }
+#elif __linux__
+    if (FN[0] != '/')
+    {
+        FN = ScriptPath + FN;                       //FN is relative - make it a full path
+    }
+#elif __APPLE__
+    if (FN[0] != '/')
+    {
+        FN = ScriptPath + FN;                       //FN is relative - make it a full path
+    }
+#endif
+
+    //if ((FN.find(":\\") == string::npos) && (FN.find(":/") == string::npos))
+    //{
+    //    FN = ScriptPath + FN;
+    //}
 
     int NumParams = 1;
 
@@ -2294,7 +2422,7 @@ bool AddFileToBundle() {
         {
         case 1:  //No parameters in script
 
-            if ((FN[FN.length() - 4] == '.') && (FN[FN.length() - 3] == 's')&& (FN[FN.length() - 2] == 'i')&& (FN[FN.length() - 1] == 'd'))
+            if ((FN[FN.length() - 4] == '.') && (tolower(FN[FN.length() - 3]) == 's')&& (tolower(FN[FN.length() - 2]) == 'i')&& (tolower(FN[FN.length() - 1]) == 'd'))
             {   //SID file
                 size_t P7 = P[7];
                 FA = ConvertIntToHextString(P[P7] + (P[P7 + 1] * 256), 4);
@@ -2490,7 +2618,7 @@ void FindNextDirPos() {
 void AddAsmDirEntry(string DirEntry) {
 
     string EntrySegments[5];
-    string delimiter = "\"";        // = "
+    string delimiter = "\"";        // = " (entry gets split at quotation mark) NOT A BUG, DO NOT CHANGE THIS
     int NumSegments = 0;
 
     for (int i = 0; i < 5; i++)
@@ -2685,7 +2813,7 @@ void AddAsmDirEntry(string DirEntry) {
 
 void ConvertKickassAsmToDirArt() {
 
-    DirArt = ReadFileToString(DirArtName);
+    DirArt = ReadFileToString(DirArtName, false);
 
     if (DirArt == "")
     {
@@ -2866,7 +2994,7 @@ bool AddCArrayDirEntry(int RowLen)
 
 void ConvertCArrayToDirArt() {
 
-    string DA = ReadFileToString(DirArtName);
+    string DA = ReadFileToString(DirArtName, false);
 
     if (DA == "")
     {
@@ -2928,13 +3056,13 @@ void ConvertCArrayToDirArt() {
     DA.erase(0, First + 1);
 
     string LineBreak = "\n";
-    size_t LineStart = 0;
+    size_t CALineStart = 0;
     int NumRows = 0;
     bool DirFull = false;
 
-    while (((LineStart = DA.find(LineBreak)) != string::npos) && (NumRows < RowCnt))
+    while (((CALineStart = DA.find(LineBreak)) != string::npos) && (NumRows < RowCnt))
     {
-        DirEntry = DA.substr(0, LineStart);     //Extract one dir entry
+        DirEntry = DA.substr(0, CALineStart);     //Extract one dir entry
 
         if (!AddCArrayDirEntry(RowLen))
         {
@@ -2942,7 +3070,7 @@ void ConvertCArrayToDirArt() {
             break;
         }
 
-        DA.erase(0, LineStart + LineBreak.length());
+        DA.erase(0, CALineStart + LineBreak.length());
 
         if (DirEntryAdded)
         {
@@ -3044,7 +3172,7 @@ void AddDirEntry(string DirEntry){
 
 void ConvertTxtToDirArt() {
 
-    DirArt = ReadFileToString(DirArtName);
+    DirArt = ReadFileToString(DirArtName, false);
 
     if (DirArt == "")
     {
@@ -3253,7 +3381,18 @@ void AddDirArt() {
 
     for (int i = DirArtName.length() - 1; i >= 0; i--)
     {
+#if _WIN32
         if ((DirArtName[i] == '\\') || (DirArtName[i] == '/'))
+        {
+            break;
+    }
+        else if (DirArtName[i] == '.')
+        {
+            ExtStart = i + 1;
+            break;
+        }
+#elif __linux__
+        if (DirArtName[i] == '/')
         {
             break;
         }
@@ -3262,6 +3401,17 @@ void AddDirArt() {
             ExtStart = i + 1;
             break;
         }
+#elif __APPLE__
+        if (DirArtName[i] == '/')
+        {
+            break;
+        }
+        else if (DirArtName[i] == '.')
+        {
+            ExtStart = i + 1;
+            break;
+        }
+#endif
     }
 
     for (size_t i = ExtStart; i < DirArtName.length(); i++)
@@ -3412,7 +3562,7 @@ bool InjectTestPlugin() {
     //Calculate sector pointer on disk (FT.cpp takes one block)
 
     //cout << BufferCnt << "\n";      //3
-    
+
     //cout << BundleCnt << "\n";      //1
 
     //cout << BlocksFree-1 << "\n";   //660
@@ -3965,7 +4115,7 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
     if (bTestDisk)
     {
         bSaverPlugin = false;   //Can't have Saver and FetchTest at the same time
-        
+
         //Add "IncludeFetchTest" flag and FetchTest plugin
         Disk[BAM + 249] = EORtransform(1);
         if (!InjectTestPlugin())
@@ -4495,10 +4645,26 @@ bool Build() {
                 if (NumScriptEntries > -1)
                 {
                     D64Name = ScriptEntryArray[0];
-                    if (D64Name.find(":") == string::npos)
+#if _WIN32
+                    if ((D64Name.size() < 3) || ((D64Name.substr(1, 2) != ":\\") && (D64Name.substr(1, 2) != ":/")))
                     {
-                        D64Name = ScriptPath + D64Name;                      //sPath is relative - use Sparkle's base folder to make it a full path
+                        D64Name = ScriptPath + D64Name;                          //D64 path is relative - make it a full path
                     }
+#elif __linux__
+                    if (D64Name[0] != '/')
+                    {
+                        D64Name = ScriptPath + D64Name;                      //D64 path is relative - make it a full path
+                    }
+#elif __APPLE__
+                    if (D64Name[0] != '/')
+                    {
+                        D64Name = ScriptPath + D64Name;                      //D64 path is relative - make it a full path
+                    }
+#endif
+                    //if (D64Name.find(":") == string::npos)
+                    //{
+                    //    D64Name = ScriptPath + D64Name;                      //D64 path is relative - use Sparkle's base folder to make it a full path
+                    //}
 
                 }
 
@@ -4619,10 +4785,26 @@ bool Build() {
                     if ((!FinishDisk(false)) || (!ResetDiskVariables()))
                         return false;
                 }
-                if (ScriptEntryArray[0].find(":") == string::npos)
+#if _WIN32
+                if ((ScriptEntryArray[0].size() < 3) || ((ScriptEntryArray[0].substr(1, 2) != ":\\") && (ScriptEntryArray[0].substr(1, 2) != ":/")))
                 {
-                    ScriptEntryArray[0] = ScriptPath + ScriptEntryArray[0];
+                    ScriptEntryArray[0] = ScriptPath + ScriptEntryArray[0];                          //DirArt path is relative - make it a full path
                 }
+#elif __linux__
+                if (ScriptEntryArray[0][0] != '/')
+                {
+                    ScriptEntryArray[0] = ScriptPath + ScriptEntryArray[0];                         //DirArt path is relative - make it a full path
+                }
+#elif __APPLE__
+                if (ScriptEntryArray[0][0] != '/')
+                {
+                    ScriptEntryArray[0] = ScriptPath + ScriptEntryArray[0];                         //DirArt path is relative - make it a full path
+                }
+#endif
+                //if (ScriptEntryArray[0].find(":") == string::npos)
+                //{
+                //    ScriptEntryArray[0] = ScriptPath + ScriptEntryArray[0];
+                //}
 
                 if (fs::exists(ScriptEntryArray[0]))
                 {
@@ -4919,16 +5101,30 @@ bool Build() {
 
 void SetScriptPath(string sPath, string aPath)
 {
-    if (sPath.find(":") == string::npos)
+#if _WIN32
+    if ((sPath.size() < 3) || ((sPath.substr(1, 2) != ":\\") && (sPath.substr(1, 2) != ":/")))
     {
         sPath = aPath + sPath;                      //sPath is relative - use Sparkle's base folder to make it a full path
     }
+#elif __linux__
+    if (sPath[0] != '/')
+    {
+        sPath = aPath + sPath;                      //sPath is relative - use Sparkle's base folder to make it a full path
+    }
+#elif __APPLE__
+    if (sPath[0] != '/')
+    {
+        sPath = aPath + sPath;                      //sPath is relative - use Sparkle's base folder to make it a full path
+    }
+#endif
 
-    ScriptName = sPath;
+    ScriptName = sPath;                             //Absolute script path + file name
 
-    ScriptPath = sPath;
+    ScriptPath = sPath;                             //Absolute script path
+
     for (int i = sPath.length() - 1; i >= 0; i--)
     {
+#if _WIN32
         if ((sPath[i] != '\\') && (sPath[i] != '/'))
         {
             ScriptPath.replace(i, 1, "");
@@ -4937,6 +5133,25 @@ void SetScriptPath(string sPath, string aPath)
         {
             break;
         }
+#elif __linux__
+        if (sPath[i] != '/')
+        {
+            ScriptPath.replace(i, 1, "");
+        }
+        else
+        {
+            break;
+        }
+#elif __APPLE__
+        if (sPath[i] != '/')
+        {
+            ScriptPath.replace(i, 1, "");
+        }
+        else
+        {
+            break;
+        }
+#endif
     }
 }
 
@@ -5014,7 +5229,19 @@ int main(int argc, char* argv[])
     cout << "Sparkle " << VersionMajor <<"." << VersionMinor << "." << hex << VersionBuild << dec << " by Sparta 2019-" << FullYear << "\n";
     cout << "**************************************\n\n";
 
-    string AppPath{filesystem::current_path().string() + "\\"};
+#if _WIN32
+    string AppPath{ filesystem::current_path().string() };
+    if (AppPath[AppPath.size() - 1] != '\\')
+        AppPath += "\\";
+#elif __linux__
+    string AppPath{ filesystem::current_path().string() };
+    if (AppPath[AppPath.size() - 1] != '/')
+        AppPath += "/";
+#elif __APPLE__
+    string AppPath{ filesystem::current_path().string() };
+    if (AppPath[AppPath.size() - 1] != '/')
+        AppPath += "/";
+#endif
 
     if (argc < 2)
     {
@@ -5023,10 +5250,13 @@ int main(int argc, char* argv[])
         //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\ThePumpkins\\Backup\\221028\\Scripts\\ThePumpkins.sls";
         //string ScriptFileName = "c:\\Users\\Tamas\\source\\repos\\GPMagazine\\Magazine\\Issue33\\Sparkle\\Magazine.sls";
         //string ScriptFileName = "c:\\Users\\Tamas\\source\\repos\\DeliriousTwelve\\Parts\\CheckerZoomer\\CheckerZoomer.sls";
-        //string ScriptFileName = "c:\\Users\\Tamas\\source\\repos\\NoBounds\\Main\\Sparkle\\NoBounds.sls";
-        string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\SparkleFetchTest\\ExprTest.sls";
-        Script = ReadFileToString(ScriptFileName);
+        //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\SparkleFetchTest\\ExprTest.sls";
+        string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\GP\\NoBounds\\Main\\Sparkle\\NoBounds.sls"; //WIN32
+        string ScriptFileName = "../../C64/NoBounds/Main/Sparkle/NoBounds.sls";   //UBUNTU
+        Script = ReadFileToString(ScriptFileName, true);
         SetScriptPath(ScriptFileName, AppPath);
+
+        cout << ScriptName << "\n" << ScriptPath << "\n";
 
 #else
 
@@ -5039,7 +5269,7 @@ int main(int argc, char* argv[])
     else
     {
         string ScriptFileName(argv[1]);
-        Script = ReadFileToString(ScriptFileName);
+        Script = ReadFileToString(ScriptFileName, true);
 
         SetScriptPath(ScriptFileName, AppPath);
     }
