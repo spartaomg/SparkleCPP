@@ -201,11 +201,7 @@ bool bEntryHasExpression = false;
 string ParsedEntries = "";
 #endif
 
-#if __linux__
-string HomeDir = getenv("HOME");
-#elif __APPLE__
-string HomeDir = getenv("HOME");
-#endif
+string HomeDir = "";
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------
 
