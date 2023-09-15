@@ -225,7 +225,7 @@ string FindAbsolutePath(string FilePath, string ScriptFilePath)
             }
             else
             {
-                cerr << "***INFO***\tUnable to identify the user's Home directory...\n"
+                cerr << "***INFO***\tUnable to identify the user's Home directory...\n";
             }
         }
         else
@@ -246,7 +246,7 @@ string FindAbsolutePath(string FilePath, string ScriptFilePath)
             }
             else
             {
-                cerr << "***INFO***\tUnable to identify the user's Home directory...\n"
+                cerr << "***INFO***\tUnable to identify the user's Home directory...\n";
             }
 }
         else
@@ -5071,7 +5071,7 @@ void SetScriptPath(string sPath, string aPath)
             }
             else
             {
-                cerr << "***INFO***\tUnable to identify the user's Home directory...\n"
+                cerr << "***INFO***\tUnable to identify the user's Home directory...\n";
             }
         }
         else
@@ -5092,7 +5092,7 @@ void SetScriptPath(string sPath, string aPath)
             }
             else
             {
-                cerr << "***INFO***\tUnable to identify the user's Home directory...\n"
+                cerr << "***INFO***\tUnable to identify the user's Home directory...\n";
             }
         }
         else
