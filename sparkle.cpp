@@ -5,7 +5,7 @@
 //#defnie NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR VERSION INFO 230914
+//  COMPILE TIME VARIABLES FOR VERSION INFO 230915
 //--------------------------------------------------------
 
 constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -781,7 +781,7 @@ string CreateExpressionString(int p)
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool EvaluateParameterExpressions()
+bool EvaluateParameterExpression()
 {
     for (int i = 1; i <= NumScriptEntries; i++)
     {
@@ -793,11 +793,36 @@ bool EvaluateParameterExpressions()
 
                 //cout << "Expression: " << Expr << "\n";
 
+                if (!tep.compile(Expr))
+                {
+                    cerr << "***CRITICAL***\tBundle #" << BundleCnt << " File #" << (FileCnt + 1) << "\tError the following file parameter expression:\t'" << ScriptEntryArray[i] << "'\n";
+                    //cout << "\t\t\t\t\t\t\t\t      Error near here:\t  " << setfill(' ') << setw(tep.get_last_error_position()) << "^\n";
+                    string EM = tep.get_last_error_message();
+                    if (EM != "")
+                    {
+                        cerr << "Error message:\t" << EM << "\n";
+                    }
+                    return false;
+                }
+
                 double r = tep.evaluate(Expr);
 
-                if ((isnan(r)) ||(r < 0))
+                if (isnan(r))
                 {
-                    cerr << "***CRITICAL***\t Bundle #" << BundleCnt << " File #" << (FileCnt + 1) << "\tError the following file parameter expression: '" << ScriptEntryArray[i] << "'\n";
+                    cerr << "***CRITICAL***\tBundle #" << BundleCnt << " File #" << (FileCnt + 1) << "\tError the following file parameter expression:\t'" << ScriptEntryArray[i] << "'\n";
+                    //cout << "\t\t\t\t\t\t\t\t      Error near here:\t  " << setfill(' ') << setw(tep.get_last_error_position()) << "^\n";
+                    string EM = tep.get_last_error_message();
+                    if (EM != "")
+                    {
+                        cerr << "Error message:\t" << EM << "\n";
+                    }
+                    return false;
+                }
+                else if (r < 0)
+                {
+                    cerr << "***CRITICAL***\tBundle #" << BundleCnt << " File #" << (FileCnt + 1) << "\tError the following file parameter expression:\t'" << ScriptEntryArray[i] << "'\n";
+                    //cout << "\t\t\t\t\t\t\t\t      Error near here:\t  " << setfill(' ') << setw(tep.get_last_error_position()) << "^\n";
+                    cerr << "Error message:\tResult cannot be a negative number.\n";
                     return false;
                 }
 
@@ -974,7 +999,7 @@ bool AddHSFile()
 
     bEntryHasExpression = false;
 
-    if (!EvaluateParameterExpressions())
+    if (!EvaluateParameterExpression())
     {
         return false;
     }
@@ -2361,7 +2386,7 @@ bool AddFileToBundle() {
 
     bEntryHasExpression = false;
 
-    if (!EvaluateParameterExpressions())
+    if (!EvaluateParameterExpression())
     {
         return false;
     }
@@ -4205,23 +4230,28 @@ bool UpdateZP() {
         return false;
     }
 
-    unsigned char OPC_STAZP = 0x85;
-    unsigned char OPC_ADCZP = 0x65;
-    unsigned char OPC_STAZPY = 0x91;
-    unsigned char OPC_DECZP = 0xC6;
-    unsigned char OPC_LDAZP = 0xA5;
-    unsigned char OPC_RORZP = 0x66;
-    unsigned char OPC_ASLZP = 0x06;
-    unsigned char OPC_EORIMM = 0x49;
+    const unsigned char OPC_STAZP = 0x85;
+    const unsigned char OPC_RORZP = 0x66;
+    const unsigned char OPC_ASLZP = 0x06;
+
+    const unsigned char OPC_ADCZP = 0x65;
+    const unsigned char OPC_STAZPY = 0x91;
+
+    const unsigned char OPC_DECZP = 0xC6;
+    //const unsigned char OPC_LDAZP = 0xA5;
+    //const unsigned char OPC_EORIMM = 0x49;
     //unsigned char OPC_LDAZPY = 0xB1;
 
-    unsigned char ZPBase = 0x02;
+    const unsigned char ZPDstLo = 0x02;
+    const unsigned char ZPDstHi = 0x03;
+    const unsigned char ZPBits = 0x04;
 
-    for (int i = LoaderBase; i < Loader_size - 2; i++)
+    //Update STA ZPDst, ADC ZPDst, STA (ZPDst),Y
+    for (int i = LoaderBase; i < Loader_size - 1; i++)
     {
         if ((Loader[i] == OPC_STAZP) || (Loader[i] == OPC_ADCZP) || (Loader[i] == OPC_STAZPY))
         {
-            if ((Loader[i + 1] == ZPBase) && (Loader[i + 2] != OPC_EORIMM))   //Skip STA $0265 EOR #$FF
+            if (Loader[i + 1] == ZPDstLo)
             {
                 Loader[i + 1] = ZP;
                 i++;
@@ -4229,11 +4259,12 @@ bool UpdateZP() {
         }
     }
 
+    //Update STA ZPDst+1, DEC ZPDst+1, ADC ZPDst+1
     for (int i = LoaderBase; i < Loader_size - 1; i++)
     {
-        if ((Loader[i] == OPC_STAZP) || (Loader[i] == OPC_DECZP) || (Loader[i] == OPC_LDAZP))
+        if ((Loader[i] == OPC_STAZP) || (Loader[i] == OPC_DECZP) || (Loader[i] == OPC_ADCZP))
         {
-            if (Loader[i + 1] == (ZPBase + 1))
+            if (Loader[i + 1] == ZPDstHi)
             {
                 Loader[i + 1] = ZP + 1;
                 i++;
@@ -4241,11 +4272,12 @@ bool UpdateZP() {
         }
     }
 
+    //Update STA Bits, ROR Bits, ASL Bits,
     for (int i = LoaderBase; i < Loader_size - 1; i++)
     {
         if ((Loader[i] == OPC_STAZP) || (Loader[i] == OPC_RORZP) || (Loader[i] == OPC_ASLZP))
         {
-            if (Loader[i + 1] == (ZPBase + 2))
+            if (Loader[i + 1] == (ZPBits))
             {
                 Loader[i + 1] = ZP + 2;
                 i++;
