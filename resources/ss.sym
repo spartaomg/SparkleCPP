@@ -1,5 +1,4 @@
 .label LastS=$21
-.label DstLoop=$23b
 .label LastT=$20
 .label ReFetch=$40e
 .label LastBits=$1e3
@@ -55,7 +54,6 @@
 .label CD=$74f
 .label ZP3e=$32
 .label ChkScnd=$4df
-.label Store01=$248
 .label ToggleLED=$34b
 .label CO=$8
 .label GCRLoop=$277c
@@ -94,6 +92,7 @@
 .label ZP01ff=$58
 .label NewDiskID=$649
 .label ClrWList=$303
+.label SkipIO=$242
 .label CopyDir=$30e
 .label MatchCopy=$2be
 .label NDWEnd=$983
@@ -155,7 +154,7 @@
 .label MidLitSeq=$2db
 .label Frames=$5bb
 .label IL=$506
-.label StoreBits=$236
+.label StoreBits=$22d
 .label BitRateRet=$6c
 .label WEnd=$95b
 .label Sparkle_IRQ_JSR=$16e
@@ -217,7 +216,7 @@
 .label ZPProdID=$78
 .label Random=$18
 .label ChgJmp=$1ea
-.label NextFile=$238
+.label NextFile=$22f
 .label Build=$4f7
 .label ZP07=$57
 .label ZP00=$6b
@@ -265,6 +264,7 @@
 .label CSV=$7
 .label GetByte=$5e5
 .label BitSLoop=$18a
+.label GetBits=$223
 .label ZPIncSav=$10
 .label ZP0101=$59
 .label Data=$482
