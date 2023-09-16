@@ -91,8 +91,8 @@ const string EntryTypeTestDisk = "testdisk";
 const string EntryTypeDirIndex = "dirindex:";
 
 unsigned long int ProductID = 0;
-unsigned int LineStart, LineEnd;    //LastSS, LastSE;
-//size_t LineStart, LineEnd;    //LastSS, LastSE;
+unsigned int LineStart, LineEnd;
+
 bool NewBundle;
 
 const int MaxNumDisks = 127;
@@ -1592,8 +1592,27 @@ bool SplitScriptEntry() {
 
 bool FindNextScriptEntry() {
 
-    LineEnd = Script.find("\n",LineStart);
+    size_t LE = Script.find("\n", LineStart);
+    
+    while (LE == LineStart)
+    {
+        NewBundle = true;
+        LE = Script.find("\n", LineStart);
+    }
 
+    if (LE != string::npos)
+    {
+        LineEnd = static_cast <unsigned int>(LE);
+        ScriptEntry = Script.substr(LineStart, LineEnd - LineStart);
+    }
+    else
+    {
+        ScriptEntry = Script.substr(LineStart);
+        LineEnd = Script.length() - 1;
+    }
+    /*
+    LineEnd = Script.find("\n", LineStart);
+    
     while (LineEnd == LineStart)
     {
         NewBundle = true;
@@ -1610,6 +1629,8 @@ bool FindNextScriptEntry() {
         ScriptEntry = Script.substr(LineStart);
         LineEnd = Script.length() - 1;
     }
+    */
+    
     LineStart = LineEnd + 1;
 
     return SplitScriptEntry();

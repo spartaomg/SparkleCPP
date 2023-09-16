@@ -34,22 +34,22 @@ const int MidLitSelector = 1;
 
 
 //Match offsets - stored 0-based
-const int MaxFarOffset = 65536;                     //0-based (257-65536, stored as 256-65535)
+//const int MaxFarOffset = 65536;                   //0-based (257-65536, stored as 256-65535) UNUSED
 const int MaxNearOffset = 256;                      //0-based (1-256, stored as 0-255)
 const int MaxShortOffset = 64;                      //0-based (1-64, stored as 0-63)
 
 int MaxOffset = MaxNearOffset * 8;                  //3 is most optimal for size, loading and disk creating speed, 8 is the new standard!!!
 
 //Match lengths
-const int MaxLongLen = 255;               //1-based (32-255, stored the same)
-const int MaxMidLen = 31;                 //1-based (2-31, stored the same)
-const int MaxFarMidLen = 31;              //(MaxMidLen * 2) + 1; minimal difference in efficacy, big difference in speed...
-const int MaxShortLen = 3 + 1;            //0-based (2-4, stored 1-3), cannot be 0 because it is preserved for EndTag
+const int MaxLongLen = 255;                         //1-based (32-255, stored the same)
+const int MaxMidLen = 31;                           //1-based (2-31, stored the same)
+const int MaxFarMidLen = 31;                        //(MaxMidLen * 2) + 1; minimal difference in efficacy, big difference in speed...
+const int MaxShortLen = 3 + 1;                      //0-based (2-4, stored 1-3), cannot be 0 because it is preserved for EndTag
 
 const unsigned char NearLongMatchTag = 0x84;
 const unsigned char FarLongMatchTag = 0x04;
 const unsigned char EndOfBundleTag = 0x00;
-const unsigned char EndOfBlockTag = 0x00;
+//const unsigned char EndOfBlockTag = 0x00;         //UNUSED
 const unsigned char NextFileTag = 0x80;
 
 const int MaxLitsPerNibble = 16;
@@ -61,7 +61,7 @@ int MLen = 0;
 int MOff = 0;
 int LitCnt = -1;
 
-const int MaxBits = 256 * 8;
+//const int MaxBits = 256 * 8;                      //UNUSED
 const int MaxLitPerBlock = 251 - 1;                 //Maximum number of literals that fits in a block, LitCnt is 0-based
                                                     //256 - (AdLo, AdHi , 1 Bit, 1 Nibble, Number of Lits)
 
