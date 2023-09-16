@@ -5,7 +5,7 @@
 //#defnie NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR VERSION INFO 230915
+//  COMPILE TIME VARIABLES FOR VERSION INFO 230916
 //--------------------------------------------------------
 
 constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -66,31 +66,33 @@ bool TmpSetNewBlock = false;
 bool SetNewBlock = false;           //This will fire at the previous bundle and will set NewBlock2
 bool NewBlock = false;              //This will fire at the specified bundle
 
-string EntryTypeScriptHeader = "[sparkle loader script]";
-string EntryTypePath = "path:";
-string EntryTypeHeader = "header:";
-string EntryTypeID = "id:";
-string EntryTypeThisID = "thisside:";
-string EntryTypeNextID = "nextside:";
-string EntryTypeName = "name:";
-string EntryTypeStart = "start:";
-string EntryTypeDirArt = "dirart:";
-string EntryTypeZP = "zp:";
-string EntryTypeIL0 = "il0:";
-string EntryTypeIL1 = "il1:";
-string EntryTypeIL2 = "il2:";
-string EntryTypeIL3 = "il3:";
-string EntryTypeProdID = "prodid:";
-string EntryTypeTracks = "tracks:";
-string EntryTypeHSFile = "hsfile:";
-string EntryTypeScript = "script:";
-string EntryTypeFile = "file:";
-string EntryTypeMem = "mem:";
-string EntryTypeAlign = "align";
-string EntryTypeTestDisk = "testdisk";
+const string EntryTypeScriptHeader = "[sparkle loader script]";
+const string EntryTypePath = "path:";
+const string EntryTypeHeader = "header:";
+const string EntryTypeID = "id:";
+const string EntryTypeThisID = "thisside:";
+const string EntryTypeNextID = "nextside:";
+const string EntryTypeName = "name:";
+const string EntryTypeStart = "start:";
+const string EntryTypeDirArt = "dirart:";
+const string EntryTypeZP = "zp:";
+const string EntryTypeIL0 = "il0:";
+const string EntryTypeIL1 = "il1:";
+const string EntryTypeIL2 = "il2:";
+const string EntryTypeIL3 = "il3:";
+const string EntryTypeProdID = "prodid:";
+const string EntryTypeTracks = "tracks:";
+const string EntryTypeHSFile = "hsfile:";
+const string EntryTypeScript = "script:";
+const string EntryTypeFile = "file:";
+const string EntryTypeMem = "mem:";
+const string EntryTypeAlign = "align";
+const string EntryTypeTestDisk = "testdisk";
+const string EntryTypeDirIndex = "dirindex:";
 
 unsigned long int ProductID = 0;
 unsigned int LineStart, LineEnd;    //LastSS, LastSE;
+//size_t LineStart, LineEnd;    //LastSS, LastSE;
 bool NewBundle;
 
 const int MaxNumDisks = 127;
@@ -114,6 +116,11 @@ vector<FileStruct> tmpVFiles;
 
 unsigned char DirBlocks[512]{};
 int DirPtr[128]{};
+
+unsigned char AltDirBitPtr[128]{};
+int AltDirBundleNo[128]{};
+int DirEntryIndex = 0;
+bool DirEntriesUsed = false;
 
 //Hi-Score File variables
 string HSFileName = "";
@@ -650,25 +657,56 @@ unsigned char EORtransform(unsigned char Input) {
 
 void InjectDirBlocks() {
 
-    //DirBlocks(0) = EORtransform(Track)
-    //DirBlocks(1) = EORtransform(Sector)
-    //DirBlocks(2) = EORtransform(Remaining sectors on track)
-    //DirBlocks(3) = BitPtr
+    //DirBlocks(0) = EORtransform(Track), it is used by the drive code
+    //DirBlocks(1) = EORtransform(Sector), it is used by the drive code
+    //DirBlocks(2) = EORtransform(Remaining sectors on track), it is used by the drive code
+    //DirBlocks(3) = BitPtr, NOT EOR transformed, it is used on the C64 side
 
-    if (BundleNo >= 0)
+    if (DirEntriesUsed)
     {
-        for (int i = BundleNo + 1; i < 128; i++)
+        //Create first DirEntry for Bundle #0
+        DirBlocks[0] = EORtransform(TabT[0]);
+        DirBlocks[1] = EORtransform(TabStartS[TabT[0]]);
+        DirBlocks[2] = EORtransform(TabSCnt[0]);
+        DirBlocks[3] = 0;
+        
+        //Fill the whole directory with Bundle #0's values
+        for (int i = 4; i < 512; i++)
         {
-            DirBlocks[(i * 4) + 3] = DirBlocks[(BundleNo * 4) + 3];
-            DirPtr[i] = DirPtr[BundleNo];
+            DirBlocks[i] = DirBlocks[i - 4];
+        }
+
+        //Overwrite directory entries if an alternative DirEntry index was assigned
+        for (int i = 1; i < 128; i++)
+        {
+            if (AltDirBundleNo[i] != 0)
+            {
+                int BN = AltDirBundleNo[i];
+                int BP = AltDirBitPtr[i];
+                DirBlocks[i * 4] = EORtransform(TabT[BN]);
+                DirBlocks[(i * 4) + 1] = EORtransform(TabStartS[TabT[BN]]);
+                DirBlocks[(i * 4) + 2] = EORtransform(TabSCnt[BN]);
+                DirBlocks[(i * 4) + 3] = BP;
+            }
         }
     }
-
-    for (int i = 0; i < 128; i++)
+    else
     {
-        DirBlocks[i * 4] = EORtransform(TabT[DirPtr[i]]);
-        DirBlocks[(i * 4) + 1] = EORtransform(TabStartS[TabT[DirPtr[i]]]);
-        DirBlocks[(i * 4) + 2] = EORtransform(TabSCnt[DirPtr[i]]);
+        if (BundleNo >= 0)
+        {
+            for (int i = BundleNo + 1; i < 128; i++)
+            {
+                DirBlocks[(i * 4) + 3] = DirBlocks[(BundleNo * 4) + 3];
+                DirPtr[i] = DirPtr[BundleNo];
+            }
+        }
+
+        for (int i = 0; i < 128; i++)
+        {
+            DirBlocks[i * 4] = EORtransform(TabT[DirPtr[i]]);
+            DirBlocks[(i * 4) + 1] = EORtransform(TabStartS[TabT[DirPtr[i]]]);
+            DirBlocks[(i * 4) + 2] = EORtransform(TabSCnt[DirPtr[i]]);
+        }
     }
 
     //Resort directory sectors to allow simple copy from $0100 to $0700
@@ -1309,6 +1347,8 @@ bool ResetBundleVariables() {
 
     UncompBundleSize = 0;
 
+    DirEntryIndex = 0;
+
 #ifdef NEWIO
     BundleUnderIO = false;
 #endif
@@ -1404,6 +1444,8 @@ bool ResetDiskVariables() {
     //Reset directory arrays
     fill_n(DirBlocks, 512, 0);
     fill_n(DirPtr, 128, 0);
+    fill_n(AltDirBitPtr, 128, 0);
+    fill_n(AltDirBundleNo, 128, 0);
 
     //Reset disk system to support 35 tracks
     TracksPerDisk = StdTracksPerDisk;
@@ -1447,6 +1489,8 @@ bool ResetDiskVariables() {
     NextID = 255;
 
     ParsedEntries = "";
+
+    DirEntriesUsed = false;
 
     //Reset Disk image
     NewDisk();
@@ -1777,17 +1821,40 @@ bool CompressBundle() {             //NEEDS PackFile() and CloseFile()
     //-------------------------------------------------------
     //SAVE CURRENT BIT POINTER AND BUFFER COUNT FOR DIRECTORY
     //-------------------------------------------------------
-
-    if (BundleNo < 128)
+    
+    int DirIdx = 0;
+    
+    if (DirEntriesUsed)
     {
-        DirBlocks[(BundleNo * 4) + 3] = BitPtr;
-        DirPtr[BundleNo] = BufferCnt;
-        BundleNo++;
+        if (BundleNo < 256)
+        {
+            if (DirEntryIndex > 0)
+            {
+                DirIdx = DirEntryIndex;
+                AltDirBitPtr[DirEntryIndex] = BitPtr;
+                AltDirBundleNo[DirEntryIndex] = BufferCnt;
+            }
+        }
+        else
+        {
+            cerr << "***INFO***\tThe number of file bundles is greater than 256 on this disk!\n"
+                << "A DirEntry value can only be assigned to bundles 1-255.\n";
+            return false;
+        }
     }
     else
     {
-        MaxBundleNoExceeded = true;
+        if (BundleNo < 128)
+        {
+            DirBlocks[(BundleNo * 4) + 3] = BitPtr;
+            DirPtr[BundleNo] = BufferCnt;
+        }
+        else
+        {
+            MaxBundleNoExceeded = true;
+        }
     }
+    BundleNo++;
 
     //-------------------------------------------------------
 
@@ -1837,9 +1904,19 @@ bool CompressBundle() {             //NEEDS PackFile() and CloseFile()
 
     TotalOrigSize += OrigSize;
     TotalCompSize += BC;
+    int CR = BC * 100 / OrigSize;
 
-    cout << OrigSize << " block" << ((OrigSize == 1) ? " " : "s") << (OrigSize < 10 ? "  " : (OrigSize < 100 ? " " : "")) << "  ->\t" << BC << " block" << ((BC == 1) ? " " : "s") << "\t(" << (BC * 100 / OrigSize) << "%)\t\t"
-        << ((FirstT < 10) ? "0" : "") << FirstT << ":" << ((FirstS < 10) ? "0" : "") << FirstS << " - " << ((LastT < 10) ? "0" : "") << LastT << ":" << ((LastS < 10) ? "0" : "") << LastS << "\n";
+    cout << (OrigSize < 10 ? "  " : (OrigSize < 100 ? " " : "")) << OrigSize << " block" << ((OrigSize == 1) ? "   ->\t" : "s  ->\t");
+    cout << (BC < 10 ? "  " : (BC < 100 ? " " : "")) << BC << " block" << ((BC == 1) ? " \t" : "s\t");
+    cout << (CR < 10 ? "  (" : (CR < 100 ? " (" : "(")) << CR << "%)\t\t";
+    cout << ((FirstT < 10) ? "0" : "") << FirstT << ":" << ((FirstS < 10) ? "0" : "") << FirstS << " - ";
+    cout << ((LastT < 10) ? "0" : "") << LastT << ":" << ((LastS < 10) ? "0" : "") << LastS;
+
+    if (DirIdx > 0)
+    {
+        cout << "\tDir Index: $" << hex << ((DirIdx < 16) ? "0" : "") << DirIdx << dec << "";
+    }
+    cout << "\n";
 
     if (LastBlockCnt > 255)
     {
@@ -3791,6 +3868,13 @@ bool InjectSaverPlugin() {
     //Identify first T/S of the saver plugin
     CT = TabT[SctPtr];
     CS = TabS[SctPtr];
+    int FirstT = CT;
+    int FirstS = CS;
+    int LastT = TabT[SctPtr+1];
+    int LastS = TabS[SctPtr+1];
+
+    cout << "Adding Hi-score Saver Plugin...\t\t\t\t\t\t\t";
+    cout << ((FirstT < 10) ? "0" : "") << FirstT << ":" << ((FirstS < 10) ? "0" : "") << FirstS << " - " << ((LastT < 10) ? "0" : "") << LastT << ":" << ((LastS < 10) ? "0" : "") << LastS << "\n";
 
     //Copy first block of saver plugin to disk
     for (int i = 0; i < 256; i++)
@@ -3834,6 +3918,13 @@ bool InjectSaverPlugin() {
 
     CT = TabT[SctPtr];
     CS = TabS[SctPtr];
+    FirstT = CT;
+    FirstS = CS;
+    LastT = TabT[SectorsPerDisk - 1];
+    LastS = TabS[SectorsPerDisk - 1];
+
+    cout << "Adding Hi-score File...\t\t\t\t\t\t\t\t";
+    cout << ((FirstT < 10) ? "0" : "") << FirstT << ":" << ((FirstS < 10) ? "0" : "") << FirstS << " - " << ((LastT < 10) ? "0" : "") << LastT << ":" << ((LastS < 10) ? "0" : "") << LastS << "\n";
 
     Disk[Track[18] + (18 * 256) + 4] = EORtransform(CT);                //DirBlocks(0) = EORtransform(Track) = 35
     Disk[Track[18] + (18 * 256) + 3] = EORtransform(TabStartS[CT]);     //DirBlocks(1) = EORtransform(Sector) = First sector of Track(35) (not first sector of file!!!)
@@ -5009,6 +5100,37 @@ bool Build() {
 
                 NewBundle = false;
                 //NewD - false;     //IS THIS NEEDED???
+            }
+            else if (ScriptEntryType == EntryTypeDirIndex)
+            {
+                if (NumScriptEntries > -1)
+                {
+                    if (IsHexString(ScriptEntryArray[0]))
+                    {
+
+                        int tmp = ConvertHexStringToInt(ScriptEntryArray[0]);
+
+                        if ((tmp == 0) || (tmp > 127))
+                        {
+                            cerr << "***CRITICAL***\tThe DirEntry value must be a hex number between $01 and $7f!\n";
+                            return false;
+                        }
+                        DirEntriesUsed = true;      //We have a valid DirEntry -> we will use the alternative directory
+                        DirEntryIndex = tmp;
+                    }
+                    else
+                    {
+                        cerr << "***CRITICAL***\tThe DirEntry value must be a hex number between $01 and $7f!\n";
+                        return false;
+                    }
+                }
+                else
+                {
+                    cerr << "***CRITICAL***\tThe DirEntry value must be a hex number between $01 and $7f!\n";
+                    return false;
+                }
+
+                //NewBundle = false; //NOT NEEDED!!! This would result in merging to adjacent bundles...
             }
             else if (ScriptEntryType == EntryTypeAlign)
             {
