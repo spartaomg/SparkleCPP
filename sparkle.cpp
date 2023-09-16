@@ -91,7 +91,7 @@ const string EntryTypeTestDisk = "testdisk";
 const string EntryTypeDirIndex = "dirindex:";
 
 unsigned long int ProductID = 0;
-unsigned int LineStart, LineEnd;
+size_t LineStart, LineEnd;
 
 bool NewBundle;
 
@@ -1553,28 +1553,23 @@ bool SplitScriptEntry() {
 
     NumScriptEntries = -1;
 
-    while (Pos < ScriptEntry.length()) {
+    while (Pos < ScriptEntry.length())
+    {
 
         if (NumScriptEntries == -1)
             NumScriptEntries++;
 
-        //if (ScriptEntryType == EntryTypePath)
-        //{
-
-            ThisChar = ScriptEntry[Pos++];                  //Keep original D64 path
-        //}
-        //else
-        //{
-            //ThisChar = tolower(ScriptEntry[Pos++]);     //Lower case everything else
-        //}
+        ThisChar = ScriptEntry[Pos++];                  //Keep original D64 path
 
         if (ThisChar != '\t') {
             ScriptEntryArray[NumScriptEntries] += ThisChar;
         }
         else
         {
-            if (ScriptEntryArray[NumScriptEntries] != "") {
-                if (NumScriptEntries < MaxNumEntries - 1) {
+            if (ScriptEntryArray[NumScriptEntries] != "")
+            {
+                if (NumScriptEntries < MaxNumEntries - 1)
+                {
                     NumScriptEntries ++;
                 }
                 else
@@ -1591,33 +1586,11 @@ bool SplitScriptEntry() {
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
 bool FindNextScriptEntry() {
-
-    size_t LE = Script.find("\n", LineStart);
     
-    while (LE == LineStart)
+    while ((LineEnd = Script.find("\n", LineStart)) == LineStart)
     {
         NewBundle = true;
-        LE = Script.find("\n", LineStart);
-    }
-
-    if (LE != string::npos)
-    {
-        LineEnd = static_cast <unsigned int>(LE);
-        ScriptEntry = Script.substr(LineStart, LineEnd - LineStart);
-    }
-    else
-    {
-        ScriptEntry = Script.substr(LineStart);
-        LineEnd = Script.length() - 1;
-    }
-    /*
-    LineEnd = Script.find("\n", LineStart);
-    
-    while (LineEnd == LineStart)
-    {
-        NewBundle = true;
-        //LineStart++;
-        LineEnd = Script.find("\n", ++LineStart);
+        LineStart++;
     }
     
     if (LineEnd != string::npos)
@@ -1627,58 +1600,14 @@ bool FindNextScriptEntry() {
     else
     {
         ScriptEntry = Script.substr(LineStart);
-        LineEnd = Script.length() - 1;
     }
-    */
-    
+
     LineStart = LineEnd + 1;
 
     return SplitScriptEntry();
-    
-    /*
-    LineStart = LineEnd;
-
-    if (LineStart > 0)
-    {
-        LineStart++;
-    }
-
-    //OrigScriptEntry = "";
-    ScriptEntry = "";
-
-    char S = Script[LineStart++];
-
-    //Find the first non-linebreak character => LineStart
-    while ((S == 13) || (S == 10)) {
-        NewBundle = true;
-        S = Script[LineStart++];
-    }
-
-    //Find the last non-linebreak character => LineEnd
-    LineEnd = LineStart--;
-
-    while ((S != 13) && (S != 10) && (LineEnd <= Script.length() - 1)) {
-        //OrigScriptEntry += S;
-        ScriptEntry += S;// tolower(S);
-        S = Script[LineEnd++];
-    }
-
-    if (LineEnd == Script.length())
-    {
-        if ((S != 13) && (S != 10))
-        {
-            //OrigScriptEntry += S;
-            ScriptEntry += S;// tolower(S);
-        }
-    }
-    else
-    {
-        LineEnd--;
-    }
-
-    return SplitScriptEntry();
-    */
+   
 }
+
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
 bool InsertScript(string& SubScriptPath)
@@ -1781,9 +1710,9 @@ bool InsertScript(string& SubScriptPath)
     }
 
     string SS1 = Script.substr(0, LineStart);
-    string SS2 = (LineEnd < Script.length()) ? Script.substr(LineEnd, Script.length() - (LineEnd)) : "";
-    Script = SS1 + "\n" + S + SS2;          //Add an extre line break after the Script entry type before the subscript is inserted
-                                            //In case the script entry type was the last entry and was not followed by a line break
+    string SS2 = (LineEnd != string::npos) ? Script.substr(LineEnd, Script.length() - LineEnd) : "";
+    Script = SS1 + "\n" + S + "\n" + SS2;   //Add an extre line break before and after the SubScript
+
     Lines.clear();
 
     LineEnd = LineStart++;
@@ -4731,7 +4660,7 @@ bool Build() {
     NewBundle = false;
     TmpSetNewBlock = false;
 
-    while (LineEnd <= Script.length() - 1) {
+    while (LineEnd != string::npos) {
 
         if (FindNextScriptEntry())
         {
@@ -5399,8 +5328,8 @@ int main(int argc, char* argv[])
         //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\ThePumpkins\\Backup\\221028\\Scripts\\ThePumpkins.sls";
         //string ScriptFileName = "c:\\Users\\Tamas\\source\\repos\\GPMagazine\\Magazine\\Issue33\\Sparkle\\Magazine.sls";
         //string ScriptFileName = "c:\\Users\\Tamas\\source\\repos\\DeliriousTwelve\\Parts\\CheckerZoomer\\CheckerZoomer.sls";
-        //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\SparkleFetchTest\\ExprTest.sls";
-        string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\GP\\NoBounds\\Main\\Sparkle\\NoBounds.sls"; //WIN32
+        string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\SparkleFetchTest\\ExprTest.sls";
+        //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\GP\\NoBounds\\Main\\Sparkle\\NoBounds.sls"; //WIN32
         //string ScriptFileName = "../../C64/NoBounds/Main/Sparkle/NoBounds.sls";   //UBUNTU
         Script = ReadFileToString(ScriptFileName, true);
         SetScriptPath(ScriptFileName, AppPath);
@@ -5412,7 +5341,7 @@ int main(int argc, char* argv[])
         PrintInfo();
         return EXIT_SUCCESS;
 
-#endif // DEBUG
+#endif
 
     }
     else
