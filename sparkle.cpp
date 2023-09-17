@@ -5,7 +5,7 @@
 //#defnie NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR VERSION INFO 230916
+//  COMPILE TIME VARIABLES FOR BUILD INFO 230917
 //--------------------------------------------------------
 
 constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -220,7 +220,7 @@ string FindAbsolutePath(string FilePath, string ScriptFilePath)
         //FilePath is relative - make it a full path
         FilePath = ScriptFilePath + FilePath;
     }
-#elif __linux__
+#elif _APPLE_ || __linux__
     if (FilePath[0] != '/')
     {
         if ((FilePath.size() > 1) && (FilePath[0] == '~') && (FilePath[1] == '/'))
@@ -241,27 +241,27 @@ string FindAbsolutePath(string FilePath, string ScriptFilePath)
             FilePath = ScriptFilePath + FilePath;
         }
     }
-#elif __APPLE__
-    if (FilePath[0] != '/')
-    {
-        if ((FilePath.size() > 1) && (FilePath[0] == '~') && (FilePath[1] == '/'))
-        {
-            //Home directory (~/...) -> replace "~" with HomeDir if known
-            if (HomeDir != "")
-            {
-                FilePath = HomeDir + FilePath.substr(1);
-            }
-            else
-            {
-                cerr << "***INFO***\tUnable to identify the user's Home directory...\n";
-            }
-}
-        else
-        {
-            //FilePath is relative - make it a full path
-            FilePath = ScriptFilePath + FilePath;
-        }
-    }
+//#elif __APPLE__
+//    if (FilePath[0] != '/')
+//    {
+//        if ((FilePath.size() > 1) && (FilePath[0] == '~') && (FilePath[1] == '/'))
+//        {
+//            //Home directory (~/...) -> replace "~" with HomeDir if known
+//            if (HomeDir != "")
+//            {
+//                FilePath = HomeDir + FilePath.substr(1);
+//            }
+//            else
+//            {
+//                cerr << "***INFO***\tUnable to identify the user's Home directory...\n";
+//            }
+//}
+//        else
+//        {
+//            //FilePath is relative - make it a full path
+//            FilePath = ScriptFilePath + FilePath;
+//        }
+//    }
 #endif
 
     return FilePath;
@@ -450,7 +450,7 @@ bool WriteDiskImage(const string& DiskName)
 
     for (size_t i = 0; i <= DiskName.length() - 1; i++)
     {
-#if _WIN32
+#if _WIN32 
         if ((DiskName[i] == '\\') || (DiskName[i] == '/'))
         {
             if (DiskDir[DiskDir.length() - 1] != ':')   //Don't try to create root directory
@@ -459,18 +459,18 @@ bool WriteDiskImage(const string& DiskName)
                     return false;
             }
         }
-#elif __linux__
+#elif _APPLE_ || __linux__
         if ((DiskName[i] == '/') && (DiskDir.size() > 0) && (DiskDir != "~"))   //Don't try to create root directory and home directory
         {
             if (!CreateDirectory(DiskDir))
                 return false;
         }
-#elif __APPLE__
-        if ((DiskName[i] == '/') && (DiskDir.size() > 0) && (DiskDir != "~"))   //Don't try to create root directory and home directory
-        {
-            if (!CreateDirectory(DiskDir))
-                return false;
-        }
+//#elif __APPLE__
+//        if ((DiskName[i] == '/') && (DiskDir.size() > 0) && (DiskDir != "~"))   //Don't try to create root directory and home directory
+//        {
+//            if (!CreateDirectory(DiskDir))
+//                return false;
+//        }
 #endif
         DiskDir += DiskName[i];
     }
@@ -1637,7 +1637,7 @@ bool InsertScript(string& SubScriptPath)
         {
             break;
         }
-#elif __linux__
+#elif _APPLE_ || __linux__
         if (sPath[i] != '/')
         {
             sPath.replace(i, 1, "");
@@ -1646,15 +1646,15 @@ bool InsertScript(string& SubScriptPath)
         {
             break;
         }
-#elif __APPLE__
-        if (sPath[i] != '/')
-        {
-            sPath.replace(i, 1, "");
-        }
-        else
-        {
-            break;
-        }
+//#elif __APPLE__
+//        if (sPath[i] != '/')
+//        {
+//            sPath.replace(i, 1, "");
+//        }
+//        else
+//        {
+//            break;
+//        }
 #endif
     }
 
@@ -3403,7 +3403,7 @@ void AddDirArt() {
             ExtStart = i + 1;
             break;
         }
-#elif __linux__
+#elif _APPLE_ || __linux__
         if (DirArtName[i] == '/')
         {
             break;
@@ -3413,16 +3413,16 @@ void AddDirArt() {
             ExtStart = i + 1;
             break;
         }
-#elif __APPLE__
-        if (DirArtName[i] == '/')
-        {
-            break;
-        }
-        else if (DirArtName[i] == '.')
-        {
-            ExtStart = i + 1;
-            break;
-        }
+//#elif __APPLE__
+//        if (DirArtName[i] == '/')
+//        {
+//            break;
+//        }
+//        else if (DirArtName[i] == '.')
+//        {
+//            ExtStart = i + 1;
+//            break;
+//        }
 #endif
     }
 
@@ -5136,7 +5136,7 @@ void SetScriptPath(string sPath, string aPath)
     {
         sPath = aPath + sPath;                      //sPath is relative - use Sparkle's base folder to make it a full path
     }
-#elif __linux__
+#elif _APPLE_ || __linux__
     if (sPath[0] != '/')
     {
         if ((sPath.size() > 1) && (sPath[0] == '~') && (sPath[1] == '/'))
@@ -5157,27 +5157,27 @@ void SetScriptPath(string sPath, string aPath)
             sPath = aPath + sPath;
         }
     }
-#elif __APPLE__
-    if (sPath[0] != '/')
-    {
-        if ((sPath.size() > 1) && (sPath[0] == '~') && (sPath[1] == '/'))
-        {
-            //Home directory (~/...) -> replace "~" with HomeDir if known
-            if (HomeDir != "")
-            {
-                sPath = HomeDir + sPath.substr(1);
-            }
-            else
-            {
-                cerr << "***INFO***\tUnable to identify the user's Home directory...\n";
-            }
-        }
-        else
-        {
-            //sPath is relative - use Sparkle's base folder to make it a full path
-            sPath = aPath + sPath;
-        }
-    }
+//#elif __APPLE__
+//    if (sPath[0] != '/')
+//    {
+//        if ((sPath.size() > 1) && (sPath[0] == '~') && (sPath[1] == '/'))
+//        {
+//            //Home directory (~/...) -> replace "~" with HomeDir if known
+//            if (HomeDir != "")
+//            {
+//                sPath = HomeDir + sPath.substr(1);
+//            }
+//            else
+//            {
+//                cerr << "***INFO***\tUnable to identify the user's Home directory...\n";
+//            }
+//        }
+//        else
+//        {
+//            //sPath is relative - use Sparkle's base folder to make it a full path
+//            sPath = aPath + sPath;
+//        }
+//    }
 #endif
 
     ScriptName = sPath;                             //Absolute script path + file name
@@ -5195,7 +5195,7 @@ void SetScriptPath(string sPath, string aPath)
         {
             break;
         }
-#elif __linux__
+#elif _APPLE_ || __linux__
         if (sPath[i] != '/')
         {
             ScriptPath.replace(i, 1, "");
@@ -5204,15 +5204,15 @@ void SetScriptPath(string sPath, string aPath)
         {
             break;
         }
-#elif __APPLE__
-        if (sPath[i] != '/')
-        {
-            ScriptPath.replace(i, 1, "");
-        }
-        else
-        {
-            break;
-        }
+//#elif __APPLE__
+//        if (sPath[i] != '/')
+//        {
+//            ScriptPath.replace(i, 1, "");
+//        }
+//        else
+//        {
+//            break;
+//        }
 #endif
     }
 }
@@ -5269,19 +5269,8 @@ void PrintInfo()
     cout << "# For more details please read the user manual!\n\n";
 
 }
-//----------------------------------------------------------------------------------------------------------------------------------------------------------
-/*
-void LoadFileInResource(int name, int type, DWORD& size, const char*& data)
-{
-    HMODULE handle = ::GetModuleHandle(NULL);
-    HRSRC rc = ::FindResource(handle, MAKEINTRESOURCE(name),
-        MAKEINTRESOURCE(type));
-    HGLOBAL rcData = ::LoadResource(handle, rc);
-    size = ::SizeofResource(handle, rc);
-    data = static_cast<const char*>(::LockResource(rcData));
-}
-*/
 
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
 
 int main(int argc, char* argv[])
 {
@@ -5297,7 +5286,7 @@ int main(int argc, char* argv[])
     if (AppPath[AppPath.size() - 1] != '\\')
         AppPath += "\\";
 
-#elif __linux__
+#elif _APPLE_ || __linux__
 
     //Identify user's Home directory
     char const* tmp = getenv("HOME");
@@ -5310,19 +5299,22 @@ int main(int argc, char* argv[])
     if (AppPath[AppPath.size() - 1] != '/')
         AppPath += "/";
 
-#elif __APPLE__
-
-    //Identify user's Home directory
-    char const* tmp = getenv("HOME");
-    if (tmp != NULL)
-    {
-        HomeDir = tmp;
-    }
-
-    string AppPath{ fs::current_path().string() };
-    if (AppPath[AppPath.size() - 1] != '/')
-        AppPath += "/";
-
+//#elif __APPLE__
+//
+//    //Identify user's Home directory
+//    char const* tmp = getenv("HOME");
+//    if (tmp != NULL)
+//    {
+//        HomeDir = tmp;
+//    }
+//
+//    string AppPath{ fs::current_path().string() };
+//    if (AppPath[AppPath.size() - 1] != '/')
+//        AppPath += "/";
+//
+#else
+    cerr << "***CRITICAL***\tUnsupported operating system!\n";
+    return EXIT_FAILURE;
 #endif
 
     if (argc < 2)
