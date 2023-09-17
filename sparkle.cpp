@@ -90,7 +90,7 @@ const string EntryTypeAlign = "align";
 const string EntryTypeTestDisk = "testdisk";
 const string EntryTypeDirIndex = "dirindex:";
 
-unsigned long int ProductID = 0;
+int ProductID = 0;
 size_t LineStart, LineEnd;
 
 bool NewBundle;
@@ -3823,7 +3823,7 @@ bool InjectSaverPlugin() {
     int LastT = TabT[SctPtr+1];
     int LastS = TabS[SctPtr+1];
 
-    cout << "Adding Hi-score Saver Plugin...\t\t\t\t\t\t\t";
+    cout << "Adding Hi-score Saver Plugin...\t\t    ->    2 blocks\t\t\t";
     cout << ((FirstT < 10) ? "0" : "") << FirstT << ":" << ((FirstS < 10) ? "0" : "") << FirstS << " - " << ((LastT < 10) ? "0" : "") << LastT << ":" << ((LastS < 10) ? "0" : "") << LastS << "\n";
 
     //Copy first block of saver plugin to disk
@@ -3870,10 +3870,15 @@ bool InjectSaverPlugin() {
     CS = TabS[SctPtr];
     FirstT = CT;
     FirstS = CS;
+    
+    int HSFBC = BlocksUsedByPlugin-2;
+    
     LastT = TabT[SectorsPerDisk - 1];
     LastS = TabS[SectorsPerDisk - 1];
 
-    cout << "Adding Hi-score File...\t\t\t\t\t\t\t\t";
+    TotalOrigSize += BlocksUsedByPlugin;
+
+    cout << "Adding Hi-score File...\t\t\t    ->   " << (HSFBC < 10 ? " " : "") << HSFBC << " block" << ((HSFBC == 1) ? " \t\t\t" : "s\t\t\t");
     cout << ((FirstT < 10) ? "0" : "") << FirstT << ":" << ((FirstS < 10) ? "0" : "") << FirstS << " - " << ((LastT < 10) ? "0" : "") << LastT << ":" << ((LastS < 10) ? "0" : "") << LastS << "\n";
 
     Disk[Track[18] + (18 * 256) + 4] = EORtransform(CT);                //DirBlocks(0) = EORtransform(Track) = 35
