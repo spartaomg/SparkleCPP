@@ -5,7 +5,7 @@
 //#defnie NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR BUILD INFO 230917
+//  COMPILE TIME VARIABLES FOR BUILD INFO 230918
 //--------------------------------------------------------
 
 constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -220,7 +220,7 @@ string FindAbsolutePath(string FilePath, string ScriptFilePath)
         //FilePath is relative - make it a full path
         FilePath = ScriptFilePath + FilePath;
     }
-#elif _APPLE_ || __linux__
+#elif __APPLE__ || __linux__
     if (FilePath[0] != '/')
     {
         if ((FilePath.size() > 1) && (FilePath[0] == '~') && (FilePath[1] == '/'))
@@ -459,7 +459,7 @@ bool WriteDiskImage(const string& DiskName)
                     return false;
             }
         }
-#elif _APPLE_ || __linux__
+#elif __APPLE__ || __linux__
         if ((DiskName[i] == '/') && (DiskDir.size() > 0) && (DiskDir != "~"))   //Don't try to create root directory and home directory
         {
             if (!CreateDirectory(DiskDir))
@@ -1637,7 +1637,7 @@ bool InsertScript(string& SubScriptPath)
         {
             break;
         }
-#elif _APPLE_ || __linux__
+#elif __APPLE__ || __linux__
         if (sPath[i] != '/')
         {
             sPath.replace(i, 1, "");
@@ -3403,7 +3403,7 @@ void AddDirArt() {
             ExtStart = i + 1;
             break;
         }
-#elif _APPLE_ || __linux__
+#elif __APPLE__ || __linux__
         if (DirArtName[i] == '/')
         {
             break;
@@ -5136,7 +5136,7 @@ void SetScriptPath(string sPath, string aPath)
     {
         sPath = aPath + sPath;                      //sPath is relative - use Sparkle's base folder to make it a full path
     }
-#elif _APPLE_ || __linux__
+#elif __APPLE__ || __linux__
     if (sPath[0] != '/')
     {
         if ((sPath.size() > 1) && (sPath[0] == '~') && (sPath[1] == '/'))
@@ -5195,7 +5195,7 @@ void SetScriptPath(string sPath, string aPath)
         {
             break;
         }
-#elif _APPLE_ || __linux__
+#elif __APPLE__ || __linux__
         if (sPath[i] != '/')
         {
             ScriptPath.replace(i, 1, "");
@@ -5286,7 +5286,7 @@ int main(int argc, char* argv[])
     if (AppPath[AppPath.size() - 1] != '\\')
         AppPath += "\\";
 
-#elif _APPLE_ || __linux__
+#elif __APPLE__ || __linux__
 
     //Identify user's Home directory
     char const* tmp = getenv("HOME");
