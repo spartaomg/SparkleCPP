@@ -1,13 +1,11 @@
 #include "common.h"
 
-//#define TESTDISK
-
 //#define DEBUG
 
 //#defnie NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR BUILD INFO 230920
+//  COMPILE TIME VARIABLES FOR BUILD INFO 230918
 //--------------------------------------------------------
 
 constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -89,9 +87,7 @@ const string EntryTypeScript = "script:";
 const string EntryTypeFile = "file:";
 const string EntryTypeMem = "mem:";
 const string EntryTypeAlign = "align";
-#ifdef TESTDISK
-    const string EntryTypeTestDisk = "testdisk";
-#endif // TESTDISK
+const string EntryTypeTestDisk = "testdisk";
 const string EntryTypeDirIndex = "dirindex:";
 
 int ProductID = 0;
@@ -134,9 +130,7 @@ size_t HSOffset = 0;
 size_t HSLength = 0;
 bool bSaverPlugin = false;
 
-#ifdef TESTDISK
-    bool bTestDisk = false;
-#endif
+bool bTestDisk = false;
 
 //Interleave constants and variables
 const unsigned char DefaultIL0 = 4;
@@ -247,6 +241,27 @@ string FindAbsolutePath(string FilePath, string ScriptFilePath)
             FilePath = ScriptFilePath + FilePath;
         }
     }
+//#elif __APPLE__
+//    if (FilePath[0] != '/')
+//    {
+//        if ((FilePath.size() > 1) && (FilePath[0] == '~') && (FilePath[1] == '/'))
+//        {
+//            //Home directory (~/...) -> replace "~" with HomeDir if known
+//            if (HomeDir != "")
+//            {
+//                FilePath = HomeDir + FilePath.substr(1);
+//            }
+//            else
+//            {
+//                cerr << "***INFO***\tUnable to identify the user's Home directory...\n";
+//            }
+//}
+//        else
+//        {
+//            //FilePath is relative - make it a full path
+//            FilePath = ScriptFilePath + FilePath;
+//        }
+//    }
 #endif
 
     return FilePath;
@@ -450,6 +465,12 @@ bool WriteDiskImage(const string& DiskName)
             if (!CreateDirectory(DiskDir))
                 return false;
         }
+//#elif __APPLE__
+//        if ((DiskName[i] == '/') && (DiskDir.size() > 0) && (DiskDir != "~"))   //Don't try to create root directory and home directory
+//        {
+//            if (!CreateDirectory(DiskDir))
+//                return false;
+//        }
 #endif
         DiskDir += DiskName[i];
     }
@@ -1436,10 +1457,8 @@ bool ResetDiskVariables() {
     HSOffset = 0;
     HSLength = 0;
 
-#ifdef TESTDISK
     //Not a fetch test disk
     bTestDisk = false;
-#endif // TESTDISK
 
     //Reset interleave
     IL0 = DefaultIL0;
@@ -1627,6 +1646,15 @@ bool InsertScript(string& SubScriptPath)
         {
             break;
         }
+//#elif __APPLE__
+//        if (sPath[i] != '/')
+//        {
+//            sPath.replace(i, 1, "");
+//        }
+//        else
+//        {
+//            break;
+//        }
 #endif
     }
 
@@ -3385,6 +3413,16 @@ void AddDirArt() {
             ExtStart = i + 1;
             break;
         }
+//#elif __APPLE__
+//        if (DirArtName[i] == '/')
+//        {
+//            break;
+//        }
+//        else if (DirArtName[i] == '.')
+//        {
+//            ExtStart = i + 1;
+//            break;
+//        }
 #endif
     }
 
@@ -3530,7 +3568,6 @@ void AddHeaderAndID() {
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
-#ifdef TESTDISK
 
 bool InjectTestPlugin() {
 
@@ -3668,8 +3705,6 @@ bool InjectTestPlugin() {
     return true;
 
 }
-
-#endif // TESTDISK
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -4058,10 +4093,9 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
 
     //Add NextID and IL0-IL3 to ZP
     int ZPILTabLoc = 0x60;
-#ifdef TESTDISK
+
     if (bTestDisk)
         idcNextID = 0x00;
-#endif // TESTDISK
 
     Drive[(3 * 256) + ZPILTabLoc + 0] = 256 - IL3;
     Drive[(3 * 256) + ZPILTabLoc + 1] = 256 - IL2;
@@ -4072,25 +4106,18 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
     //Add PlugIn to ZP (IncSaver = $74)
     int ZPIncPluginLoc = 0x74;
 
-#ifdef TESTDISK
     if (bTestDisk)
     {
         Drive[(3 * 256) + ZPIncPluginLoc] = 1;
     }
+    else if (bSaverPlugin)
+    {
+        Drive[(3 * 256) + ZPIncPluginLoc] = 2;
+    }
     else
     {
-#endif // TESTDISK
-        if (bSaverPlugin)
-        {
-            Drive[(3 * 256) + ZPIncPluginLoc] = 2;
-        }
-        else
-        {
-            Drive[(3 * 256) + ZPIncPluginLoc] = 0;
-        }
-#ifdef TESTDISK
+        Drive[(3 * 256) + ZPIncPluginLoc] = 0;
     }
-#endif // TESTDISK
 
     CT = 18;
     CS = 11;
@@ -4116,7 +4143,6 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
     Disk[BAM + 250] = EORtransform(256 - IL0);
 
     BlocksUsedByPlugin = 0;
-#ifdef TESTDISK
     if (bTestDisk)
     {
         bSaverPlugin = false;   //Can't have Saver and FetchTest at the same time
@@ -4126,23 +4152,17 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
         if (!InjectTestPlugin())
             return false;
     }
+    else if (bSaverPlugin)
+    {
+        //Add "IncludeSaveCode" flag and Saver plugin
+        Disk[BAM + 249] = EORtransform(2);
+        if(!InjectSaverPlugin())
+            return false;
+    }
     else
     {
-#endif // TESTDISK
-        if (bSaverPlugin)
-        {
-            //Add "IncludeSaveCode" flag and Saver plugin
-            Disk[BAM + 249] = EORtransform(2);
-            if (!InjectSaverPlugin())
-                return false;
-        }
-        else
-        {
-            Disk[BAM + 249] = EORtransform(0);
-        }
-#ifdef TESTDISK
+        Disk[BAM + 249] = EORtransform(0);
     }
-#endif // TESTDISK
 
 
     //Also add Product ID to BAM, EOR-transformed
@@ -4505,10 +4525,9 @@ bool AddCompressedBundlesToDisk() {
         return false;
     }
 
-#ifdef TESTDISK
+    //CalcTabs();
     if (!bTestDisk)
         InjectDirBlocks();
-#endif // TESTDISK
 
     for (int i = 0; i < BufferCnt; i++)
     {
@@ -4995,7 +5014,6 @@ bool Build() {
 
                 NewBundle = true;
             }
-#ifdef TESTDISK
             else if (ScriptEntryType == EntryTypeTestDisk)
             {
                 if (!NewD)
@@ -5007,8 +5025,7 @@ bool Build() {
 
                 bTestDisk = true;
                 NewBundle = true;
-                }
-#endif // TESTDISK
+            }
             else if (ScriptEntryType == EntryTypeScript)
             {
                 if (!InsertScript(ScriptEntryArray[0]))
@@ -5140,6 +5157,27 @@ void SetScriptPath(string sPath, string aPath)
             sPath = aPath + sPath;
         }
     }
+//#elif __APPLE__
+//    if (sPath[0] != '/')
+//    {
+//        if ((sPath.size() > 1) && (sPath[0] == '~') && (sPath[1] == '/'))
+//        {
+//            //Home directory (~/...) -> replace "~" with HomeDir if known
+//            if (HomeDir != "")
+//            {
+//                sPath = HomeDir + sPath.substr(1);
+//            }
+//            else
+//            {
+//                cerr << "***INFO***\tUnable to identify the user's Home directory...\n";
+//            }
+//        }
+//        else
+//        {
+//            //sPath is relative - use Sparkle's base folder to make it a full path
+//            sPath = aPath + sPath;
+//        }
+//    }
 #endif
 
     ScriptName = sPath;                             //Absolute script path + file name
@@ -5166,6 +5204,15 @@ void SetScriptPath(string sPath, string aPath)
         {
             break;
         }
+//#elif __APPLE__
+//        if (sPath[i] != '/')
+//        {
+//            ScriptPath.replace(i, 1, "");
+//        }
+//        else
+//        {
+//            break;
+//        }
 #endif
     }
 }
@@ -5252,11 +5299,22 @@ int main(int argc, char* argv[])
     if (AppPath[AppPath.size() - 1] != '/')
         AppPath += "/";
 
+//#elif __APPLE__
+//
+//    //Identify user's Home directory
+//    char const* tmp = getenv("HOME");
+//    if (tmp != NULL)
+//    {
+//        HomeDir = tmp;
+//    }
+//
+//    string AppPath{ fs::current_path().string() };
+//    if (AppPath[AppPath.size() - 1] != '/')
+//        AppPath += "/";
+//
 #else
-
     cerr << "***CRITICAL***\tUnsupported operating system!\n";
     return EXIT_FAILURE;
-
 #endif
 
     if (argc < 2)
@@ -5264,6 +5322,9 @@ int main(int argc, char* argv[])
 
 #ifdef DEBUG
 
+        //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\ThePumpkins\\Backup\\221028\\Scripts\\ThePumpkins.sls";
+        //string ScriptFileName = "c:\\Users\\Tamas\\source\\repos\\GPMagazine\\Magazine\\Issue33\\Sparkle\\Magazine.sls";
+        //string ScriptFileName = "c:\\Users\\Tamas\\source\\repos\\DeliriousTwelve\\Parts\\CheckerZoomer\\CheckerZoomer.sls";
         string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\SparkleFetchTest\\ExprTest.sls";
         //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\GP\\NoBounds\\Main\\Sparkle\\NoBounds.sls"; //WIN32
         //string ScriptFileName = "../../C64/NoBounds/Main/Sparkle/NoBounds.sls";   //UBUNTU
