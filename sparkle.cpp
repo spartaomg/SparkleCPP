@@ -4507,7 +4507,11 @@ bool AddCompressedBundlesToDisk() {
 
 #ifdef TESTDISK
     if (!bTestDisk)
+    {
+#endif // TESTDISK
         InjectDirBlocks();
+#ifdef TESTDISK
+    }
 #endif // TESTDISK
 
     for (int i = 0; i < BufferCnt; i++)
