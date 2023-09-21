@@ -2,7 +2,8 @@
 DIR_OBJ = obj/release
 DIR_BIN = bin/release
 OBJFLAGS = -O3 -Wall -std=c++17 -fexceptions -c
-LINKFLAGS = -s -std=c++17 -o
+#LINKFLAGS = -s -std=c++17 -o
+LINKFLAGS = -static -static-libgcc -static-libstdc++ -s -std=c++17 -o
 RESFLAGS = -J rc -O coff -i
 create_dir = @mkdir -p $(@D)
 OBJ = $(DIR_OBJ)/ascii2dirart.o $(DIR_OBJ)/loader.o $(DIR_OBJ)/packer.o $(DIR_OBJ)/petscii2dirart.o $(DIR_OBJ)/sd.o $(DIR_OBJ)/sf.o $(DIR_OBJ)/sparkle.o $(DIR_OBJ)/ss.o $(DIR_OBJ)/ssio.o $(DIR_OBJ)/thirdparty/tinyexpr.o
