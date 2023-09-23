@@ -7,7 +7,7 @@
 //#defnie NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR BUILD INFO 230920
+//  COMPILE TIME VARIABLES FOR BUILD INFO 230921
 //--------------------------------------------------------
 
 constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -3089,38 +3089,51 @@ void ConvertBinToDirArt(string DirArtType) {
     DirTrack = 18;
     DirSector = 1;
 
-    int DAPtr = (DirArtType == "prg") ? 2 : 0;
-
-    for (size_t b = DAPtr; b < DA.size(); b += 40)
+    size_t DAPtr = (DirArtType == "prg") ? 2 : 0;
+    size_t EntryStart = DAPtr;
+    while (DAPtr <= DA.size())
     {
-        FindNextDirPos();
-        if (DirPos != 0)
+        if ((DAPtr == DA.size()) || (DAPtr == EntryStart + 16) || (DA[DAPtr] == 0xa0))
         {
-            Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0] = 0x82;      //"PRG" -  all dir entries will point at first file in dir
-            Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 1] = 18;        //Track 18 (track pointer of boot loader)
-            Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 2] = 7;         //Sector 7 (sector pointer of boot loader)
+            //if (DAPtr > EntryStart)   //BUG FIX - accept empty lines, i.e. treat each 0xa0 chars as line ends
+            //{
+                FindNextDirPos();
 
-            for (int i = 0; i < 16; i++)
-            {
-                if (b + i < DA.size())
+                if (DirPos != 0)
                 {
-                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Petscii2DirArt[DA[b + i]];
+                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0] = 0x82;      //"PRG" -  all dir entries will point at first file in dir
+                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 1] = 18;        //Track 18 (track pointer of boot loader)
+                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 2] = 7;         //Sector 7 (sector pointer of boot loader)
+
+                    for (size_t i = 0; i < 16; i++)                 //Fill dir entry with 0xa0 chars first
+                    {
+                        Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = 0xa0;
+                    }
+
+                    for (size_t i = 0; i < DAPtr - EntryStart; i++) //Then copy dir entry
+                    {
+                        Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Petscii2DirArt[DA[EntryStart + i]];
+                    }
+
+                    if ((DirTrack == 18) && (DirSector == 1) && (DirPos == 2))
+                    {
+                        //Very first dir entry, also add loader block count
+                        Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0x1c] = LoaderBlockCount;
+                    }
                 }
                 else
                 {
                     break;
                 }
-            }
-            if ((DirTrack == 18) && (DirSector == 1) && (DirPos == 2))
-            {
-                //Very first dir entry, also add loader block count
-                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0x1c] = LoaderBlockCount;
-            }
+
+                while ((DAPtr < DA.size()) && (DAPtr < EntryStart + 39) && (DA[DAPtr] != 0xa0))
+                {
+                    DAPtr++;        //Find last char of screen row (start+39) or first $a0-byte if sooner
+                }
+            //}
+            EntryStart = DAPtr + 1; //Start of next line
         }
-        else
-        {
-            break;
-        }
+        DAPtr++;
     }
 }
 
@@ -4299,13 +4312,6 @@ bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL) {
     AdLo = (B - 1) % 256;
     AdHi = (B - 1) / 256;
 
-    //unsigned char* Loader = new unsigned char [Loader_size];
-
-    //for (int i = 0; i < Loader_size; i++)
-    //{
-        //Loader[i] = Loader[i];
-    //}
-
 
     if (!UpdateZP())
         return false;
@@ -4323,16 +4329,6 @@ bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL) {
         }
     }
 
- /*
-     for (int i = 0; i < Loader_size - 6; i++)   //Find JMP Sparkle_LoadFetched instruction
-    {
-        if ((Loader[i] == 0x10) && (Loader[i + 3] == 0xad) && (Loader[i + 5] == 0x4c))
-        {
-            Loader[i] = AdHi;                   //Hi Byte return address at the end of Loader
-            Loader[i + 3] = AdLo;               //Lo Byte return address at the end of Loader
-        }
-    }
-*/
     //Number of blocks in Loader
     LoaderBlockCount = Loader_size / 254;
     if (Loader_size % 254 != 0)
@@ -4635,13 +4631,14 @@ bool Build() {
     LineStart = 0;
     LineEnd = 0;
 
-    FindNextScriptEntry();
+    //FindNextScriptEntry();
 
-    if (ScriptEntryType != EntryTypeScriptHeader)
-    {
-        cerr << "***CRITICAL***\tInvalid script file!\n";
-        return false;
-    }
+    //if (ScriptEntryType != EntryTypeScriptHeader)
+    //{
+    //    cerr << "***CRITICAL***\tInvalid script file!\n";
+    //    return false;
+    //}
+    
     if (!ResetDiskVariables())
     {
         return false;
@@ -5195,35 +5192,35 @@ void PrintInfo()
     */
 
     cout << "SCRIPT TEMPLATE:\n\n";
-    cout << "[Sparkle Loader Script]\n\n";
-    cout << "Path:\t\tfilepath\\diskname.d64\t\t\t\t\t# path and file name of the D64 image <- THIS IS A COMMENT\n";
-    cout << "Header:\t\tdisk header\t\t\t\t\t\t# max. 16 characters\n";
-    cout << "ID:\t\tdskid\t\t\t\t\t\t\t# max. 5 characters\n";
-    cout << "Name:\t\tdemo name\t\t\t\t\t\t# max. 16 characters\n";
-    cout << "Start:\t\tabcd\t\t\t\t\t\t\t# first part's start address\n";
-    cout << "DirArt:\t\tfilepath\\diarartfile.d64\t\t\t\t# D64, TXT, PRG, BIN, C array, KickAss ASM formats accepted\n";
-    cout << "Tracks:\t\t35\t\t\t\t\t\t\t# 35 vs 40, default: 35 if omitted\n";
-    cout << "HSFile:\t\tfilepath\\hsfilename.bin\tabcd\tabcdabcd\tabcd\t# (address) (offset) (length) can be omitted if not needed\n";
-    cout << "ProdID:\t\tabcdef\t\t\t\t\t\t\t# 6-digit hex number, once per script, must be the same for disks of a multidisk prod, autogenerated if omitted\n";
-    cout << "ThisSide:\tab\t\t\t\t\t\t\t# 2-digit hex number, only if disks of a multidisk prod are built separately\n";
-    cout << "NextSide:\tab\t\t\t\t\t\t\t# 2-digit hex number, only if disks of a multidisk prod are built separately\n";
-    cout << "IL0:\t\t4\t\t\t\t\t\t\t# 1-20, default: 4 if omitted\n";
-    cout << "IL1:\t\t3\t\t\t\t\t\t\t# 1-18, default: 3 if omitted\n";
-    cout << "IL2:\t\t3\t\t\t\t\t\t\t# 1-17, default: 3 if omitted\n";
-    cout << "IL3:\t\t3\t\t\t\t\t\t\t# 1-16, default: 3 if omitted\n";
-    cout << "ZP:\t\t02\t\t\t\t\t\t\t# 02-fd, once per script, must be the same for disks of a multidisk prod, default: 02 if omitted\n\n";
-    cout << "# Bundle 0 - files marked with * will be loaded under I/O ($d000-$dfff)\n";
-    cout << "File:\t\tfilepath\\file1.prg*\tabcd\tabcdabcd\tabcd\t# (address) (offset) (length)\n";
-    cout << "File:\t\tfilepath\\file2.bin\tabcd\tabcdabcd\t\t# (address) (offset) (default length)\n";
-    cout << "File:\t\tfilepath\\file3.kla\tabcd\t\t\t\t# (address) (default offset) (default length)\n\n";
-    cout << "# Bundle 1 - bundles must be separated by at least one blank line!\n";
-    cout << "File:\t\tfilepath\\file4.prg\t\t\t\t\t# (default address) (default offset) (default length)\n\n";
-    cout << "# Bundle 2\n";
-    cout << "Script:\t\tfilepath\\scriptfile.sls\t\t\t\t\t# this will import another script here...\n\n";
-    cout << "# Entries can be fully omitted if they are not needed or the default value is used.\n";
-    cout << "# Use TAB(s) to separate entry types and their values!\n";
-    cout << "# Unrecognized entries are interpreted as comments.\n";
-    cout << "# For more details please read the user manual!\n\n";
+    //cout << "[Sparkle Loader Script]\n\n";
+    cout << "Path:\t\tfilepath\\diskname.d64\t\t\t\t\t<< path and file name of the D64 image <- THIS IS A COMMENT\n";
+    cout << "Header:\t\tdisk header\t\t\t\t\t\t<< max. 16 characters\n";
+    cout << "ID:\t\tdskid\t\t\t\t\t\t\t<< max. 5 characters\n";
+    cout << "Name:\t\tdemo name\t\t\t\t\t\t<< max. 16 characters\n";
+    cout << "Start:\t\tabcd\t\t\t\t\t\t\t<< first part's start address\n";
+    cout << "DirArt:\t\tfilepath\\diarartfile.d64\t\t\t\t<< D64, TXT, PRG, BIN, C array, KickAss ASM formats accepted\n";
+    cout << "Tracks:\t\t35\t\t\t\t\t\t\t<< 35 vs 40, default: 35 if omitted\n";
+    cout << "HSFile:\t\tfilepath\\hsfilename.bin\tabcd\tabcdabcd\tabcd\t<< (address) (offset) (length) can be omitted if not needed\n";
+    cout << "ProdID:\t\tabcdef\t\t\t\t\t\t\t<< 6-digit hex number, once per script, must be the same for disks of a multidisk prod, autogenerated if omitted\n";
+    cout << "ThisSide:\tab\t\t\t\t\t\t\t<< 2-digit hex number, only if disks of a multidisk prod are built separately\n";
+    cout << "NextSide:\tab\t\t\t\t\t\t\t<< 2-digit hex number, only if disks of a multidisk prod are built separately\n";
+    cout << "IL0:\t\t4\t\t\t\t\t\t\t<< 1-20, default: 4 if omitted\n";
+    cout << "IL1:\t\t3\t\t\t\t\t\t\t<< 1-18, default: 3 if omitted\n";
+    cout << "IL2:\t\t3\t\t\t\t\t\t\t<< 1-17, default: 3 if omitted\n";
+    cout << "IL3:\t\t3\t\t\t\t\t\t\t<< 1-16, default: 3 if omitted\n";
+    cout << "ZP:\t\t02\t\t\t\t\t\t\t<< 02-fd, once per script, must be the same for disks of a multidisk prod, default: 02 if omitted\n\n";
+    cout << "<< Bundle 0 - files marked with * will be loaded under I/O ($d000-$dfff)\n";
+    cout << "File:\t\tfilepath\\file1.prg*\tabcd\tabcdabcd\tabcd\t<< (address) (offset) (length)\n";
+    cout << "File:\t\tfilepath\\file2.bin\tabcd\tabcdabcd\t\t<< (address) (offset) (default length)\n";
+    cout << "File:\t\tfilepath\\file3.kla\tabcd\t\t\t\t<< (address) (default offset) (default length)\n\n";
+    cout << "<< Bundle 1 - bundles must be separated by at least one blank line!\n";
+    cout << "File:\t\tfilepath\\file4.prg\t\t\t\t\t<< (default address) (default offset) (default length)\n\n";
+    cout << "<< Bundle 2\n";
+    cout << "Script:\t\tfilepath\\scriptfile.sls\t\t\t\t\t<< this will import another script here...\n\n";
+    cout << "<< Entries can be fully omitted if they are not needed or the default value is used.\n";
+    cout << "<< Use TAB(s) to separate entry types and their values!\n";
+    cout << "<< Unrecognized entries are interpreted as comments.\n";
+    cout << "<< For more details please read the user manual!\n\n";
 
 }
 
