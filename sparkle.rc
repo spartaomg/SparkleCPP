@@ -26,8 +26,8 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 2,3,23,924
- PRODUCTVERSION 2,3,23,924
+ FILEVERSION 2,3,23,929
+ PRODUCTVERSION 2,3,23,929
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -44,12 +44,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "OMG"
             VALUE "FileDescription", "Sparkle 2 - IRQ Loader and Linking Tool for the Commodore 64"
-            VALUE "FileVersion", "2.3.23.924"
+            VALUE "FileVersion", "2.3.23.929"
             VALUE "InternalName", "Sparkle.exe"
             VALUE "LegalCopyright", "Copyright © Sparta 2019-2023"
             VALUE "OriginalFilename", "Sparkle.exe"
             VALUE "ProductName", "Sparkle 2 - IRQ Loader and Linking Tool for the Commodore 64"
-            VALUE "ProductVersion", "2.3.23.924"
+            VALUE "ProductVersion", "2.3.23.929"
         END
     END
     BLOCK "VarFileInfo"
@@ -57,14 +57,6 @@ BEGIN
         VALUE "Translation", 0x409, 1200
     END
 END
-
-
-/////////////////////////////////////////////////////////////////////////////
-//
-// 256
-//
-
-IDR_INCFILE1            256                     "Resources\\Sparkle.inc"
 
 #endif    // English (United States) resources
 /////////////////////////////////////////////////////////////////////////////

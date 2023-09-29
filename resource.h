@@ -1,9 +1,8 @@
 ﻿//{{NO_DEPENDENCIES}}
 // Microsoft Visual C++ generated include file.
-// Used by Sparkle.rc
+// Used by sparkle.rc
 //
-#define IDR_INCFILE1                    105
-#define TEXTFILE				        256
+#define TEXTFILE                        256
 
 // Next default values for new objects
 // 

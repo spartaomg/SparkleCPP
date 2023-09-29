@@ -7,7 +7,7 @@
 //#defnie NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR BUILD INFO 230924
+//  COMPILE TIME VARIABLES FOR BUILD INFO 230929
 //--------------------------------------------------------
 
 constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -384,7 +384,7 @@ string ReadFileToString(const string& FileName, bool CorrectFilePath)
 
     str.assign((istreambuf_iterator<char>(t)), istreambuf_iterator<char>());
 
-    for (size_t i = 0; i < str.size(); i++)
+    for (int i = str.length() - 1; i >= 0; i--)         //Done from end to start as the length of the string may change
     {
         if (str[i] == '\r')
         {
@@ -3249,22 +3249,22 @@ void ConvertPetToDirArt() {
                 Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0] = 0x82;  //"PRG" -  all dir entries will point at first file in dir
                 Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 1] = 18;    //Track 18 (track pointer of boot loader)
                 Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 2] = 7;     //Sector 7
+            }
 
-                if ((DirTrack == 18) && (DirSector == 1) && (DirPos == 2))
-                {
-                    //Very first dir entry, also add loader block count
-                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0x1c] = LoaderBlockCount;
-                }
+            if ((DirTrack == 18) && (DirSector == 1) && (DirPos == 2))
+            {
+                //Very first dir entry, also add loader block count
+                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0x1c] = LoaderBlockCount;
+            }
 
-                for (size_t i = 0; i < 16; i++)
-                {
-                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = 0xa0;
-                }
+            for (size_t i = 0; i < 16; i++)
+            {
+                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = 0xa0;
+            }
 
-                for (size_t i = 0; (i < RowLen) && (i < 16); i++)
-                {
-                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Petscii2DirArt[PetFile[5 + (rc * RowLen) + i]];
-                }
+            for (size_t i = 0; (i < RowLen) && (i < 16); i++)
+            {
+                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Petscii2DirArt[PetFile[5 + (rc * RowLen) + i]];
             }
         }
         else

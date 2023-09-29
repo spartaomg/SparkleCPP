@@ -15,7 +15,7 @@
 #include <iostream>
 #include <sstream>
 #include <filesystem>
-#include "resource.h"
+//#include "resource.h"
 
 #ifdef INCLTINYEXPR
 #include "thirdparty/tinyexpr.h"
