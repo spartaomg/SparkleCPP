@@ -216,6 +216,47 @@ string ParsedEntries = "";
 
 string HomeDir = "";
 
+string DirArtType = "";
+
+unsigned int ImgWidth = 0;
+unsigned int ImgHeight = 0;
+unsigned int BGCol = 0;
+unsigned int FGCol = 0;
+
+vector <unsigned char> Image;   //pixels in RGBA format (4 bytes per pixel)
+vector <unsigned char> BmpRaw;
+
+int Mplr = 0;
+
+typedef struct tagBITMAPINFOHEADER {
+    int32_t biSize;
+    int32_t biWidth;
+    int32_t biHeight;
+    int16_t biPlanes;
+    int16_t biBitCount;
+    int32_t biCompression;
+    int32_t biSizeImage;
+    int32_t biXPelsPerMeter;
+    int32_t biYPelsPerMeter;
+    int32_t biClrUsed;
+    int32_t biClrImportant;
+} BITMAPINFOHEADER, * LPBITMAPINFOHEADER, * PBITMAPINFOHEADER;
+
+typedef struct tagRGBQUAD {
+    unsigned char rgbBlue;
+    unsigned char rgbGreen;
+    unsigned char rgbRed;
+    unsigned char rgbReserved;
+} RGBQUAD;
+
+typedef struct tagBITMAPINFO {
+    BITMAPINFOHEADER bmiHeader;
+    RGBQUAD          bmiColors[1];
+} BITMAPINFO, * LPBITMAPINFO, * PBITMAPINFO;
+
+BITMAPINFO BmpInfo;
+BITMAPINFOHEADER BmpInfoHeader;
+
 //------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 string FindAbsolutePath(string FilePath, string ScriptFilePath)
@@ -2795,7 +2836,7 @@ void AddAsmDirEntry(string DirEntry) {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void ConvertKickassAsmToDirArt() {
+void ImportDirArtFromAsm() {
 
     DirArt = ReadFileToString(DirArtName, false);
 
@@ -2976,7 +3017,7 @@ bool AddCArrayDirEntry(int RowLen)
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void ConvertCArrayToDirArt() {
+void ImportDirArtFromCArray() {
 
     string DA = ReadFileToString(DirArtName, false);
 
@@ -3071,7 +3112,7 @@ void ConvertCArrayToDirArt() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void ConvertBinToDirArt(string DirArtType) {
+void ImportDirArtFromBinary() {
 
     vector<unsigned char> DA;
 
@@ -3167,7 +3208,7 @@ void AddDirEntry(string DirEntry){
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void ConvertTxtToDirArt() {
+void ImportDirArtFromTxt() {
 
     DirArt = ReadFileToString(DirArtName, false);
 
@@ -3208,7 +3249,7 @@ void ConvertTxtToDirArt() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void ConvertPetToDirArt() {
+void ImportDirArtFromPet() {
 
     //Binary file With a .pet extension that includes the following information, without any padding:
     //- 1 byte: screen width in chars (40 for whole C64 screen)
@@ -3276,7 +3317,7 @@ void ConvertPetToDirArt() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void ConvertD64ToDirArt() {
+void ImportDirArtFromD64() {
 
     vector<unsigned char> DA;
 
@@ -3359,6 +3400,394 @@ void ConvertD64ToDirArt() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
+unsigned int GetPixel(size_t X, size_t Y)
+{
+    size_t Pos = Y * ((size_t)ImgWidth * 4) + (X * 4);
+
+    unsigned char R = Image[Pos + 0];
+    unsigned char G = Image[Pos + 1];
+    unsigned char B = Image[Pos + 2];
+    unsigned char A = Image[Pos + 3];
+
+    unsigned int Col = (R * 0x1000000) + (G * 0x10000) + (B * 0100) + A;
+
+    return Col;
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+bool IdentifyColors()
+{
+    unsigned int Col1 = GetPixel(0, 0);  //The first of two allowed colors per image
+    unsigned int Col2 = Col1;
+
+
+    //First find two colors (Col1 is already assigned to pixel(0,0))
+    for (size_t y = 0; y < ImgHeight; y += Mplr)
+    {
+        for (size_t x = 0; x < ImgWidth; x += Mplr)
+        {
+            unsigned int ThisCol = GetPixel(x, y);
+            if ((ThisCol != Col1) && (Col2 == Col1))
+            {
+                Col2 = ThisCol;
+            }
+            else if ((ThisCol != Col1) && (ThisCol != Col2))
+            {
+                cerr << "***INFO***\tThis image contains more than two colors.\nThe disk will be built without DirArt.\n";
+                return false;
+            }
+        }
+    }
+
+    if (Col1 == Col2)
+    {
+        cerr << "***INFO***Unable to determine foreground and background colors in DirArt image file.\nThe disk will be built without DirArt.\n";
+        return false;
+    }
+
+    //Start with same colors
+    FGCol = Col1;
+    BGCol = Col1;
+
+    //First let's try to find a SPACE character -> its color will be the background color
+
+    for (size_t cy = 0; cy < ImgHeight; cy += ((size_t)Mplr * 8))
+    {
+        for (size_t cx = 0; cx < ImgWidth; cx += ((size_t)Mplr * 8))
+        {
+            int PixelCnt = 0;
+
+            unsigned int FirstCol = GetPixel(cx, cy);
+
+            for (size_t y = 0; y < (size_t)Mplr * 8; y += (size_t)Mplr)
+            {
+                for (size_t x = 0; x < (size_t)Mplr * 8; x += (size_t)Mplr)
+                {
+                    if (GetPixel(cx + x, cy + y) == FirstCol)
+                    {
+                        PixelCnt++;
+                    }
+                }
+            }
+            if (PixelCnt == 64)         //SPACE character found (i.e. all 64 pixels are the same color - the opposite (0xa0) is not allowed in dirart)
+            {
+                BGCol = FirstCol;
+                FGCol = (BGCol == Col1) ? Col2 : Col1;
+                return true;
+            }
+        }//End cx
+    }//End cy
+
+#ifdef PXDENSITY
+    //No SPACE found in DirArt image, now check the distribution of low and high density pixels (i.e. pixels that have the highest chance to be eighter BG of FG color)
+    //THIS IS NOT USED AS THE DISTRIBUTION OF THE INDIVIDUAL CHARACTERS CANNOT BE PREDICTED
+    int LoPx = 0;
+    int HiPx = 0;
+
+    for (size_t cy = 0; cy < ImgHeight; cy += (size_t)Mplr * 8)
+    {
+        for (size_t cx = 0; cx < ImgWidth; cx += (size_t)Mplr * 8)
+        {
+            //Low density pixels = pixels most likely to be 0 (0:2, 7:2, 0:5. 7:5, 5:7)
+            if (GetPixel(cx + 0, cy + 2) == Col1) LoPx++;
+            if (GetPixel(cx + 7, cy + 2) == Col1) LoPx++;
+            if (GetPixel(cx + 0, cy + 5) == Col1) LoPx++;
+            if (GetPixel(cx + 7, cy + 5) == Col1) LoPx++;
+            if (GetPixel(cx + 5, cy + 7) == Col1) LoPx++;
+
+            //High density pixels = pixels most likely to be 1 (2:3, 3:3, 4:3, 3:6, 4:6)
+            if (GetPixel(cx + 2, cy + 3) == Col1) HiPx++;
+            if (GetPixel(cx + 3, cy + 3) == Col1) HiPx++;
+            if (GetPixel(cx + 4, cy + 3) == Col1) HiPx++;
+            if (GetPixel(cx + 3, cy + 6) == Col1) HiPx++;
+            if (GetPixel(cx + 4, cy + 6) == Col1) HiPx++;
+
+        }//End cx
+    }//End cy
+
+    if (LoPx > HiPx)
+    {
+        BGCol = Col1;
+        FGCol = Col2;
+    }
+    else
+    {
+        BGCol = Col2;
+        FGCol = Col1;
+    }
+
+    if (FGCol != BGCol)
+    {
+        return true;
+    }
+#endif // PXDENSITY
+
+    //No SPACE character
+    //Let's use the darker color as BGCol
+    int R1 = Col1 / 0x1000000;
+    int G1 = (Col1 & 0xff0000) / 0x10000;
+    int B1 = (Col1 & 0x00ff00) / 0x100;
+    int R2 = Col2 / 0x1000000;
+    int G2 = (Col2 & 0xff0000) / 0x10000;
+    int B2 = (Col2 & 0x00ff00) / 0x100;
+
+    double C1 = sqrt((0.21 * R1 * R1) + (0.72 * G1 * G1) + (0.07 * B1 * B1));
+    double C2 = sqrt((0.21 * R2 * R2) + (0.72 * G2 * G2) + (0.07 * B2 * B2));
+    //Another formula: sqrt(0.299 * R ^ 2 + 0.587 * G ^ 2 + 0.114 * B ^ 2)
+
+    BGCol = (C1 < C2) ? Col1 : Col2;
+    FGCol = (BGCol == Col1) ? Col2 : Col1;
+
+    if (BGCol == FGCol)
+    {
+        cerr << "***INFO***Unable to determine foreground and background colors in DirArt image file.\nThe disk will be built without DirArt.\n";
+        return false;
+    }
+
+    return true;
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+bool DecodeBmp()
+{
+    const size_t BIH = 0x0e;            //Offset of Bitmap Info Header within raw data
+    const size_t DATA_OFFSET = 0x0a;    //Offset of Bitmap Data Start within raw data
+
+    memcpy(&BmpInfoHeader, &BmpRaw[BIH], sizeof(BmpInfoHeader));
+
+    if (BmpInfoHeader.biWidth % 128 != 0)
+    {
+        cerr << "Invalid image size. The image must have a width of 128 pixels (16 chars).\n";
+        return false;
+    }
+
+    int ColMax = (BmpInfoHeader.biBitCount < 24) ? (1 << BmpInfoHeader.biBitCount) : 0;
+
+    PBITMAPINFO BmpInfo = (PBITMAPINFO)new char[sizeof(BITMAPINFOHEADER) + (ColMax * sizeof(RGBQUAD))];
+
+    //Copy info header into structure
+    memcpy(&BmpInfo->bmiHeader, &BmpInfoHeader, sizeof(BmpInfoHeader));
+
+    //Copy palette into structure
+    for (size_t i = 0; i < (size_t)ColMax; i++)
+    {
+        memcpy(&BmpInfo->bmiColors[i], &BmpRaw[0x36 + (i * 4)], sizeof(RGBQUAD));
+    }
+
+    //Calculate data offset
+    size_t DataOffset = (size_t)BmpRaw[DATA_OFFSET] + (size_t)(BmpRaw[DATA_OFFSET + 1] * 0x100) + (size_t)(BmpRaw[DATA_OFFSET + 2] * 0x10000) + (size_t)(BmpRaw[DATA_OFFSET + 3] * 01000000);
+
+    //Calculate length of pixel rows in bytes
+    size_t RowLen = ((size_t)BmpInfo->bmiHeader.biWidth * (size_t)BmpInfo->bmiHeader.biBitCount) / 8;
+
+    //BMP pads pixel rows to multiples of 4 in bytes
+    size_t PaddedRowLen = (RowLen % 4) == 0 ? RowLen : RowLen - (RowLen % 4) + 4;
+
+    //Calculate size of our image vector (we will use 4 bytes per pixel in RGBA format)
+    size_t BmpSize = (size_t)BmpInfo->bmiHeader.biWidth * 4 * (size_t)BmpInfo->bmiHeader.biHeight;
+
+    //Resize image vector
+    Image.resize(BmpSize, 0);
+
+    size_t BmpOffset = 0;
+
+    if (ColMax != 0)    //1 bit/pixel, 4 bits/pixel, 8 bits/pixel modes - use palette data
+    {
+        int BitsPerPx = BmpInfo->bmiHeader.biBitCount;   //1         4          8
+        int bstart = 8 - BitsPerPx;                      //1-bit: 7; 4-bit:  4; 8-bit =  0;
+        int mod = 1 << BitsPerPx;                        //1-bit: 2; 4-bit: 16; 8-bit: 256;
+
+        for (int y = (BmpInfo->bmiHeader.biHeight - 1); y >= 0; y--)    //Pixel rows are read from last bitmap row to first
+        {
+            size_t RowOffset = DataOffset + (y * PaddedRowLen);
+
+            for (size_t x = 0; x < RowLen; x++)                         //Pixel row are read left to right
+            {
+                unsigned int Pixel = BmpRaw[RowOffset + x];
+
+                for (int b = bstart; b >= 0; b -= BitsPerPx)
+                {
+                    int PaletteIndex = (Pixel >> b) % mod;
+
+                    Image[BmpOffset + 0] = BmpInfo->bmiColors[PaletteIndex].rgbRed;
+                    Image[BmpOffset + 1] = BmpInfo->bmiColors[PaletteIndex].rgbGreen;
+                    Image[BmpOffset + 2] = BmpInfo->bmiColors[PaletteIndex].rgbBlue;
+                    BmpOffset += 4;
+                }
+            }
+        }
+    }
+    else
+    {
+        int BytesPerPx = BmpInfo->bmiHeader.biBitCount / 8;    //24 bits/pixel: 3; 32 bits/pixel: 4
+
+        for (int y = (BmpInfo->bmiHeader.biHeight - 1); y >= 0; y--)    //Pixel rows are read from last bitmap row to first
+        {
+            size_t RowOffset = DataOffset + (y * PaddedRowLen);
+
+            for (size_t x = 0; x < RowLen; x += BytesPerPx)              //Pixel row are read left to right
+            {
+                Image[BmpOffset + 0] = BmpRaw[RowOffset + x + 2];
+                Image[BmpOffset + 1] = BmpRaw[RowOffset + x + 1];
+                Image[BmpOffset + 2] = BmpRaw[RowOffset + x + 0];
+                BmpOffset += 4;
+            }
+        }
+    }
+
+    ImgWidth = BmpInfo->bmiHeader.biWidth;
+    ImgHeight = BmpInfo->bmiHeader.biHeight;
+
+    return true;
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+void ImportDirArtFromImage()
+{
+    if (DirArtType == "png")
+    {
+        //Load and decode PNG image using LodePNG (Copyright (c) 2005-2023 Lode Vandevenne)
+        unsigned error = lodepng::decode(Image, ImgWidth, ImgHeight, DirArtName);
+
+        //if there's an error, display it
+        if (error)
+        {
+            cout << "***INFO***\tPNG load/decode error: " << error << ": " << lodepng_error_text(error) << "\nThe disk will be built without DirArt.\n";
+            return;
+        }
+    }
+    else if (DirArtType == "bmp")
+    {
+        BmpRaw.clear();
+
+        if (ReadBinaryFile(DirArtName, BmpRaw) == -1)
+        {
+            cerr << "***INFO***\tUnable to open BMP DirArt file.\nThe disk will be built without DirArt.\n";
+            return;
+        }
+        else if (BmpRaw.size() == 0)
+        {
+            cerr << "***INFO***\tThe DirArt file cannot be 0 bytes long.\nThe disk will be built without DirArt.\n";
+            return;
+        }
+
+        if (!DecodeBmp())
+        {
+            return;
+        }
+    }
+    //Here we have the image decoded in Image vector of unsigned chars, 4 bytes representing a pixel in RGBA format
+
+    if (ImgWidth % 128 != 0)
+    {
+        cerr << "***INFO***\tInvalid image size. The image width must be multiples of 128 pixels (16 chars wide).\nThe disk will be built without DirArt.\n";
+        return;
+    }
+
+    Mplr = ImgWidth / 128;
+
+    if (!IdentifyColors())
+    {
+        return;
+    }
+
+    int PixelCnt = 0;
+
+    for (size_t cy = 0; cy < ImgHeight; cy += (size_t)Mplr * 8)
+    {
+        unsigned int Entry[16]{};
+        for (size_t cx = 0; cx < ImgWidth; cx += (size_t)Mplr * 8)
+        {
+            PixelCnt = 0;
+            for (size_t y = 0; y < (size_t)Mplr * 8; y += (size_t)Mplr)
+            {
+                for (size_t x = 0; x < (size_t)Mplr * 8; x += (size_t)Mplr)
+                {
+                    if (GetPixel(cx + x, cy + y) == FGCol)
+                    {
+                        PixelCnt++;
+                    }
+                }//End x
+            }//End y
+            Entry[cx / ((size_t)Mplr * 8)] = 32;
+
+            for (size_t i = 0; i < 256; i++)
+            {
+                if (PixelCnt == PixelCntTab[i])
+                {
+                    size_t px = i % 16;
+                    size_t py = i / 16;
+                    bool Match = true;
+                    for (size_t y = 0; y < 8; y++)
+                    {
+                        for (size_t x = 0; x < 8; x++)
+                        {
+                            size_t PixelX = cx + ((size_t)Mplr * x);
+                            size_t PixelY = cy + ((size_t)Mplr * y);
+                            unsigned int ThisCol = GetPixel(PixelX, PixelY);
+                            unsigned char DACol = 0;
+                            if (ThisCol == FGCol)
+                            {
+                                DACol = 1;
+                            }
+
+                            size_t CharSetPos = (py * 8 * 128) + (y * 128) + (px * 8) + x;
+
+                            if (DACol != CharSetTab[CharSetPos])
+                            {
+                                Match = false;
+                                break;
+                            }
+                        }//Next x
+                        if (!Match)
+                        {
+                            break;
+                        }//End if
+                    }//Next y
+                    if (Match)
+                    {
+                        Entry[cx / ((size_t)Mplr * 8)] = i;
+                        break;
+                    }//End if
+                }//End if
+            }//Next i
+        }//Next cx
+
+        FindNextDirPos();
+
+        if (DirPos != 0)
+        {
+            Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0] = 0x82;      //"PRG" -  all dir entries will point at first file in dir
+            Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 1] = 18;        //Track 18 (track pointer of boot loader)
+            Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 2] = 7;         //Sector 7 (sector pointer of boot loader)
+
+            for (int i = 0; i < 16; i++)
+            {
+                unsigned int C = Entry[i];
+                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Petscii2DirArt[C];
+            }
+
+            if ((DirTrack == 18) && (DirSector == 1) && (DirPos == 2))
+            {
+                //Very first dir entry, also add loader block count
+                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0x1c] = LoaderBlockCount;
+            }
+        }
+        else
+        {
+            break;
+        }
+    }//Next cy
+
+    return;
+
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
 void AddDirArt() {
 
     if (DirArtName == "")
@@ -3371,8 +3800,6 @@ void AddDirArt() {
         cerr << "***INFO***\tThe following DirArt file does not exist: " << DirArtName << "\nThe disk will be built without DirArt.\n";
         return;
     }
-
-    string DirArtType = "";
 
     int ExtStart = DirArtName.length();
 
@@ -3406,33 +3833,45 @@ void AddDirArt() {
         DirArtType += tolower(DirArtName[i]);
     }
 
-    if (DirArtType == "d64")                // Copy DirArt from D64
+    if (DirArtType == "d64")                // Import from D64
     {
-        ConvertD64ToDirArt();
+        ImportDirArtFromD64();
     }
-    else if (DirArtType == "txt")           // Convert TXT file to DirArt
+    else if (DirArtType == "txt")           // Import from TXT file
     {
-        ConvertTxtToDirArt();
+        ImportDirArtFromTxt();
     }
-    else if (DirArtType == "prg")           // Convert PRG (binary file with header) to DirArt
+    else if (DirArtType == "prg")           // Import from PRG (binary file with header)
     {
-        ConvertBinToDirArt(DirArtType);
+        ImportDirArtFromBinary();
     }
-    else if (DirArtType == "c")             // Convert C array to DirArt
+    else if (DirArtType == "c")             // Import from Marq's PETSCII Editor C array file
     {
-        ConvertCArrayToDirArt();
+        ImportDirArtFromCArray();
     }
-    else if (DirArtType == "asm")           // Convert Kick Assembler file parameter list to DirArt
+    else if (DirArtType == "asm")           // Import from Kick Assembler file parameter list
     {
-        ConvertKickassAsmToDirArt();
+        ImportDirArtFromAsm();
     }
-    else if (DirArtType == "pet")           // Convert PET file to DirArt
+    else if (DirArtType == "pet")           // Import from PET binary
     {
-        ConvertPetToDirArt();
+        ImportDirArtFromPet();
+    }
+    else if (DirArtType == "json")          // Import from JSON file
+    {
+
+    }
+    else if (DirArtType == "png")           // Import from PNG image using LodePNG (Copyright (c) 2005-2023 Lode Vandevenne)
+    {
+        ImportDirArtFromImage();
+    }
+    else if (DirArtType == "bmp")           // Import from BMP image
+    {
+        ImportDirArtFromImage();
     }
     else
     {
-        ConvertBinToDirArt("");     // Convert any other binary file to DirArt (same as PRG without header)
+        ImportDirArtFromBinary();           // Import from any other binary file (same as PRG without header)
     }
 }
 
@@ -5174,7 +5613,7 @@ void SetScriptPath(string sPath, string aPath)
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 void PrintInfo()
 {
-    cout << "USAGE: Sparkle script.sls\n\n";
+    cout << "USAGE: Sparkle2 script.sls\n\n";
 
     /*        cout << "IMPORTANT LOADER FUNCTIONS:\n\n";
 
