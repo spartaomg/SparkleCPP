@@ -3554,7 +3554,7 @@ bool DecodeBmp()
 {
     const size_t BIH = 0x0e;                                            //Offset of Bitmap Info Header within raw data
     const size_t DATA_OFFSET = 0x0a;                                    //Offset of Bitmap Data Start within raw data
-    const size_t MINSIZE = sizeof(tagBITMAPINFOHEADER) + BIH;         //Minimum header size
+    const size_t MINSIZE = sizeof(tagBITMAPINFOHEADER) + BIH;           //Minimum header size
 
     if (ImgRaw.size() < MINSIZE)
     {
@@ -3572,7 +3572,7 @@ bool DecodeBmp()
 
     if ((BmpInfoHeader.biCompression != 0) && (BmpInfoHeader.biCompression != 3))
     {
-        cerr << "***INFO***\tUnsupported BMP format. Sparkle can only work with uncompressed BMP files that use the RGB color space.\nThe disk will be built without DirArt.\n";
+        cerr << "***INFO***\tUnsupported BMP format. Sparkle can only work with uncompressed BMP files.\nThe disk will be built without DirArt.\n";
         return false;
     }
 
@@ -3706,7 +3706,7 @@ void ImportDirArtFromImage()
 
     if (ImgWidth % 128 != 0)
     {
-        cerr << "***INFO***\tInvalid image size. The image width must be multiples of 128 pixels (16 chars wide).\nThe disk will be built without DirArt.\n";
+        cerr << "***INFO***\tUnsupported image size. The image must be 128 pixels (16 chars) wide or a multiple of it if resized.\nThe disk will be built without DirArt.\n";
         return;
     }
 
