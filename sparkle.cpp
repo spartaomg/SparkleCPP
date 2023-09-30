@@ -1,13 +1,13 @@
 #include "common.h"
 
-//#define TESTDISK
+#define TESTDISK
 
 //#define DEBUG
 
 //#defnie NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR BUILD INFO 230929
+//  COMPILE TIME VARIABLES FOR BUILD INFO 230930
 //--------------------------------------------------------
 
 constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -224,7 +224,7 @@ unsigned int BGCol = 0;
 unsigned int FGCol = 0;
 
 vector <unsigned char> Image;   //pixels in RGBA format (4 bytes per pixel)
-vector <unsigned char> BmpRaw;
+vector <unsigned char> ImgRaw;  //raw image
 
 int Mplr = 0;
 
@@ -2651,7 +2651,7 @@ void AddAsmDirEntry(string DirEntry) {
         EntrySegments[i] = "";
     }
 
-    while ((DirArt.find(delimiter) != string::npos) && (NumSegments < 4))
+    while ((DirEntry.find(delimiter) != string::npos) && (NumSegments < 4))
     {
         EntrySegments[NumSegments++] = DirEntry.substr(0, DirEntry.find(delimiter));
         DirEntry.erase(0, DirEntry.find(delimiter) + delimiter.length());
@@ -2853,8 +2853,8 @@ void ImportDirArtFromAsm() {
     }
 
     string delimiter = "\n";
-    DirTrack = 18;
-    DirSector = 1;
+    //DirTrack = 18;
+    //DirSector = 1;
 
     while (DirArt.find(delimiter) != string::npos)
     {
@@ -3069,8 +3069,8 @@ void ImportDirArtFromCArray() {
         }
     }
 
-    DirTrack = 18;
-    DirSector = 1;
+    //DirTrack = 18;
+    //DirSector = 1;
 
     int RowLen = min(ConvertStringToInt(sRowLen),16);
     int RowCnt = min(ConvertStringToInt(sRowCnt),48);
@@ -3127,14 +3127,14 @@ void ImportDirArtFromBinary() {
         return;
     }
 
-    DirTrack = 18;
-    DirSector = 1;
+    //DirTrack = 18;
+    //DirSector = 1;
 
     size_t DAPtr = (DirArtType == "prg") ? 2 : 0;
     size_t EntryStart = DAPtr;
     while (DAPtr <= DA.size())
     {
-        if ((DAPtr == DA.size()) || (DAPtr == EntryStart + 16) || (DA[DAPtr] == 0xa0))
+        if (((DAPtr == DA.size()) && (DAPtr != EntryStart)) || (DAPtr == EntryStart + 16) || (DAPtr < DA.size() && (DA[DAPtr] == 0xa0)))
         {
             //if (DAPtr > EntryStart)   //BUG FIX - accept empty lines, i.e. treat each 0xa0 chars as line ends
             //{
@@ -3219,8 +3219,8 @@ void ImportDirArtFromTxt() {
     }
 
     string delimiter = "\n";
-    DirTrack = 18;
-    DirSector = 1;
+    //DirTrack = 18;
+    //DirSector = 1;
 
     while (DirArt.find(delimiter) != string::npos)
     {
@@ -3276,8 +3276,8 @@ void ImportDirArtFromPet() {
     unsigned char RowLen = PetFile[0];
     unsigned char RowCnt = PetFile[1] > 48 ? 48 : PetFile[1];
 
-    DirTrack = 18;
-    DirSector = 1;
+    //DirTrack = 18;
+    //DirSector = 1;
 
     for (size_t rc = 0; rc < RowCnt; rc++)
     {
@@ -3335,8 +3335,8 @@ void ImportDirArtFromD64() {
     size_t T = 18;
     size_t S = 1;
 
-    DirTrack = 18;
-    DirSector = 1;
+    //DirTrack = 18;
+    //DirSector = 1;
 
     bool DirFull = false;
     size_t DAPtr{};
@@ -3423,9 +3423,9 @@ bool IdentifyColors()
 
 
     //First find two colors (Col1 is already assigned to pixel(0,0))
-    for (size_t y = 0; y < ImgHeight; y += Mplr)
+    for (size_t y = 0; y < ImgHeight; y++)
     {
-        for (size_t x = 0; x < ImgWidth; x += Mplr)
+        for (size_t x = 0; x < ImgWidth; x++)
         {
             unsigned int ThisCol = GetPixel(x, y);
             if ((ThisCol != Col1) && (Col2 == Col1))
@@ -3552,14 +3552,27 @@ bool IdentifyColors()
 
 bool DecodeBmp()
 {
-    const size_t BIH = 0x0e;            //Offset of Bitmap Info Header within raw data
-    const size_t DATA_OFFSET = 0x0a;    //Offset of Bitmap Data Start within raw data
+    const size_t BIH = 0x0e;                                            //Offset of Bitmap Info Header within raw data
+    const size_t DATA_OFFSET = 0x0a;                                    //Offset of Bitmap Data Start within raw data
+    const size_t MINSIZE = sizeof(tagBITMAPINFOHEADER) + BIH;         //Minimum header size
 
-    memcpy(&BmpInfoHeader, &BmpRaw[BIH], sizeof(BmpInfoHeader));
+    if (ImgRaw.size() < MINSIZE)
+    {
+        cerr << "***INFO***\tThe size of this BMP file is smaller than the minimum size allowed.\nThe disk will be built without DirArt.\n";
+        return false;
+    }
+
+    memcpy(&BmpInfoHeader, &ImgRaw[BIH], sizeof(BmpInfoHeader));
 
     if (BmpInfoHeader.biWidth % 128 != 0)
     {
-        cerr << "Invalid image size. The image must have a width of 128 pixels (16 chars).\n";
+        cerr << "***INFO***\tUnsupported BMP size. The image must be 128 pixels (16 chars) wide or a multiple of it if resized.\nThe disk will be built without DirArt.\n";
+        return false;
+    }
+
+    if ((BmpInfoHeader.biCompression != 0) && (BmpInfoHeader.biCompression != 3))
+    {
+        cerr << "***INFO***\tUnsupported BMP format. Sparkle can only work with uncompressed BMP files that use the RGB color space.\nThe disk will be built without DirArt.\n";
         return false;
     }
 
@@ -3573,17 +3586,26 @@ bool DecodeBmp()
     //Copy palette into structure
     for (size_t i = 0; i < (size_t)ColMax; i++)
     {
-        memcpy(&BmpInfo->bmiColors[i], &BmpRaw[0x36 + (i * 4)], sizeof(RGBQUAD));
+        memcpy(&BmpInfo->bmiColors[i], &ImgRaw[0x36 + (i * 4)], sizeof(RGBQUAD));
     }
 
     //Calculate data offset
-    size_t DataOffset = (size_t)BmpRaw[DATA_OFFSET] + (size_t)(BmpRaw[DATA_OFFSET + 1] * 0x100) + (size_t)(BmpRaw[DATA_OFFSET + 2] * 0x10000) + (size_t)(BmpRaw[DATA_OFFSET + 3] * 01000000);
+    size_t DataOffset = (size_t)ImgRaw[DATA_OFFSET] + (size_t)(ImgRaw[DATA_OFFSET + 1] * 0x100) + (size_t)(ImgRaw[DATA_OFFSET + 2] * 0x10000) + (size_t)(ImgRaw[DATA_OFFSET + 3] * 01000000);
 
     //Calculate length of pixel rows in bytes
     size_t RowLen = ((size_t)BmpInfo->bmiHeader.biWidth * (size_t)BmpInfo->bmiHeader.biBitCount) / 8;
 
-    //BMP pads pixel rows to multiples of 4 in bytes
+    //BMP pads pixel rows to a multiple of 4 in bytes
     size_t PaddedRowLen = (RowLen % 4) == 0 ? RowLen : RowLen - (RowLen % 4) + 4;
+    //size_t PaddedRowLen = ((RowLen + 3) / 4) * 4;
+    
+    size_t CalcSize = DataOffset + (BmpInfo->bmiHeader.biHeight * PaddedRowLen);
+
+    if (ImgRaw.size() != DataOffset + (BmpInfo->bmiHeader.biHeight * PaddedRowLen))
+    {
+        cerr << "***INFO***\tCorrupted BMP file size.\nThe disk will be built without DirArt.\n";
+        return false;
+    }
 
     //Calculate size of our image vector (we will use 4 bytes per pixel in RGBA format)
     size_t BmpSize = (size_t)BmpInfo->bmiHeader.biWidth * 4 * (size_t)BmpInfo->bmiHeader.biHeight;
@@ -3605,7 +3627,7 @@ bool DecodeBmp()
 
             for (size_t x = 0; x < RowLen; x++)                         //Pixel row are read left to right
             {
-                unsigned int Pixel = BmpRaw[RowOffset + x];
+                unsigned int Pixel = ImgRaw[RowOffset + x];
 
                 for (int b = bstart; b >= 0; b -= BitsPerPx)
                 {
@@ -3629,9 +3651,9 @@ bool DecodeBmp()
 
             for (size_t x = 0; x < RowLen; x += BytesPerPx)              //Pixel row are read left to right
             {
-                Image[BmpOffset + 0] = BmpRaw[RowOffset + x + 2];
-                Image[BmpOffset + 1] = BmpRaw[RowOffset + x + 1];
-                Image[BmpOffset + 2] = BmpRaw[RowOffset + x + 0];
+                Image[BmpOffset + 0] = ImgRaw[RowOffset + x + 2];
+                Image[BmpOffset + 1] = ImgRaw[RowOffset + x + 1];
+                Image[BmpOffset + 2] = ImgRaw[RowOffset + x + 0];
                 BmpOffset += 4;
             }
         }
@@ -3647,32 +3669,33 @@ bool DecodeBmp()
 
 void ImportDirArtFromImage()
 {
+    ImgRaw.clear();
+    Image.clear();
+
+    if (ReadBinaryFile(DirArtName, ImgRaw) == -1)
+    {
+        cerr << "***INFO***\tUnable to open image DirArt file.\nThe disk will be built without DirArt.\n";
+        return;
+    }
+    else if (ImgRaw.size() == 0)
+    {
+        cerr << "***INFO***\tThe DirArt file cannot be 0 bytes long.\nThe disk will be built without DirArt.\n";
+        return;
+    }
+
     if (DirArtType == "png")
     {
-        //Load and decode PNG image using LodePNG (Copyright (c) 2005-2023 Lode Vandevenne)
-        unsigned error = lodepng::decode(Image, ImgWidth, ImgHeight, DirArtName);
+        //Decode PNG image using LodePNG (Copyright (c) 2005-2023 Lode Vandevenne)
+        unsigned int error = lodepng::decode(Image, ImgWidth, ImgHeight, ImgRaw);
 
-        //if there's an error, display it
         if (error)
         {
-            cout << "***INFO***\tPNG load/decode error: " << error << ": " << lodepng_error_text(error) << "\nThe disk will be built without DirArt.\n";
+            cout << "***INFO***\tPNG decode error: " << error << ": " << lodepng_error_text(error) << "\nThe disk will be built without DirArt.\n";
             return;
         }
     }
     else if (DirArtType == "bmp")
     {
-        BmpRaw.clear();
-
-        if (ReadBinaryFile(DirArtName, BmpRaw) == -1)
-        {
-            cerr << "***INFO***\tUnable to open BMP DirArt file.\nThe disk will be built without DirArt.\n";
-            return;
-        }
-        else if (BmpRaw.size() == 0)
-        {
-            cerr << "***INFO***\tThe DirArt file cannot be 0 bytes long.\nThe disk will be built without DirArt.\n";
-            return;
-        }
 
         if (!DecodeBmp())
         {
@@ -3693,6 +3716,9 @@ void ImportDirArtFromImage()
     {
         return;
     }
+
+    //DirTrack = 18;
+    //DirSector = 1;
 
     int PixelCnt = 0;
 
@@ -3805,6 +3831,9 @@ void ImportFromJson()
     }
     int RowLen = 40;
     int RowCnt = 25;
+
+    //DirTrack = 18;
+    //DirSector = 1;
 
     if (DirArt.find("width") != string::npos)
     {
@@ -3957,49 +3986,64 @@ void AddDirArt() {
 #endif
     }
 
+    DirArtType = "";
+
     for (size_t i = ExtStart; i < DirArtName.length(); i++)
     {
         DirArtType += tolower(DirArtName[i]);
     }
 
+    DirTrack = 18;
+    DirSector = 1;
+
     if (DirArtType == "d64")                // Import from D64
     {
+        cout << "Importing DirArt from D64 file...\n";
         ImportDirArtFromD64();
     }
     else if (DirArtType == "txt")           // Import from TXT file
     {
+        cout << "Importing DirArt from text file...\n";
         ImportDirArtFromTxt();
     }
     else if (DirArtType == "prg")           // Import from PRG (binary file with header)
     {
+        cout << "Importing DirArt from PRG file...\n";
         ImportDirArtFromBinary();
     }
     else if (DirArtType == "c")             // Import from Marq's PETSCII Editor C array file
     {
+        cout << "Importing DirArt from C file...\n";
         ImportDirArtFromCArray();
     }
     else if (DirArtType == "asm")           // Import from Kick Assembler file parameter list
     {
+        cout << "Importing DirArt from ASM file...\n";
         ImportDirArtFromAsm();
     }
     else if (DirArtType == "pet")           // Import from PET binary
     {
+        cout << "Importing DirArt from PET file...\n";
         ImportDirArtFromPet();
     }
     else if (DirArtType == "json")          // Import from JSON file
     {
+        cout << "Importing DirArt from JSON file...\n";
         ImportFromJson();
     }
     else if (DirArtType == "png")           // Import from PNG image using LodePNG (Copyright (c) 2005-2023 Lode Vandevenne)
     {
+        cout << "Importing DirArt from PNG image...\n";
         ImportDirArtFromImage();
     }
     else if (DirArtType == "bmp")           // Import from BMP image
     {
+        cout << "Importing DirArt from BMP image...\n";
         ImportDirArtFromImage();
     }
     else
     {
+        cout << "Importing DirArt from unscpecified binary file...\n";
         ImportDirArtFromBinary();           // Import from any other binary file (same as PRG without header)
     }
 }
@@ -5833,13 +5877,13 @@ int main(int argc, char* argv[])
 
 #ifdef DEBUG
 
-        string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\SparkleFetchTest\\ExprTest.sls";
-        //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\GP\\NoBounds\\Main\\Sparkle\\NoBounds.sls"; //WIN32
+        //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\SparkleFetchTest\\ExprTest.sls";
+        string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\GP\\NoBounds\\Main\\Sparkle\\NoBounds.sls"; //WIN32
         //string ScriptFileName = "../../C64/NoBounds/Main/Sparkle/NoBounds.sls";   //UBUNTU
         Script = ReadFileToString(ScriptFileName, true);
         SetScriptPath(ScriptFileName, AppPath);
 
-        cout << ScriptName << "\n" << ScriptPath << "\n";
+        //cout << ScriptName << "\n" << ScriptPath << "\n";
 
 #else
 
