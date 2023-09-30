@@ -3788,6 +3788,135 @@ void ImportDirArtFromImage()
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
+void ImportFromJson()
+{
+    DirArt = ReadFileToString(DirArtName, false);
+
+    if (DirArt == "")
+    {
+        cerr << "***INFO***\tUnable to open the following .JSON DirArt file: " << DirArtName << "\nThe disk will be built without DirArt.\n";
+        return;
+    }
+
+    //Convert the whole string to lower case for easier processing
+    for (size_t i = 0; i < DirArt.length(); i++)
+    {
+        DirArt[i] = tolower(DirArt[i]);
+    }
+    int RowLen = 40;
+    int RowCnt = 25;
+
+    if (DirArt.find("width") != string::npos)
+    {
+        //find numeric string between "width":XX,
+        string W = DirArt.substr(DirArt.find("width"));
+        W = W.substr(W.find(":") + 1);
+        W = W.substr(0, W.find(","));
+        while (W.find(" ") != string::npos)
+        {
+            //Remove space characters if there's any
+            W.replace(W.find(" "), 1, "");
+        }
+        if ((W.length() > 0) && (IsNumeric(W)))
+        {
+            RowLen = ConvertStringToInt(W);
+        }
+    }
+
+    if (DirArt.find("height") != string::npos)
+    {
+        //find numeric string between "height":XX,
+        string H = DirArt.substr(DirArt.find("height"));
+        H = H.substr(H.find(":") + 1);
+        H = H.substr(0, H.find(","));
+        while (H.find(" ") != string::npos)
+        {
+            //Remove space characters if there's any
+            H.replace(H.find(" "), 1, "");
+        }
+        if ((H.length() > 0) && (IsNumeric(H)))
+        {
+            RowCnt = ConvertStringToInt(H);
+        }
+    }
+    unsigned char* ScreenCodes = new unsigned char[RowLen * RowCnt] {};
+
+    if (DirArt.find("screencodes") != string::npos)
+    {
+        //find numeric string between "height":XX,
+        string S = DirArt.substr(DirArt.find("screencodes"));
+        S = S.substr(S.find("[") + 1);
+        S = S.substr(0, S.find("]"));
+        while (S.find(" ") != string::npos)
+        {
+            //Remove space characters if there's any
+            S.replace(S.find(" "), 1, "");
+        }
+
+        size_t p = 0;
+
+        while (S.find(",") != string::npos)
+        {
+            string B = S.substr(0, S.find(","));
+            S.erase(0, S.find(",") + 1);
+            if (IsNumeric(B))
+            {
+                ScreenCodes[p++] = ConvertStringToInt(B);
+            }
+            else if (IsHexString(B))
+            {
+                ScreenCodes[p++] = ConvertHexStringToInt(B);
+            }
+        }
+
+        //Last screen code, after asr comma
+        if (IsNumeric(S))
+        {
+            ScreenCodes[p++] = ConvertStringToInt(S);
+        }
+        else if (IsHexString(S))
+        {
+            ScreenCodes[p++] = ConvertHexStringToInt(S);
+        }
+
+        for (int rc = 0; rc < RowCnt; rc++)
+        {
+            FindNextDirPos();
+
+            if (DirPos != 0)
+            {
+                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0] = 0x82;      //"PRG" -  all dir entries will point at first file in dir
+                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 1] = 18;        //Track 18 (track pointer of boot loader)
+                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 2] = 7;         //Sector 7 (sector pointer of boot loader)
+
+                for (int i = 0; i < 16; i++)
+                {
+                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = 0xa0;
+                }
+
+                for (int i = 0; i < min(16, RowLen); i++)
+                {
+                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Petscii2DirArt[ScreenCodes[(rc * RowLen) + i]];
+                }
+
+                if ((DirTrack == 18) && (DirSector == 1) && (DirPos == 2))
+                {
+                    //Very first dir entry, also add loader block count
+                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0x1c] = LoaderBlockCount;
+                }
+            }
+            else
+            {
+                break;
+            }
+        }
+    }
+
+    return;
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
 void AddDirArt() {
 
     if (DirArtName == "")
@@ -3859,7 +3988,7 @@ void AddDirArt() {
     }
     else if (DirArtType == "json")          // Import from JSON file
     {
-
+        ImportFromJson();
     }
     else if (DirArtType == "png")           // Import from PNG image using LodePNG (Copyright (c) 2005-2023 Lode Vandevenne)
     {
