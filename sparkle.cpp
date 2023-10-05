@@ -4095,7 +4095,7 @@ void AddDemoNameToDisk(unsigned char T, unsigned char S) {
         }
     }
 */
-    size_t DirEntryOffset = Track[18] + 256 + 2;  //First directory entry's offset;
+    size_t DirEntryOffset = (size_t)Track[18] + 256 + 2;  //First directory entry's offset;
 
     Disk[DirEntryOffset] = 0x82;
     Disk[DirEntryOffset + 1] = T;
@@ -5452,13 +5452,26 @@ bool Build() {
                 if (NumScriptEntries > -1)
                 {
                     int TmpIL = 0;
-                    if (IsNumeric(ScriptEntryArray[0]) == true)
+
+                    if (ScriptEntryArray[0].size() > 0)
                     {
-                        TmpIL = stoi(ScriptEntryArray[0]);
+                        if (ScriptEntryArray[0].at(0) == '.')
+                        {
+                            string sTmp = ScriptEntryArray[0].substr(1);
+                            if (IsNumeric(sTmp))
+                            {
+                                TmpIL = ConvertStringToInt(sTmp);
+                            }
+                        }
+                        else if (IsHexString(ScriptEntryArray[0]))
+                        {
+                            TmpIL = ConvertHexStringToInt(ScriptEntryArray[0]);
+                        }
                     }
+
                     if (TmpIL % 21 > 0)
                     {
-                        IL0 = TmpIL;
+                        IL0 = TmpIL % 21;
                     }
                     else
                     {
@@ -5480,13 +5493,26 @@ bool Build() {
                 if (NumScriptEntries > -1)
                 {
                     int TmpIL = 0;
-                    if (IsNumeric(ScriptEntryArray[0]) == true)
+
+                    if (ScriptEntryArray[0].size() > 0)
                     {
-                        TmpIL = stoi(ScriptEntryArray[0]);
+                        if (ScriptEntryArray[0].at(0) == '.')
+                        {
+                            string sTmp = ScriptEntryArray[0].substr(1);
+                            if (IsNumeric(sTmp))
+                            {
+                                TmpIL = ConvertStringToInt(sTmp);
+                            }
+                        }
+                        else if (IsHexString(ScriptEntryArray[0]))
+                        {
+                            TmpIL = ConvertHexStringToInt(ScriptEntryArray[0]);
+                        }
                     }
+
                     if (TmpIL % 19 > 0)
                     {
-                        IL1 = TmpIL;
+                        IL1 = TmpIL % 19;
                     }
                     else
                     {
@@ -5508,13 +5534,26 @@ bool Build() {
                 if (NumScriptEntries > -1)
                 {
                     int TmpIL = 0;
-                    if (IsNumeric(ScriptEntryArray[0]) == true)
+
+                    if (ScriptEntryArray[0].size() > 0)
                     {
-                        TmpIL = stoi(ScriptEntryArray[0]);
+                        if (ScriptEntryArray[0].at(0) == '.')
+                        {
+                            string sTmp = ScriptEntryArray[0].substr(1);
+                            if (IsNumeric(sTmp))
+                            {
+                                TmpIL = ConvertStringToInt(sTmp);
+                            }
+                        }
+                        else if (IsHexString(ScriptEntryArray[0]))
+                        {
+                            TmpIL = ConvertHexStringToInt(ScriptEntryArray[0]);
+                        }
                     }
+
                     if (TmpIL % 18 > 0)
                     {
-                        IL2 = TmpIL;
+                        IL2 = TmpIL % 18;
                     }
                     else
                     {
@@ -5536,13 +5575,26 @@ bool Build() {
                 if (NumScriptEntries > -1)
                 {
                     int TmpIL = 0;
-                    if (IsNumeric(ScriptEntryArray[0]) == true)
+
+                    if (ScriptEntryArray[0].size() > 0)
                     {
-                        TmpIL = stoi(ScriptEntryArray[0]);
+                        if (ScriptEntryArray[0].at(0) == '.')
+                        {
+                            string sTmp = ScriptEntryArray[0].substr(1);
+                            if (IsNumeric(sTmp))
+                            {
+                                TmpIL = ConvertStringToInt(sTmp);
+                            }
+                        }
+                        else if (IsHexString(ScriptEntryArray[0]))
+                        {
+                            TmpIL = ConvertHexStringToInt(ScriptEntryArray[0]);
+                        }
                     }
+
                     if (TmpIL % 17 > 0)
                     {
-                        IL3 = TmpIL;
+                        IL3 = TmpIL % 17;
                     }
                     else
                     {
@@ -5889,7 +5941,7 @@ int main(int argc, char* argv[])
 #ifdef DEBUG
 
         //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\SparkleFetchTest\\ExprTest.sls";
-        string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\GP\\NoBounds\\Main\\Sparkle\\NoBoundsA_short.sls"; //WIN32
+        string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\GP\\NoBounds\\Main\\Sparkle\\NoBounds.sls"; //WIN32
         //string ScriptFileName = "../../C64/NoBounds/Main/Sparkle/NoBounds.sls";   //UBUNTU
         Script = ReadFileToString(ScriptFileName, true);
         SetScriptPath(ScriptFileName, AppPath);
