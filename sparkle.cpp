@@ -7,7 +7,7 @@
 //#defnie NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR BUILD INFO 230930
+//  COMPILE TIME VARIABLES FOR BUILD INFO 231004
 //--------------------------------------------------------
 
 constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -3601,7 +3601,7 @@ bool DecodeBmp()
     
     size_t CalcSize = DataOffset + (BmpInfo->bmiHeader.biHeight * PaddedRowLen);
 
-    if (ImgRaw.size() != DataOffset + (BmpInfo->bmiHeader.biHeight * PaddedRowLen))
+    if (ImgRaw.size() != CalcSize)
     {
         cerr << "***INFO***\tCorrupted BMP file size.\nThe disk will be built without DirArt.\n";
         return false;
@@ -4052,17 +4052,23 @@ void AddDirArt() {
 
 void AddDemoNameToDisk(unsigned char T, unsigned char S) {
 
-    size_t B;
-    string DN = DemoName;
-    unsigned char A{};
-
-    if ((DN == "") && (DirArtName != ""))
+    if ((DemoName == "") && (DirArtName != ""))
     {
-        //No DemoName defined, check if we have a DirArt file attached
-        //Dirart attached, we will add first dir entry there
+        //No DemoName defined, but we have a DirArt attached, we will add first dir entry there
         return;
     }
-
+    else if (DemoName == "")
+    {
+        //No DemoName, no DirArt - use the script's file name as DemoName
+        DemoName = ScriptName.substr(ScriptPath.length());
+        DemoName = DemoName.substr(0, DemoName.length() - 4);
+        if (DemoName.length() > 16)
+        {
+            DemoName = DemoName.substr(0, 16);
+        }
+    }
+/*
+    //THIS IS NOT NEEDED, THE DIRECTORY IS EMPTY AT THIS POINT, WE ARE USING THE FIRST SLOT
     CT = 18;
     CS = 1;
 
@@ -4073,8 +4079,7 @@ void AddDemoNameToDisk(unsigned char T, unsigned char S) {
         Cnt = Track[Disk[Cnt]] + (Disk[Cnt + 1] * 256);
     }
 
-    B = 2;
-
+    size_t B = 2;
     while (Disk[Cnt + B] != 0x00)
     {
         B += 32;
@@ -4089,23 +4094,23 @@ void AddDemoNameToDisk(unsigned char T, unsigned char S) {
             Disk[Cnt + 1] = 255;
         }
     }
+*/
+    size_t DirEntryOFfset = Track[18] + 256 + 2;  //First directory entry's offset;
 
-    Disk[Cnt + B] = 0x82;
-    Disk[Cnt + B + 1] = T;
-    Disk[Cnt + B + 2] = S;
+    Disk[DirEntryOFfset] = 0x82;
+    Disk[DirEntryOFfset + 1] = T;
+    Disk[DirEntryOFfset + 2] = S;
 
     for (int W = 0; W < 16; W++)
     {
-        Disk[Cnt + B + 3 + W] = 0xa0;
+        Disk[DirEntryOFfset + 3 + W] = 0xa0;
     }
 
-    for (size_t W = 0; W < DN.length(); W++)
+    for (size_t W = 0; W < DemoName.length(); W++)
     {
-        int C = DN[W];
-        A = Ascii2DirArt[C];
-        Disk[Cnt + B + 3 + W] = A;
+        Disk[DirEntryOFfset + 3 + W] = Ascii2DirArt[(size_t)DemoName[W]];
     }
-    Disk[Cnt + B + 0x1c] = LoaderBlockCount;    //Length of boot loader in blocks
+    Disk[DirEntryOFfset + 0x1c] = LoaderBlockCount;    //Length of boot loader in blocks
 
 }
 
@@ -5222,6 +5227,12 @@ bool FinishDisk(bool LastDisk) {
         cout << "File entries with parameter expressions after evaluation:\n" << ParsedEntries << "\n";
     }
 
+    if (D64Name == "")
+    {
+        //No D64Name provided, use the script's path and file name
+        D64Name = ScriptName.substr(0, ScriptName.length() - 3) + "d64";
+    }
+
     if (!WriteDiskImage(D64Name))
     {
         return false;
@@ -5878,7 +5889,7 @@ int main(int argc, char* argv[])
 #ifdef DEBUG
 
         //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\SparkleFetchTest\\ExprTest.sls";
-        string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\GP\\NoBounds\\Main\\Sparkle\\NoBounds.sls"; //WIN32
+        string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\GP\\NoBounds\\Main\\Sparkle\\NoBoundsA_short.sls"; //WIN32
         //string ScriptFileName = "../../C64/NoBounds/Main/Sparkle/NoBounds.sls";   //UBUNTU
         Script = ReadFileToString(ScriptFileName, true);
         SetScriptPath(ScriptFileName, AppPath);
