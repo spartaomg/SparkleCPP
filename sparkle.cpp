@@ -7,7 +7,7 @@
 //#defnie NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR BUILD INFO 231004
+//  COMPILE TIME VARIABLES FOR BUILD INFO 231005
 //--------------------------------------------------------
 
 constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -5220,7 +5220,7 @@ bool FinishDisk(bool LastDisk) {
     CompRatio /= TotalOrigSize;
 
     cout << "\nFinal disk: " << TotalOrigSize << " block" << (TotalOrigSize == 1 ? "" : "s") << " compressed to " << BlocksUsed << " block" << (BlocksUsed == 1 ? ", " : "s, ")
-        << BlocksFree << " block" << (BlocksFree == 1 ? "" : "s") << " remaining free. Overall compression ratio : " << setprecision(2) << fixed << CompRatio << " %\n\n";
+        << BlocksFree << " block" << (BlocksFree == 1 ? "" : "s") << " remaining free. Overall compression ratio: " << setprecision(2) << fixed << CompRatio << " %\n\n";
 
     if (ParsedEntries != "")
     {
