@@ -4095,22 +4095,22 @@ void AddDemoNameToDisk(unsigned char T, unsigned char S) {
         }
     }
 */
-    size_t DirEntryOFfset = Track[18] + 256 + 2;  //First directory entry's offset;
+    size_t DirEntryOffset = Track[18] + 256 + 2;  //First directory entry's offset;
 
-    Disk[DirEntryOFfset] = 0x82;
-    Disk[DirEntryOFfset + 1] = T;
-    Disk[DirEntryOFfset + 2] = S;
+    Disk[DirEntryOffset] = 0x82;
+    Disk[DirEntryOffset + 1] = T;
+    Disk[DirEntryOffset + 2] = S;
 
     for (int W = 0; W < 16; W++)
     {
-        Disk[DirEntryOFfset + 3 + W] = 0xa0;
+        Disk[DirEntryOffset + 3 + W] = 0xa0;
     }
 
     for (size_t W = 0; W < DemoName.length(); W++)
     {
-        Disk[DirEntryOFfset + 3 + W] = Ascii2DirArt[(size_t)DemoName[W]];
+        Disk[DirEntryOffset + 3 + W] = Ascii2DirArt[(size_t)DemoName[W]];
     }
-    Disk[DirEntryOFfset + 0x1c] = LoaderBlockCount;    //Length of boot loader in blocks
+    Disk[DirEntryOffset + 0x1c] = LoaderBlockCount;    //Length of boot loader in blocks
 
 }
 
