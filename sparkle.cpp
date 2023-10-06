@@ -1,6 +1,6 @@
 #include "common.h"
 
-#define TESTDISK
+//#define TESTDISK
 
 //#define DEBUG
 
@@ -2640,7 +2640,12 @@ void FindNextDirPos() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void AddAsmDirEntry(string DirEntry) {
+bool AddAsmDirEntry(string AsmDirEntry)
+{
+    for (size_t i = 0; i < AsmDirEntry.length(); i++)
+    {
+        AsmDirEntry[i] = tolower(AsmDirEntry[i]);
+    }
 
     string EntrySegments[5];
     string delimiter = "\"";        // = " (entry gets split at quotation mark) NOT A BUG, DO NOT CHANGE THIS
@@ -2651,12 +2656,12 @@ void AddAsmDirEntry(string DirEntry) {
         EntrySegments[i] = "";
     }
 
-    while ((DirEntry.find(delimiter) != string::npos) && (NumSegments < 4))
+    while ((AsmDirEntry.find(delimiter) != string::npos) && (NumSegments < 4))
     {
-        EntrySegments[NumSegments++] = DirEntry.substr(0, DirEntry.find(delimiter));
-        DirEntry.erase(0, DirEntry.find(delimiter) + delimiter.length());
+        EntrySegments[NumSegments++] = AsmDirEntry.substr(0, AsmDirEntry.find(delimiter));
+        AsmDirEntry.erase(0, AsmDirEntry.find(delimiter) + delimiter.length());
     }
-    EntrySegments[NumSegments++] = DirEntry;
+    EntrySegments[NumSegments++] = AsmDirEntry;
 
     //EntrySegments[0] = '[name =' OR '[name = @'
     //EntrySegments[1] = 'text' OR '\$XX\$XX\$XX'
@@ -2729,112 +2734,234 @@ void AddAsmDirEntry(string DirEntry) {
                 }
             }
 
-            if (Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0] == 0)
+            FindNextDirPos();
+
+            if (DirPos != 0)
             {
-                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0] = FileType;      //All dir entries will point at first file in dir
-                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 1] = 18;            //Track 18 (track pointer of boot loader)
-                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 2] = 7;             //Sector 7 (sector pointer of boot loader)
-            }
+                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0] = FileType;  //Always overwrite FileType
+                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 1] = 18;        //Track 18 (track pointer of boot loader)
+                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 2] = 7;         //Sector 7 (sector pointer of boot loader)
 
-            if (EntrySegments[0].find("@") != string::npos)
-            {
-                //Numeric entry
-                unsigned char Entry[16];
-                string Values[16];
-
-                //Fill array with 16 SHIFT+SPACE characters
-                fill_n(Entry, 16, 0xa0);
-                fill_n(Values, 16, "");
-                //for (int i = 0; i < 16; i++)
-                //{
-                    //Entry[i] = 0xa0;
-                    //Values[i] = "";
-                //}
-
-                int NumValues = 0;
-                delimiter = "\\";
-                while ((EntrySegments[1].find(delimiter) != string::npos) && (NumValues < 15))
+                if (EntrySegments[0].find("@") != string::npos)
                 {
-                    string ThisValue = EntrySegments[1].substr(0, EntrySegments[1].find(delimiter));
-                    if (ThisValue != "")
-                    {
-                        Values[NumValues++] = ThisValue;
-                    }
-                    EntrySegments[1].erase(0, EntrySegments[1].find(delimiter) + delimiter.length());
-                }
-                Values[NumValues++] = EntrySegments[1];
+                    //Numeric entry
+                    unsigned char Entry[16];
+                    string Values[16];
 
-                int Idx = 0;
+                    //Fill array with 16 SHIFT+SPACE characters
+                    fill_n(Entry, 16, 0xa0);
+                    fill_n(Values, 16, "");
 
-                for (int v = 0; v < NumValues; v++)
-                {
-                    if (Values[v] != "")
+                    int NumValues = 0;
+                    delimiter = "\\";
+                    while ((EntrySegments[1].find(delimiter) != string::npos) && (NumValues < 15))
                     {
-                        unsigned char NextChar = 0x20;          //SPACE default char - if conversion is not possible
-                        if (Values[v].find("$") == 0)
+                        string ThisValue = EntrySegments[1].substr(0, EntrySegments[1].find(delimiter));
+                        if (ThisValue != "")
                         {
-                            //Hex Entry
-                            Values[v].erase(0, 1);
-                            if (IsHexString(Values[v]))
+                            Values[NumValues++] = ThisValue;
+                        }
+                        EntrySegments[1].erase(0, EntrySegments[1].find(delimiter) + delimiter.length());
+                    }
+                    Values[NumValues++] = EntrySegments[1];
+
+                    int Idx = 0;
+
+                    for (int v = 0; v < NumValues; v++)
+                    {
+                        if (Values[v] != "")
+                        {
+                            unsigned char NextChar = 0x20;          //SPACE default char - if conversion is not possible
+                            if (Values[v].find("$") == 0)
                             {
-                                NextChar = ConvertHexStringToInt(Values[v]);
+                                //Hex Entry
+                                Values[v].erase(0, 1);
+                                if (IsHexString(Values[v]))
+                                {
+                                    NextChar = ConvertHexStringToInt(Values[v]);
+                                }
+                                else
+                                {
+                                    break;
+                                }
                             }
                             else
+                            {
+                                //Decimal Entry
+                                if (IsNumeric(Values[v]))
+                                {
+                                    NextChar = ConvertStringToInt(Values[v]);
+                                }
+                                else
+                                {
+                                    break;
+                                }
+                            }
+                            Entry[Idx++] = NextChar;
+                            if (Idx == 16)
                             {
                                 break;
                             }
                         }
-                        else
-                        {
-                            //Decimal Entry
-                            if (IsNumeric(Values[v]))
-                            {
-                                NextChar = ConvertStringToInt(Values[v]);
-                            }
-                            else
-                            {
-                                break;
-                            }
-                        }
-                        Entry[Idx++] = NextChar;
-                        if (Idx == 16)
-                        {
-                            break;
-                        }
+                    }
+                    for (size_t i = 0; i < 16; i++)
+                    {
+                        Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Entry[i];
                     }
                 }
-                for (size_t i = 0; i < 16; i++)
+                else
                 {
-                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Entry[i];
+                    //Text Entry, pad it with inverted space
+                    //Fill the slot first with $A0
+                    for (size_t i = 0; i < 16; i++)
+                    {
+                        Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = 0xa0;
+                    }
+                    string ThisEntry = EntrySegments[1];
+                    for (size_t i = 0; (i < ThisEntry.length()) && (i < 16); i++)
+                    {
+                        unsigned char NextChar = toupper(ThisEntry[i]);
+                        Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Ascii2DirArt[NextChar];
+                    }
                 }
             }
             else
             {
-                //Text Entry, pad it with inverted space
-                //Fill the slot first with $A0
-                for (size_t i = 0; i < 16; i++)
-                {
-                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = 0xa0;
-                }
-                string ThisEntry = EntrySegments[1];
-                for (size_t i = 0; (i < ThisEntry.length()) && (i < 16); i++)
-                {
-                    unsigned char NextChar = toupper(ThisEntry[i]);
-                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Ascii2DirArt[NextChar];
-                }
+                return false;
             }
         }
     }
 
-    if ((DirTrack == 18) && (DirSector == 1) && (DirPos == 2))
-    {
-        //Very first dir entry MUST be PRG, also add loader block count
-        Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0] = 0x82;
-        Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0x1c] = LoaderBlockCount;
-    }
+    return true;
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+bool AddAsmDiskParameters()
+{
+    size_t Track18 = Track[18];
+
+    bool QuoteOn = false;
+    for (size_t i = 0; i < DirEntry.length(); i++)
+    {
+        if (DirEntry[i] == '\"')
+        {
+            QuoteOn = !QuoteOn;
+        }
+        else if (!QuoteOn)
+        {
+            DirEntry[i] = tolower(DirEntry[i]);
+        }
+    }
+
+    string AsmD64Name = "";
+    string delimiter = "filename";
+
+    if (DirEntry.find(delimiter) != string::npos)
+    {
+        AsmD64Name = DirEntry;
+        AsmD64Name.erase(0, AsmD64Name.find(delimiter) + delimiter.length());
+        DirEntry.erase(DirEntry.find(delimiter), DirEntry.find(delimiter) + delimiter.length());
+
+        if (AsmD64Name.find("\"") != string::npos)
+        {
+            AsmD64Name = AsmD64Name.substr(AsmD64Name.find("\"") + 1);
+            if (AsmD64Name.find("\"") != string::npos)
+            {
+                AsmD64Name = AsmD64Name.substr(0, AsmD64Name.find("\""));
+            }
+            else
+            {
+                AsmD64Name = "";
+            }
+        }
+        else
+        {
+            AsmD64Name = "";
+        }
+    }
+
+    if ((AsmD64Name != "") && (D64Name == ""))
+    {
+        D64Name = FindAbsolutePath(AsmD64Name, ScriptPath);
+    }
+
+    string AsmDiskHeader = "";
+    delimiter = "name";
+    if (DirEntry.find(delimiter) != string::npos)
+    {
+        AsmDiskHeader = DirEntry;
+        AsmDiskHeader.erase(0, AsmDiskHeader.find(delimiter) + delimiter.length());
+
+        if (AsmDiskHeader.find("\"") != string::npos)
+        {
+            AsmDiskHeader = AsmDiskHeader.substr(AsmDiskHeader.find("\"") + 1);
+            if (AsmDiskHeader.find("\"") != string::npos)
+            {
+                AsmDiskHeader = AsmDiskHeader.substr(0, AsmDiskHeader.find("\""));
+            }
+            else
+            {
+                AsmDiskHeader = "";
+            }
+        }
+        else
+        {
+            AsmDiskHeader = "";
+        }
+    }
+
+    if ((AsmDiskHeader != "") && (DiskHeader == ""))
+    {
+        for (size_t i = 0; i < 16; i++)
+        {
+            if (i < AsmDiskHeader.size())
+            {
+                Disk[Track18 + 0x90 + i] = Ascii2DirArt[(size_t)AsmDiskHeader[i]];
+            }
+        }
+    }
+
+    string AsmDiskID = "";
+    delimiter = "id";
+    if (DirEntry.find(delimiter) != string::npos)
+    {
+        AsmDiskID = DirEntry;
+        AsmDiskID.erase(0, AsmDiskID.find(delimiter) + delimiter.length());
+
+        if (AsmDiskID.find("\"") != string::npos)
+        {
+            AsmDiskID = AsmDiskID.substr(AsmDiskID.find("\"") + 1);
+            if (AsmDiskID.find("\"") != string::npos)
+            {
+                AsmDiskID = AsmDiskID.substr(0, AsmDiskID.find("\""));
+            }
+            else
+            {
+                AsmDiskID = "";
+            }
+        }
+        else
+        {
+            AsmDiskID = "";
+        }
+    }
+
+    if ((AsmDiskID != "") && (DiskID == ""))
+    {
+        for (size_t i = 0; i < 5; i++)
+        {
+            if (i < AsmDiskID.size())
+            {
+                Disk[Track18 + 0xa2 + i] = Ascii2DirArt[(size_t)AsmDiskID[i]];
+            }
+        }
+    }
+
+    return true;
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------
 
 void ImportDirArtFromAsm() {
 
@@ -2856,29 +2983,52 @@ void ImportDirArtFromAsm() {
     //DirTrack = 18;
     //DirSector = 1;
 
+
     while (DirArt.find(delimiter) != string::npos)
     {
-        string DirEntry = DirArt.substr(0, DirArt.find(delimiter));
+        DirEntry = DirArt.substr(0, DirArt.find(delimiter));
         DirArt.erase(0, DirArt.find(delimiter) + delimiter.length());
-        FindNextDirPos();
-        if (DirPos != 0)
+        string EntryType = DirEntry.substr(0, DirEntry.find("["));
+
+        for (size_t i = 0; i < EntryType.length(); i++)
         {
-            AddAsmDirEntry(DirEntry);   //Convert one line at the time
+            EntryType[i] = tolower(EntryType[i]);
+        }
+
+        if (EntryType.find(".disk") != string::npos)
+        {
+            if (!AddAsmDiskParameters())
+                return;
         }
         else
         {
-            break;
+            if (!AddAsmDirEntry(DirEntry))   //Convert one line at the time
+                return;
         }
     }
 
     if ((DirArt != "") && (DirPos != 0))
     {
-        FindNextDirPos();
-        if (DirPos != 0)
+        DirEntry = DirArt;
+        string EntryType = DirEntry.substr(0, DirEntry.find("["));
+
+        for (size_t i = 0; i < EntryType.length(); i++)
         {
-            AddAsmDirEntry(DirArt);
+            EntryType[i] = tolower(EntryType[i]);
+        }
+
+        if (EntryType.find(".disk") != string::npos)
+        {
+            if (!AddAsmDiskParameters())
+                return;
+        }
+        else
+        {
+            AddAsmDirEntry(DirEntry);
         }
     }
+
+    return;
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
