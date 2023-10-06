@@ -2738,7 +2738,14 @@ bool AddAsmDirEntry(string AsmDirEntry)
 
             if (DirPos != 0)
             {
-                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0] = FileType;  //Always overwrite FileType
+                if ((DirTrack == 18) && (DirSector == 1) && (DirPos == 2))
+                {
+                    //If this is the very first directory entry, it must be a PRG...
+                    FileType = 0x82;
+                    //Very first dir entry, also add loader block count
+                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0x1c] = LoaderBlockCount;
+                }
+                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0] = FileType;  //...otherwise, always keep FileType from ASM file
                 Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 1] = 18;        //Track 18 (track pointer of boot loader)
                 Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 2] = 7;         //Sector 7 (sector pointer of boot loader)
 
@@ -3502,19 +3509,25 @@ void ImportDirArtFromD64() {
 
                 if (DirPos != 0)
                 {
-                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0] = 0x82;      //"PRG" -  all dir entries will point at first file in dir
+                    if ((DirTrack == 18) && (DirSector == 1) && (DirPos == 2))
+                    {
+                        //Very first dir entry MUST be PRG
+                        Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0] = 0x82;
+                        //Very first dir entry, also add loader block count
+                        Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0x1c] = LoaderBlockCount;
+                    }
+                    else
+                    {
+                        //All other entries - import filetype from DirArt
+                        Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0] = DA[DAPtr + b + 0];
+                    }
+                    
                     Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 1] = 18;        //Track 18 (track pointer of boot loader)
                     Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 2] = 7;         //Sector 7 (sector pointer of boot loader)
 
                     for (int i = 0; i < 16; i++)
                     {
                         Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = DA[DAPtr + b + 3 + i];
-                    }
-
-                    if ((DirTrack == 18) && (DirSector == 1) && (DirPos == 2))
-                    {
-                        //Very first dir entry, also add loader block count
-                        Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 0x1c] = LoaderBlockCount;
                     }
                 }
                 else
