@@ -5,7 +5,7 @@
 1694446498 source:c:\users\tamas\onedrive\c64\c++\sparkle\loader.cpp
 	"common.h"
 
-1694022342 c:\users\tamas\onedrive\c64\c++\sparkle\common.h
+1696031368 c:\users\tamas\onedrive\c64\c++\sparkle\common.h
 	<algorithm>
 	<iostream>
 	<string>
@@ -17,11 +17,12 @@
 	<stdlib.h>
 	<iomanip>
 	<iostream>
+	<sstream>
 	<filesystem>
-	"resource.h"
-	"ThirdParty/tinyexpr.h"
+	"thirdparty/lodepng.h"
+	"thirdparty/tinyexpr.h"
 
-1694446461 source:c:\users\tamas\onedrive\c64\c++\sparkle\packer.cpp
+1694892947 source:c:\users\tamas\onedrive\c64\c++\sparkle\packer.cpp
 	"common.h"
 
 1693960884 source:c:\users\tamas\onedrive\c64\c++\sparkle\petscii2dirart.cpp
@@ -30,18 +31,18 @@
 1693960885 source:c:\users\tamas\onedrive\c64\c++\sparkle\sd.cpp
 	"common.h"
 
-1694269763 source:c:\users\tamas\onedrive\c64\c++\sparkle\ss.cpp
+1696812207 source:c:\users\tamas\onedrive\c64\c++\sparkle\ss.cpp
 	"common.h"
 
-1694269763 source:c:\users\tamas\onedrive\c64\c++\sparkle\ssio.cpp
+1696812207 source:c:\users\tamas\onedrive\c64\c++\sparkle\ssio.cpp
 	"common.h"
 
-1694445674 source:c:\users\tamas\onedrive\c64\c++\sparkle\sparkle.cpp
+1696633010 source:c:\users\tamas\onedrive\c64\c++\sparkle\sparkle.cpp
 	"common.h"
 
-1667511155 c:\users\tamas\onedrive\c64\c++\sparkle\resource.h
+1696025182 c:\users\tamas\onedrive\c64\c++\sparkle\resource.h
 
-1694445441 source:c:\users\tamas\onedrive\c64\c++\sparkle\sparkle.rc
+1696631045 source:c:\users\tamas\onedrive\c64\c++\sparkle\sparkle.rc
 	"resource.h"
 	"winres.h"
 
@@ -98,4 +99,18 @@
 
 1694014770 source:c:\users\tamas\onedrive\c64\c++\sparkle\thirdparty\tinyexpr.cpp
 	"tinyexpr.h"
+
+1695918156 c:\users\tamas\onedrive\c64\c++\sparkle\thirdparty\lodepng.h
+	<string.h>
+	<vector>
+	<string>
+	"lodepng.h"
+	<iostream>
+	"lodepng.h"
+
+1695918156 source:c:\users\tamas\onedrive\c64\c++\sparkle\thirdparty\lodepng.cpp
+	"lodepng.h"
+	<limits.h>
+	<stdio.h>
+	<stdlib.h>
 
