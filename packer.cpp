@@ -84,14 +84,14 @@ int NibblePtr, BitPos, BitsLeft;
 unsigned char LastByte;
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
-
+/*
 void WriteBinaryFile(const string& FileName, unsigned char* Buffer, streamsize Size) {
 
     ofstream myFile(FileName, ios::out | ios::binary);
     myFile.write((char*)&Buffer[0], Size);
 
 }
-
+*/
 //----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 bool UpdateByteStream()
@@ -585,173 +585,6 @@ bool SequenceFits(int BytesToAdd, int BitsToAdd, int SequenceUnderIO) {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool CloseFile() {
-
-    //ADDS NEXT FILE TAG TO BUFFER
-
-    //4-5 bytes and 1-2 bits needed for NextFileTag, Address Bytes and first Lit byte (+1 more if UIO)
-    //BYTES NEEDED: (1)End Tag + (2)AdLo + (3)AdHi + (4)1st Literal +/- (5)I/O FLAG of NEW FILE's 1st literal
-    //BUG reported by Raistlin/G*P
-
-    int BytesNeededForNextFile = 4 + CheckIO(PrgLen - 1, -1);
-
-    //THE FIRST LITERAL BYTE WILL ALSO NEED A LITERAL BIT
-    //DO NOT check whether Match Bit is needed for new file - will be checked in Sequencefits()
-    //BUG reported by Visage/Lethargy
-
-    int BitsNeededForNextFile = 1;
-
-    //Type selector bit  (match vs literal) is not needed, the first byte of a file is always literal
-    //So this is the literal length bit: 0 - 1 literal, 1 - more than 1 literals, would also need a Nibble...
-    //...but here we only need to be able to fit 1 literal byte
-
-    NextFileInBuffer = true;
-
-    if (SequenceFits(BytesNeededForNextFile, BitsNeededForNextFile,0))
-    {
-        //Buffer has enough space for New File Match Tag and New File Info and first Literal byte (and I/O flag if needed)
-
-        //If last sequence was a match (no literals) then add a match bit
-        if ((MLen > 0) || (LitCnt == -1)) AddBits(MatchSelector, 1);
-
-        Buffer[BytePtr--] = NextFileTag;                            //Then add New File Match Tag
-        FirstLitOfBlock = true;
-    }
-    else
-    {
-        //Next File Info does not fit, so close buffer, next file will start in new block
-        if (!CloseBuffer())
-            return false;
-    }
-
-    return true;
-}
-
-//----------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-bool CloseBundle(int NextFileIO, bool LastPartOnDisk)
-{
-    //Can't use BitsNeededForNextBundle here, this could be the last bundle on the disk!!!
-    //So we re-calculate the number of bytes needed for the next (potentially dummy) bundle
-    //BYTES NEEDED: (1)Long Match Tag + (2)End Tag + (3)BitPtr + (4)AdLo + (5)AdHi + (6)1st Literal +/- (7)I/O flag
-    int BytesNeeded = 6 + NextFileIO;     //Next bundle is already sorted here, we know exactly which file is the next one
-    
-    //SABREWULF BUG - reported by Raistlin
-    //Adding a Literal Bit here resulted in overcalculating the space needed for the next block -AFTER- we already identified and compressed it
-    //and started a new block with a dummy write - this resulted in out-of-order loading of the last block with wrong match references
-    
-    //THE FIRST LITERAL OF THE NEXT BUNDLE DOES -NOT- NEED AN ADDITIONAL LITERAL BIT - it is already included in Bytes, see (3)BitPtr!!!
-    //DO NOT ADD MATCH BIT HERE, IT WILL BE ADDED IN SequenceFits()
-    
-    int BitsNeeded = 0;
-
-    TransitionalBlock = true;    //This is always a transitional block, unless close sequence does not fit, will add +1 for Block Count
-
-    if (NewBlock)
-    {
-        goto NewB;   //The bundle will start in a new block
-    }
-
-
-    //ADDS NEW Bundle TAG (Long Match Tag + End Tag) TO THE END OF THE Bundle
-
-    //-----------------------------------------------------------------------------------
-    //"SPRITE BUG"
-    //Compression bug related to the transitional block - FIXED
-    //Fix: include NEXT file's I / O status in calculation of needed bytes
-    //-----------------------------------------------------------------------------------
-
-    if (SequenceFits(BytesNeeded, BitsNeeded, 0))       //This will add the EndTag to the needed bytes
-    {
-        //Buffer has enough space for New Bundle Tag and New Bundle Info and first Literal byte (and IO flag if needed)
-
-        //If last sequence was a match (no literals) then add a match bit
-        if ((MLen > 0) || (LitCnt == -1))
-        {
-            AddBits(1, 1);
-        }
-    NextPart:
-        //Match Bit is not needed if this is the beginning of the next block
-        FilesInBuffer++;  //There is going to be more than 1 file in the buffer
-
-        Buffer[1] = EORtransform(0);
-
-        NibblePtr = 0;
-        Buffer[BytePtr--] = NearLongMatchTag;                         //'Then add New File Match Tag
-        Buffer[BytePtr--] = EndOfBundleTag;
-        BitPtr = BytePtr--;
-        Buffer[BitPtr] = 0x01;
-
-        BitPos = 7;
-        BitsLeft = 7;
-
-        if (LastPartOnDisk)                 //'This will finish the disk
-        {
-            Buffer[BytePtr] = BytePtr - 2;  //Finish disk with a dummy literal byte that overwrites itself to reset LastX for next disk side
-            Buffer[BytePtr - 1] = 0x03;     //New address is the next byte in buffer
-            Buffer[BytePtr - 2] = 0x00;     //Dummy $00 Literal that overwrites itself
-            LitCnt = 0;                     //One (dummy) literal
-            //AddLitBits()                   'NOT NEEDED, WE ARE IN THE MIDDLE OF THE BUFFER, 1ST BIT NEEDS TO BE OMITTED
-            AddBits(0, 1);          //ADD 2ND BIT SEPARATELY (0-BIT, TECHNCALLY, THIS IS NOT NEEDED SINCE THIS IS THE LAST BIT)
-            //-------------------------------------------------------------------
-            //Buffer(ByteCnt - 3) = &H0      'THIS IS THE END TAG, NOT NEEDED HERE, WILL BE ADDED WHEN BUFFER IS CLOSED
-            //ByteCnt -= 4					' * BUGFIX, THANKS TO RAISTLIN / G * P FOR REPORTING
-            //-------------------------------------------------------------------
-            BytePtr -= 3;
-            if (BundleNo < 128)
-            {
-                DirBlocks[(BundleNo * 4) + 3] = BitPtr;
-                DirPtr[BundleNo] = BufferCnt;
-            }
-        }
-
-        //DO NOT CLOSE LAST BUFFER HERE, WE ARE GOING TO ADD NEXT Bundle TO LAST BUFFER
-        if ((BufferCnt * 256) > BlockPtr + 255)                                    //Only save block count if block is already added to ByteSt
-        {
-            ByteSt[BlockPtr + 1] = EORtransform(LastBlockCnt);   //New Block Count is ByteSt(BlockPtr+1) in buffer, not ByteSt(BlockPtr+255)
-            LoaderBundles++;
-        }
-
-        LitCnt = -1;                        //Reset LitCnt here
-
-    }
-    else
-    {
-NewB:
-        //Next File Info DOES NOT fit, so close buffer
-        if (!CloseBuffer())         //Adds EndTag and starts new buffer
-            return false;
-        //Then add 1 dummy literal byte to new block (blocks must start with 1 literal, next bundle tag is a match tag)
-        Buffer[255] = 0xFD;         //Dummy Address ($03fd* - first literal's address in buffer... (*NextPart above, will reserve BlockCnt)
-        Buffer[254] = 0x03;         //...we are overwriting it with the same value
-        Buffer[253] = 0x00;         //Dummy value, will be overwritten with itself
-        LitCnt = 0;
-        AddLitBits(LitCnt);    //WE NEED THIS HERE, AS THIS IS THE BEGINNING OF THE BUFFER, AND 1ST BIT WILL BE CHANGED TO COMPRESSION BIT
-        BytePtr = 252;
-        LastBlockCnt++;
-
-        if (LastBlockCnt > 255)
-        {
-            //Bundles cannot be larger than 255 blocks compressed
-            cout << "***CRITICAL***\tBundle " << BundleCnt << " would need " << LastBlockCnt << " blocks on the disk.\nBundles cannot be larger than 255 blocks!\n";
-            return false;
-        }
-
-        BlockCnt--;
-        //THEN GOTO NEXT Bundle SECTION
-        goto NextPart;
-
-    }
-
-    NewBlock = SetNewBlock;        //NewBlock is true at closing the previous bundle, so first it just sets NewBlock2
-    SetNewBlock = false;            //And NewBlock2 will fire at the desired bundle
-
-    return true;
-
-}
-
-//----------------------------------------------------------------------------------------------------------------------------------------------------------------
-
 void FindFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex, int RefMaxAddress, int RefMinAddress)
 {
     //unsigned char* Prg8 = &Prgs[CurrentFileIndex].Prg[0];
@@ -839,8 +672,8 @@ void FindFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex, int RefMaxAd
             }
         }
 */
-        //int NearMinO = min(RefMinAddressIndex, ShortMaxO);
-        //int NearMaxO = min(max(Pos + MaxNearOffset, OffsetBase + RefMinAddressIndex), OffsetBase + RefMaxAddressIndex) - OffsetBase;
+//int NearMinO = min(RefMinAddressIndex, ShortMaxO);
+//int NearMaxO = min(max(Pos + MaxNearOffset, OffsetBase + RefMinAddressIndex), OffsetBase + RefMaxAddressIndex) - OffsetBase;
 /*
         for (int O = NearMaxO; O >= NearMinO; O--)
         {
@@ -875,7 +708,7 @@ void FindFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex, int RefMaxAd
             }
         }
 */
-        //int FarMinO = max(RefMinAddressIndex, NearMaxO);
+//int FarMinO = max(RefMinAddressIndex, NearMaxO);
         int BestLength = FFL[Pos];
         int BestOffset = FFO[Pos];
 
@@ -886,24 +719,24 @@ void FindFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex, int RefMaxAd
             {
                 int MaxLL = min(min(Pos + 1, MaxLongLen), O - RefMinAddressIndex + 1);   //MaxLL = 255 or less
 
-                for (int L = 1; L <= MaxLL; L ++)
+                for (int L = 1; L <= MaxLL; L++)
+                {
+                    if ((L == MaxLL) || (Prgs[CurrentFileIndex].Prg[Pos - L] != Prgs[RefIndex].Prg[O - L]))
                     {
-                        if ((L == MaxLL) || (Prgs[CurrentFileIndex].Prg[Pos - L] != Prgs[RefIndex].Prg[O - L]))
+                        //Find the first position where there is NO match -> this will give us the absolute length of the match
+                        //L=MatchLength + 1 here
+                        if (L > 2)
                         {
-                            //Find the first position where there is NO match -> this will give us the absolute length of the match
-                            //L=MatchLength + 1 here
-                            if (L > 2)
+                            if (BestLength < L)
                             {
-                                if (BestLength < L)
-                                {
-                                    BestLength = L;
-                                    BestOffset = O - Pos + OffsetBase;
-                                    //MatchFound = true;
-                                }
+                                BestLength = L;
+                                BestOffset = O - Pos + OffsetBase;
+                                //MatchFound = true;
                             }
-                            break;
                         }
+                        break;
                     }
+                }
                 //If far matches maxed out, we can leave the loop and go to the next Prg position
                 if (BestLength >= min(min(Pos + 1, MaxFarMidLen), O - RefMinAddressIndex + 1))
                 {
@@ -915,6 +748,670 @@ void FindFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex, int RefMaxAd
         FFL[Pos] = BestLength;
         FFO[Pos] = BestOffset;
     }
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+void SearchReferenceFile(int PrgMaxIndex, int RefIndex, int RefMaxAddress, int RefMinAddress)
+{
+    //PrgMaxIndex = relative address within Prg
+    //RefMaxAddress, RefMinAddress = absolute addresses within reference file
+    if (!Prgs[RefIndex].FileIO)
+    {
+        //Reference file is not under I/O, check if it is IN I/O
+        if (((RefMinAddress >= 0xd000) && (RefMinAddress < 0xe000)) || ((RefMaxAddress >= 0xd000) && (RefMaxAddress < 0xe000)))
+        {
+            //This reference file is IN the I/O registers, SKIP anything between $d000-$dfff
+            if (RefMinAddress + 1 < 0xd000)
+            {
+                //Search from start to $cfff
+                FindFarMatches(RefIndex, PrgMaxIndex, 1, 0xcfff, RefMinAddress + 1);
+            }
+            if (RefMaxAddress > 0xe000)
+            {
+                //Search from $e000 to end of file
+                FindFarMatches(RefIndex, PrgMaxIndex, 1, RefMaxAddress, 0xe000 + 1);
+            }
+        }
+        else
+        {
+            FindFarMatches(RefIndex, PrgMaxIndex, 1, RefMaxAddress, RefMinAddress + 1);
+        }
+    }
+    else
+    {
+        FindFarMatches(RefIndex, PrgMaxIndex, 1, RefMaxAddress, RefMinAddress + 1);
+    }
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
+{
+    //----------------------------------------------------------------------------------------------------------
+    //                                      TODO: TRY REVERSE VECTORS!!!
+    //----------------------------------------------------------------------------------------------------------
+    //FIND LONGEST SHORT AND NEAR MATCHES FOR EACH POSITION, AND FAR MATCHES WITH OFFSET < MAX. 1024
+    //----------------------------------------------------------------------------------------------------------
+
+    int CurrentMaxL;
+    int L = 0;
+
+    for (int Pos = SeqHighestIndex; Pos >= SeqLowestIndex; Pos--)   //Pos cannot be 0, Prg(0) is always literal as it is always 1 byte left
+    {
+        //Offset goes from 1 to max offset (cannot be 0)
+        int MaxO = min(MaxOffset, SeqHighestIndex - Pos);
+        //Match length goes from 1 to max length
+        int MaxLL = min(Pos, MaxLongLen);
+        int MaxSL = min(Pos, MaxShortLen);
+
+        if ((FirstRun) || (FO[Pos] > MaxO) || (NO[Pos] > MaxO) || (SO[Pos] > MaxO))
+        {
+            //Only run search for this Pos if this is the first pass or the previously found match has an offset beyond block
+            if (SO[Pos] > MaxO)
+            {
+                SO[Pos] = 0;
+                SL[Pos] = 0;
+            }
+            if (NO[Pos] > MaxO)
+            {
+                NO[Pos] = 0;
+                NL[Pos] = 0;
+            }
+            if (FO[Pos] > MaxO)
+            {
+                FO[Pos] = 0;
+                FL[Pos] = 0;
+            }
+
+            unsigned char PrgValAtPos = Prgs[CurrentFileIndex].Prg[Pos];
+
+            int ShortMaxO = min(MaxShortOffset, MaxO);
+
+            int BestSL = SL[Pos];
+            int BestSO = SO[Pos];
+
+            int BestNL = NL[Pos];
+            int BestNO = NO[Pos];
+
+            for (int O = 1; O <= ShortMaxO; O++)
+            {
+                //If both short and long matches maxed out, we can leave the loop and go to the next Prg position
+                if ((BestNL == MaxLL) && (BestSL == MaxSL))
+                {
+                    break;
+                }
+                //Check if first byte matches at offset, if not go to next offset
+                if (PrgValAtPos == Prgs[CurrentFileIndex].Prg[Pos + O])
+                {
+                    L = 1;
+                    do
+                    {
+                        if (Prgs[CurrentFileIndex].Prg[Pos - L] != Prgs[CurrentFileIndex].Prg[Pos + O - L])
+                        {
+                            break;
+                        }
+                        else
+                        {
+                            L++;
+                        }
+                    } while (L <= MaxLL);
+
+                    if (L > 1)
+                    {
+                        if (BestSL < (CurrentMaxL = min(MaxSL, L)))
+                        {
+                            BestSL = CurrentMaxL; //If(L > MaxShortLen, MaxShortLen, L)   'Short matches cannot be longer than 4 bytes
+                            BestSO = O;                        //Keep Offset 1-based
+                        }
+                        if (BestNL < (CurrentMaxL = min(L, MaxLL)))
+                        {
+                            BestNL = CurrentMaxL;
+                            BestNO = O;
+                        }
+                    }
+                }
+            }
+
+            SL[Pos] = BestSL;
+            SO[Pos] = BestSO;
+
+            int NearMaxO = min(MaxNearOffset, MaxO);
+
+            for (int O = ShortMaxO + 1; O <= NearMaxO; O++)
+            {
+                //If both short and long matches maxed out, we can leave the loop and go to the next Prg position
+                if (BestNL == MaxLL)
+                {
+                    break;
+                }
+                //Check if first byte matches at offset, if not go to next offset
+                if (PrgValAtPos == Prgs[CurrentFileIndex].Prg[Pos + O])
+                {
+                    L = 1;
+                    do {
+                        if (Prgs[CurrentFileIndex].Prg[Pos - L] != Prgs[CurrentFileIndex].Prg[Pos + O - L])
+                        {
+                            break;
+                        }
+                        else
+                        {
+                            L++;
+                        }
+                    } while (L <= Pos);
+
+                    if (L > (BestSL > 1 ? BestSL : 1))    // max(1, SL[Pos]))     //Only check match lengths > SL[Pos]
+                    {
+                        if (BestNL < (CurrentMaxL = min(L, MaxLL)))
+                        {
+                            BestNL = CurrentMaxL;
+                            BestNO = O;
+                        }
+                        int I = Pos;
+                        while ((L >= (CurrentMaxL = min(I, MaxLL))) && (L-- > 1))
+                        {
+                            NL[I] = CurrentMaxL;
+                            NO[I--] = O;
+                        }
+                    }
+                }
+            }
+
+            NL[Pos] = BestNL;
+            NO[Pos] = BestNO;
+
+            if (BestNL != MaxLL)
+            {
+
+                int BestFL = FL[Pos];
+                int BestFO = FO[Pos];
+
+                for (int O = NearMaxO + 1; O <= MaxO; O++)
+                {
+                    //If both short and long matches maxed out, we can leave the loop and go to the next Prg position
+                    if (BestFL == MaxLL)
+                    {
+                        break;
+                    }
+                    //Check if first byte matches at offset, if not go to next offset
+                    if (PrgValAtPos == Prgs[CurrentFileIndex].Prg[Pos + O])
+                    {
+                        L = 1;
+                        do {
+                            if (Prgs[CurrentFileIndex].Prg[Pos - L] != Prgs[CurrentFileIndex].Prg[Pos + O - L])
+                            {
+                                break;
+                            }
+                            else
+                            {
+                                L++;
+                            }
+                        } while (L <= Pos);
+
+                        if (L > (BestNL > 2 ? BestNL : 2))    // max(2, NL[Pos])) //Only check lengths > NL[Pos]
+                        {
+                            if (BestFL < (CurrentMaxL = min(L, MaxLL)))
+                            {
+                                BestFL = CurrentMaxL;
+                                BestFO = O;
+                            }
+                            int I = Pos;
+                            while ((L >= (CurrentMaxL = min(I, MaxLL))) && (L-- > 2))
+                            {
+                                FL[I] = CurrentMaxL;
+                                FO[I--] = O;
+                            }
+                        }
+                    }
+                }
+                FL[Pos] = BestFL;
+                FO[Pos] = BestFO;
+            }
+        }
+    }
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+void CalcBestSequence(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
+{
+    FindMatches(SeqHighestIndex, SeqLowestIndex, FirstRun);
+
+    //----------------------------------------------------------------------------------------------------------
+    //FIND BEST SEQUENCE FOR EACH POSITION
+    //----------------------------------------------------------------------------------------------------------
+
+    for (int Pos = SeqLowestIndex; Pos <= SeqHighestIndex; Pos++)
+    {
+        //Start with second element, first has been initialized above
+        Seq[Pos + 1].TotalBits = 0xffffff;
+        //Max block size=100 = $10000 bytes = $80000 bits, make default larger than this
+
+        if ((FL[Pos] != 0) || (FFL[Pos] != 0))
+        {
+            if (FL[Pos] >= FFL[Pos])
+            {
+                CheckMatchSeq(FL[Pos], FO[Pos], Pos);
+            }
+            else if (Pos < SeqHighestIndex)     //The last byte of the block MUST be a literal, we can't use Far Matches there
+            {
+                //If a reference is under I/O then this block also must be under I/O to be able to copy the reference
+                //If ((PrgAdd + Pos + FFO(Pos) >= &HD000) AndAlso (PrgAdd + Pos + FFO(Pos) < &HE000)) OrElse
+                //((PrgAdd + Pos + FFO(Pos) - FFL(Pos) >= &HD000) AndAlso (PrgAdd + Pos + FFO(Pos) - FFL(Pos) < &HE000)) Then
+                //BlockUnderIO = 1
+                //End If
+                CheckMatchSeq(FFL[Pos], FFO[Pos], Pos);
+            }
+        }
+        if ((NL[Pos] > 0) || (FNL[Pos] > 0))
+        {
+            if (NL[Pos] >= FNL[Pos])
+            {
+                CheckMatchSeq(NL[Pos], NO[Pos], Pos);
+            }
+            else if (Pos < SeqHighestIndex)
+            {
+                CheckMatchSeq(FNL[Pos], FNO[Pos], Pos);
+            }
+        }
+        if ((SL[Pos] > 0) || (FSL[Pos] > 0))
+        {
+            if (SL[Pos] >= FSL[Pos])
+            {
+                CheckMatchSeq(SL[Pos], SO[Pos], Pos);
+            }
+            else if (Pos < SeqHighestIndex)
+            {
+                CheckMatchSeq(FSL[Pos], FSO[Pos], Pos);
+            }
+        }
+        CheckLitSeq(Pos);
+    }
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+bool CloseBuffer() {
+
+    AddMatchBit();
+
+    BlockCnt++;
+    BufferCnt++;
+
+    //This does not work here yet, Pack needs to be changed to a function
+    //If BufferCnt > BlocksFree Then
+    //MsgBox("Unable to add bundle to disk :(", vbOKOnly, "Not enough free space on disk")
+    //GoTo NoDisk
+    //End If
+
+    if (!UpdateByteStream())
+        return false;
+
+    ResetBuffer();                      //Resets buffer variables
+
+    NextFileInBuffer = false;           //Reset Next File flag
+
+    TransitionalBlock = false;          //Only the first block of a bundle is a transitional block
+
+    FirstLitOfBlock = true;
+
+    if (SI < 0)                         //We have reached the end of the file -> exit
+    {
+        return true;
+    }
+
+    //If we have not reached the end of the file, then update buffer
+
+    //------------------------------------------------------------------------------------------------------------------------------
+    //"COLOR BUG"
+    //Compression bug related to the transitional block (i.e. finding the last block of a bundle) - FIXED
+    //Fix: add 5 or 6 bytes + 2 bits to the calculation to find the last block of a bundle
+    //+2 new bundle tag, +2 NEXT Bundle address, +1 first literal byte of NEXT Bundle, +0/1 IO status of first literal byte of NEXT file
+    //+1 literal bit, +1 match bit (may or may not be needed, but we don't know until the end...)
+    //------------------------------------------------------------------------------------------------------------------------------
+
+    //Check if the first literal byte of the NEXT Bundle will go under I/O
+    //Bits needed for next bundle is calculated in ModDisk:SortPart
+    //(Next block = Second block) or (remaining bits of Last File in Bundle + Needed Bits fit in this block)
+
+    //LETHARGY BUG - Bits Left need to be calculated from Seq(SI+1) and NOT Seq(SI)
+    //Add 4 bits if number of nibbles is odd
+    int BitsLeftInBundle = Seq[SI + 1].TotalBits + ((Seq[SI + 1].Nibbles % 2) * 4);
+
+    //If the next block is the first one on a new track, no need to recalculate the sequence
+    //As all previous blocks will be loaded from the previous track before this block gets loaded
+    bool NewTrack = false;
+
+    if (BufferCnt < (17 * 21))
+    {
+        if (BufferCnt % 21 == 0) NewTrack = true;
+    }
+    else if (BufferCnt < ((17 * 21) + (6 * 19)))
+    {
+        if ((BufferCnt - (17 * 21)) % 19 == 0) NewTrack = true;
+    }
+    else if (BufferCnt < ((17 * 21) + (6 * 19) + (6 * 18)))
+    {
+        if ((BufferCnt - (17 * 21) - (6 * 19)) % 18 == 0) NewTrack = true;
+    }
+    else
+    {
+        if ((BufferCnt - (17 * 21) - (6 * 19) - (6 * 18)) % 17 == 0) NewTrack = true;
+    }
+
+    //KARAOKE BUG - fixed in Sparkle 2.2
+    //BitsLeftInBundle = bits left to be compressed in bundle, add 1 bit if MLen>0, add 8 bits for Block Count (to simulate 'TransitionalBlock = True')
+    //If the result is less than the bits remaining free in the remaining data + the first byte of the next bundle should fit in the buffer
+    //I.e. we have identified the last block of the bundle (=transitional block)
+
+    //LastBlockOfBundle = ((BitsLeftInBundle + BitsNeededForNextBundle + ((MLen == 0) ? 0 : 1) + 8 <= ((LastByte - 1) * 8) + BitPos) && (LastFileOfBundle) && (!NewBlock));
+
+    if ((LastFileOfBundle) && (!NewBlock))
+    {
+        int BitsNeeded = BitsLeftInBundle + BitsNeededForNextBundle + ((MLen == 0) ? 0 : 1) + 8;
+        int BitsAvailable = ((LastByte - 1) * 8) + BitPos;
+
+        if (BitsNeeded <= BitsAvailable)
+        {
+            LastBlockOfBundle = true;
+        }
+        else
+        {
+            LastBlockOfBundle = false;
+        }
+    }
+    /*
+        if ((BitsLeftInBundle + BitsNeededForNextBundle + ((MLen == 0) ? 0 : 1) + 8 <= ((LastByte - 1) * 8) + BitPos) && (LastFileOfBundle) && (!NewBlock))
+        {
+            LastBlockOfBundle = true;
+        }
+        else
+        {
+            LastBlockOfBundle = false;
+        }
+    */
+
+    if ((LastBlockOfBundle) || (NewTrack) || (BlockCnt == 1))
+    {
+        //Seq(SI+1).Bytes/Nibbles/Bits = to calculate remaining bits in file
+        //BitsNeededForNextBundle (5-6 bytes + 1/2 bits)
+        //+5/6 bytes +1/2 bits
+        //LastByte-1: subtract close tag/block count = Byte(1)
+        //Bits remaining in block: LastByte * 8 (+ remaining bits in last BitPtr (BitPos+1))
+        //But we are trying to overcalculate here to avoid misidentification of the last block
+        //Which would result in buggy decompression
+
+        //This is the last block ONLY IF the remainder of the bundle + the next bundle's info fits!!!
+        //AND THE NEXT Bundle IS NOT ALIGNED in which case the next block is the last one
+        //Seg(SI).bit includes both the byte stream in bits and the bit stream (total bits needed to compress the remainder of the bundle)
+        //+Close Tag: 8 bits
+        //+BitsNeeded: 5-6 bytes for next bundle's info + 1 lit bit + / -1 match bit(may or may not be needed, but we wouldn't know until the end)
+        //For the 2nd and last blocks of a bundle and the first blocks on a new track only recalculate the first byte's sequence
+        //If BlockCnt <> 1 Then MsgBox((BitsLeftInBundle + BitsNeededForNextBundle).ToString + vbNewLine + (Seq(SI + 1).TotalBits + BitsNeededForNextBundle).ToString + vbNewLine + ((LastByte - 1) * 8 + BitPos).ToString)
+
+        //Only recalculate the very first byte's sequence
+        CalcBestSequence(max(SI, 1), max(SI, 1), false); //'(If(SI > 1, SI, 1), If(SI > 1, SI, 1))
+
+        if (NewTrack)
+        {
+
+            if (CurrentFileIndex > PartialFileIndex)
+            {
+
+                if (PartialFileIndex > -1)
+                {
+                    //Search the finished segment of partial file
+                        //ReferenceFile = Prgs(PartialFileIndex).ToArray
+                    ReferenceFileStart = Prgs[PartialFileIndex].iFileAddr;
+
+                    SearchReferenceFile(SI, PartialFileIndex, ReferenceFileStart + PartialFileOffset, ReferenceFileStart + 1);
+                }
+
+                //Search any finished files on track (partial file < finished file < current file)
+                for (int I = PartialFileIndex + 1; I <= CurrentFileIndex - 1; I++)
+                {
+                    //ReferenceFile = Prgs(I).ToArray
+                    ReferenceFileStart = Prgs[I].iFileAddr;
+
+                    SearchReferenceFile(SI, I, ReferenceFileStart + Prgs[I].iFileLen - 1, ReferenceFileStart + 1);
+                }
+
+                //Search the finished segment of this file
+                //ReferenceFile = Prgs(CurrentFileIndex).ToArray
+                ReferenceFileStart = Prgs[CurrentFileIndex].iFileAddr;
+
+                SearchReferenceFile(SI, CurrentFileIndex, ReferenceFileStart + Prgs[CurrentFileIndex].iFileLen - 1, ReferenceFileStart + SI + 1);
+            }
+            else
+            {
+                //Partial file = CurrentFile (same file, spanning multiple tracks)
+                //ReferenceFile = Prgs(CurrentFileIndex).ToArray
+                ReferenceFileStart = Prgs[CurrentFileIndex].iFileAddr;
+
+                SearchReferenceFile(SI, CurrentFileIndex, ReferenceFileStart + PartialFileOffset, ReferenceFileStart + SI + 1);
+
+            }
+
+            //'The current file becomes the partial file, anything before it is now finished and can be used for search
+            PartialFileIndex = CurrentFileIndex;
+            PartialFileOffset = SI;
+
+        }
+
+        if ((BlockCnt != 1) && (!NewTrack))     //Do not recalculate the very first block and first blocks on each track
+        {
+            //Last/Transitional block
+            BitsLeftInBundle = Seq[SI + 1].TotalBits + ((Seq[SI + 1].Nibbles % 2) * 4);
+            //If the new bit count does not fit in the buffer then this is NOT the last block -> recalc sequence
+            //KARAOKE BUG - fixed in Sparkle 2.2
+            if (BitsLeftInBundle + BitsNeededForNextBundle + ((MLen == 0) ? 0 : 1) + 8 > ((LastByte - 1) * 8) + BitPos)
+            {
+                LastBlockOfBundle = false;
+                goto CalcAll;
+            }
+        }
+    }
+    else
+    {
+        //For all other blocks recalculate the first 256*3 bytes' sequence (MaxNearOffset * 3)
+    CalcAll:
+        CalcBestSequence(max(SI, 1), max(SI - MaxOffset, 1), false);   //If(SI > 1, SI, 1), If(SI - MaxOffset > 1, SI - MaxOffset, 1))
+    }
+
+    //----------------------------------------------------------------------------------------------------------
+
+    //if ((PrgAdd + SI) == 0x666f)        //SABREWULF
+    //{
+    //    PrgAdd += 0;
+    //}
+
+    AdLoPos = BytePtr;
+    Buffer[BytePtr--] = (PrgAdd + SI) % 256;
+
+    BlockUnderIO = CheckIO(SI, -1);          //Check if last byte of prg could go under IO
+
+    if (BlockUnderIO == 1)
+    {
+        BytePtr--;
+    }
+
+    AdHiPos = BytePtr;
+    Buffer[BytePtr--] = ((PrgAdd + SI) / 256) % 256;
+    LastByte = BytePtr;             //LastByte = the first byte of the ByteStream after and Address Bytes (253 or 252 with BlockCnt)
+
+    StartPtr = SI;
+
+    return true;
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+bool CloseFile() {
+
+    //ADDS NEXT FILE TAG TO BUFFER
+
+    //4-5 bytes and 1-2 bits needed for NextFileTag, Address Bytes and first Lit byte (+1 more if UIO)
+    //BYTES NEEDED: (1)End Tag + (2)AdLo + (3)AdHi + (4)1st Literal +/- (5)I/O FLAG of NEW FILE's 1st literal
+    //BUG reported by Raistlin/G*P
+
+    int BytesNeededForNextFile = 4 + CheckIO(PrgLen - 1, -1);
+
+    //THE FIRST LITERAL BYTE WILL ALSO NEED A LITERAL BIT
+    //DO NOT check whether Match Bit is needed for new file - will be checked in Sequencefits()
+    //BUG reported by Visage/Lethargy
+
+    int BitsNeededForNextFile = 1;
+
+    //Type selector bit  (match vs literal) is not needed, the first byte of a file is always literal
+    //So this is the literal length bit: 0 - 1 literal, 1 - more than 1 literals, would also need a Nibble...
+    //...but here we only need to be able to fit 1 literal byte
+
+    NextFileInBuffer = true;
+
+    if (SequenceFits(BytesNeededForNextFile, BitsNeededForNextFile,0))
+    {
+        //Buffer has enough space for New File Match Tag and New File Info and first Literal byte (and I/O flag if needed)
+
+        //If last sequence was a match (no literals) then add a match bit
+        if ((MLen > 0) || (LitCnt == -1)) AddBits(MatchSelector, 1);
+
+        Buffer[BytePtr--] = NextFileTag;                            //Then add New File Match Tag
+        FirstLitOfBlock = true;
+    }
+    else
+    {
+        //Next File Info does not fit, so close buffer, next file will start in new block
+        if (!CloseBuffer())
+            return false;
+    }
+
+    return true;
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+bool StartNewBundle()
+{
+    //New Bundle is Aligned OR next file start sequence DOES NOT fit, so close buffer
+    if (!CloseBuffer())         //Adds EndTag and starts new buffer
+        return false;
+    
+    //Then add 1 dummy literal byte to new block (blocks must start with 1 literal, next bundle tag is a match tag)
+    Buffer[255] = 0xfd;         //Dummy Address ($03fd* - first literal's address in buffer... (*NextPart above, will reserve BlockCnt)
+    Buffer[254] = 0x03;         //...we are overwriting it with the same value
+    Buffer[253] = 0x00;         //Dummy value, will be overwritten with itself
+    
+    LitCnt = 0;
+    
+    AddLitBits(LitCnt);    //WE NEED THIS HERE, AS THIS IS THE BEGINNING OF THE BUFFER, AND 1ST BIT WILL BE CHANGED TO COMPRESSION BIT
+    
+    BytePtr = 252;
+    LastBlockCnt++;
+
+    if (LastBlockCnt > 255)
+    {
+        //Bundles cannot be larger than 255 blocks compressed
+        cout << "***CRITICAL***\tBundle " << BundleCnt << " would need " << LastBlockCnt << " blocks on the disk.\nBundles cannot be larger than 255 blocks!\n";
+        return false;
+    }
+
+    BlockCnt--;
+
+    return true;
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+void StartNextBundle(bool LastBundleOnDisk)
+{
+    //Buffer has enough space for New Bundle Tag and New Bundle Info and first Literal byte (and IO flag if needed)
+
+    //Match Bit is not needed if this is the beginning of the next block
+    FilesInBuffer++;  //There is going to be more than 1 file in the buffer
+
+    Buffer[1] = EORtransform(0);
+
+    NibblePtr = 0;
+    Buffer[BytePtr--] = NearLongMatchTag;   //Then add New File Match Tag
+    Buffer[BytePtr--] = EndOfBundleTag;
+    BitPtr = BytePtr--;
+    Buffer[BitPtr] = 0x01;
+
+    BitPos = 7;
+    BitsLeft = 7;
+
+    if (LastBundleOnDisk)                   //This will finish the disk
+    {
+        Buffer[BytePtr] = BytePtr - 2;      //Finish disk with a dummy literal byte that overwrites itself to reset LastX for next disk side
+        Buffer[BytePtr - 1] = 0x03;         //New address is the next byte in buffer
+        Buffer[BytePtr - 2] = 0x00;         //Dummy $00 Literal that overwrites itself
+        LitCnt = 0;                         //One (dummy) literal
+        //AddLitBits()                      //NOT NEEDED, WE ARE IN THE MIDDLE OF THE BUFFER, 1ST BIT NEEDS TO BE OMITTED
+        AddBits(0, 1);             //ADD 2ND BIT SEPARATELY (0-BIT, TECHNCALLY, THIS IS NOT NEEDED SINCE THIS IS THE LAST BIT)
+
+        BytePtr -= 3;
+        if (BundleNo < 128)
+        {
+            DirBlocks[(BundleNo * 4) + 3] = BitPtr;
+            DirPtr[BundleNo] = BufferCnt;
+        }
+    }
+
+    //DO NOT CLOSE LAST BUFFER HERE, WE ARE GOING TO ADD NEXT Bundle TO LAST BUFFER
+    if ((BufferCnt * 256) > BlockPtr + 255)                                    //Only save block count if block is already added to ByteSt
+    {
+        ByteSt[BlockPtr + 1] = EORtransform(LastBlockCnt);   //New Block Count is ByteSt(BlockPtr+1) in buffer, not ByteSt(BlockPtr+255)
+        LoaderBundles++;
+    }
+
+    LitCnt = -1;                        //Reset LitCnt here
+
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+bool CloseBundle(int NextFileIO, bool LastBundleOnDisk)
+{
+    //Can't use BitsNeededForNextBundle here, this could be the last bundle on the disk!!!
+    //So we re-calculate the number of bytes needed for the next (potentially dummy) bundle
+    //BYTES NEEDED: (1)Long Match Tag + (2)End Tag + (3)BitPtr + (4)AdLo + (5)AdHi + (6)1st Literal +/- (7)I/O flag
+    int BytesNeeded = 6 + NextFileIO;     //Next bundle is already sorted here, we know exactly which file is the next one
+    
+    //SABREWULF BUG - reported by Raistlin
+    //Adding a Literal Bit here resulted in overcalculating the space needed for the next block -AFTER- we already identified and compressed it
+    //and started a new block with a dummy write - this resulted in out-of-order loading of the last block with wrong match references
+    
+    //THE FIRST LITERAL OF THE NEXT BUNDLE DOES -NOT- NEED AN ADDITIONAL LITERAL BIT - it is already included in Bytes, see (3)BitPtr!!!
+    //DO NOT ADD MATCH BIT HERE, IT WILL BE ADDED IN SequenceFits()
+    
+    int BitsNeeded = 0;
+
+    TransitionalBlock = true;    //This is always a transitional block, unless close sequence does not fit, will add +1 for Block Count
+
+    if ((NewBlock) || (!SequenceFits(BytesNeeded, BitsNeeded, 0)))
+    {
+        if (!StartNewBundle())
+            return false;
+
+    }
+    else
+    {
+
+        //If last sequence was a match (no literals) then add a match bit
+        if ((MLen > 0) || (LitCnt == -1))
+        {
+            AddBits(1, 1);
+        }
+    }
+
+    //Then add next bundle
+    StartNextBundle(LastBundleOnDisk);
+
+    NewBlock = SetNewBlock;        //NewBlock is true at closing the previous bundle, so first it just sets NewBlock2
+    SetNewBlock = false;            //And NewBlock2 will fire at the desired bundle
+
+    return true;
+
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1125,323 +1622,6 @@ void FindVirtualFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex,int Re
             }
         }
  */
-    }
-}
-
-//----------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
-{
-    //----------------------------------------------------------------------------------------------------------
-    //                                      TODO: TRY REVERSE VECTORS!!!
-    //----------------------------------------------------------------------------------------------------------
-    //FIND LONGEST SHORT AND NEAR MATCHES FOR EACH POSITION, AND FAR MATCHES WITH OFFSET < MAX. 1024
-    //----------------------------------------------------------------------------------------------------------
-
-    int CurrentMaxL;
-    int L = 0;
-
-    for (int Pos = SeqHighestIndex; Pos >= SeqLowestIndex; Pos--)   //Pos cannot be 0, Prg(0) is always literal as it is always 1 byte left
-    {
-        //Offset goes from 1 to max offset (cannot be 0)
-        int MaxO = min(MaxOffset, SeqHighestIndex - Pos);
-        //Match length goes from 1 to max length
-        int MaxLL = min(Pos, MaxLongLen);
-        int MaxSL = min(Pos, MaxShortLen);
-
-        if ((FirstRun) || (FO[Pos] > MaxO) || (NO[Pos] > MaxO) || (SO[Pos] > MaxO))
-        {
-            //Only run search for this Pos if this is the first pass or the previously found match has an offset beyond block
-            if (SO[Pos] > MaxO)
-            {
-                SO[Pos] = 0;
-                SL[Pos] = 0;
-            }
-            if (NO[Pos] > MaxO)
-            {
-                NO[Pos] = 0;
-                NL[Pos] = 0;
-            }
-            if (FO[Pos] > MaxO)
-            {
-                FO[Pos] = 0;
-                FL[Pos] = 0;
-            }
-
-            unsigned char PrgValAtPos = Prgs[CurrentFileIndex].Prg[Pos];
-            
-            int ShortMaxO = min(MaxShortOffset, MaxO);
-
-            int BestSL = SL[Pos];
-            int BestSO = SO[Pos];
-
-            int BestNL = NL[Pos];
-            int BestNO = NO[Pos];
-
-            for (int O = 1; O <= ShortMaxO;O++)
-            {
-                //If both short and long matches maxed out, we can leave the loop and go to the next Prg position
-                if ((BestNL == MaxLL) && (BestSL == MaxSL))
-                {
-                    break;
-                }
-                //Check if first byte matches at offset, if not go to next offset
-                if (PrgValAtPos == Prgs[CurrentFileIndex].Prg[Pos + O])
-                {
-                    L = 1;
-                    do
-                    {
-                        if (Prgs[CurrentFileIndex].Prg[Pos - L] != Prgs[CurrentFileIndex].Prg[Pos + O - L])
-                        {
-                            break;
-                        }
-                        else
-                        {
-                            L++;
-                        }
-                    } while (L <= MaxLL);
-
-                    if (L > 1)
-                    {
-                        if (BestSL < (CurrentMaxL = min(MaxSL, L)))
-                        {
-                            BestSL = CurrentMaxL; //If(L > MaxShortLen, MaxShortLen, L)   'Short matches cannot be longer than 4 bytes
-                            BestSO = O;                        //Keep Offset 1-based
-                        }
-                        if (BestNL < (CurrentMaxL = min(L, MaxLL)))
-                        {
-                            BestNL = CurrentMaxL;
-                            BestNO = O;
-                        }
-                    }
-                }
-            }
-            
-            SL[Pos] = BestSL;
-            SO[Pos] = BestSO;
-
-            int NearMaxO = min(MaxNearOffset, MaxO);
-
-            for (int O = ShortMaxO + 1; O <= NearMaxO; O++)
-            {
-                //If both short and long matches maxed out, we can leave the loop and go to the next Prg position
-                if (BestNL == MaxLL)
-                {
-                    break;
-                }
-                //Check if first byte matches at offset, if not go to next offset
-                if (PrgValAtPos == Prgs[CurrentFileIndex].Prg[Pos + O])
-                {
-                    L = 1;
-                    do {
-                        if (Prgs[CurrentFileIndex].Prg[Pos - L] != Prgs[CurrentFileIndex].Prg[Pos + O - L])
-                        {
-                            break;
-                        }
-                        else
-                        {
-                            L++;
-                        }
-                    } while (L <= Pos);
-
-                    if (L > (BestSL > 1 ? BestSL : 1))    // max(1, SL[Pos]))     //Only check match lengths > SL[Pos]
-                    {
-                        if (BestNL < (CurrentMaxL = min(L, MaxLL)))
-                        {
-                            BestNL = CurrentMaxL;
-                            BestNO = O;
-                        }
-                        int I = Pos;
-                        while ((L >= (CurrentMaxL = min(I, MaxLL))) && (L-- > 1))
-                        {
-                            NL[I] = CurrentMaxL;
-                            NO[I--] = O;
-                        }
-                    }
-                }
-            }
-
-            NL[Pos] = BestNL;
-            NO[Pos] = BestNO;
-
-            if (BestNL != MaxLL)
-            {
-
-                int BestFL = FL[Pos];
-                int BestFO = FO[Pos];
-
-                for (int O = NearMaxO + 1; O <= MaxO; O++)
-                {
-                    //If both short and long matches maxed out, we can leave the loop and go to the next Prg position
-                    if (BestFL == MaxLL)
-                    {
-                        break;
-                    }
-                    //Check if first byte matches at offset, if not go to next offset
-                    if (PrgValAtPos == Prgs[CurrentFileIndex].Prg[Pos + O])
-                    {
-                        L = 1;
-                        do {
-                            if (Prgs[CurrentFileIndex].Prg[Pos - L] != Prgs[CurrentFileIndex].Prg[Pos + O - L])
-                            {
-                                break;
-                            }
-                            else
-                            {
-                                L++;
-                            }
-                        } while (L <= Pos);
-
-                        if (L > (BestNL > 2 ? BestNL : 2))    // max(2, NL[Pos])) //Only check lengths > NL[Pos]
-                        {
-                            if (BestFL < (CurrentMaxL = min(L, MaxLL)))
-                            {
-                                BestFL = CurrentMaxL;
-                                BestFO = O;
-                            }
-                            int I = Pos;
-                            while ((L >= (CurrentMaxL = min(I, MaxLL))) && (L-- > 2))
-                            {
-                                FL[I] = CurrentMaxL;
-                                FO[I--] = O;
-                            }
-                        }
-                    }
-                }
-                FL[Pos] = BestFL;
-                FO[Pos] = BestFO;
-            }
-        }
-    }
-}
-
-//----------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-/*  for (int Pos = SeqLowestIndex; Pos <= SeqHighestIndex; Pos++)
-    {
-        if ((FirstRun) || (FO[Pos] + Pos > SeqHighestIndex) || (NO[Pos] + Pos > SeqHighestIndex) || (SO[Pos] + Pos > SeqHighestIndex))
-        {
-            //Only run search for this Pos if this is the first pass or the previously found match has an offset beyond block
-
-            if (SO[Pos] + Pos > SeqHighestIndex)
-            {
-                SO[Pos] = 0;
-                SL[Pos] = 0;
-            }
-            if (NO[Pos] + Pos > SeqHighestIndex)
-            {
-                NO[Pos] = 0;
-                NL[Pos] = 0;
-            }
-            if (FO[Pos] + Pos > SeqHighestIndex)
-            {
-                FO[Pos] = 0;
-                FL[Pos] = 0;
-            }
-
-            int MaxO = min(MaxFarOffset, SeqHighestIndex - Pos);    // (pos + MaxFarOffset <= Last) ? MaxFarOffset : Last - pos;
-
-            vector<unsigned char> MinMatch{ Prgs[CurrentFileIndex].Prg[Pos],Prgs[CurrentFileIndex].Prg[Pos + 1] };
-
-            //Match length goes from 1 to max length
-            vector<unsigned char>::iterator SBegin = Prgs[CurrentFileIndex].Prg.begin() + Pos + 1;
-            vector<unsigned char>::iterator SEnd = Prgs[CurrentFileIndex].Prg.begin()+SeqHighestIndex;
-
-            while ((SBegin = search(SBegin, SEnd, MinMatch.begin(), MinMatch.end())) != SEnd)
-            {
-                pair<vector<unsigned char>::iterator, vector<unsigned char>::iterator> MatchEnd
-                    = mismatch(SBegin, SEnd, Prgs[CurrentFileIndex].Prg.begin() + Pos);
-                int MatchOffset = SBegin - (Prgs[CurrentFileIndex].Prg.begin() + Pos);
-                //MaxLL = Math.Min(Pos + 1, MaxLongLen)   'MaxLL = 255 or less
-                //MaxSL = Math.Min(Pos + 1, MaxShortLen)  'MaxSL = 4 or less
-                int MatchLength = MatchEnd.first - SBegin;
-                int MaxLL = min(MaxLongLen, SeqHighestIndex - Pos);
-                int MaxSL = min(MaxShortLen, SeqHighestIndex - Pos);
-                //int MatchLen = min(LLMax, Len);
-                SBegin++;
-
-                if ((MatchOffset <= MaxShortOffset) && (SL[Pos] < MaxSL) && (SL[Pos] < MatchLength))
-                {
-                    SL[Pos] = min(MatchLength, MaxShortLen);
-                    SO[Pos] = MatchOffset;
-                }
-
-                if ((MatchOffset <= MaxNearOffset) && (NL[Pos] < MatchLength))
-                {
-                    NL[Pos] = MatchLength;
-                    NO[Pos] = MatchOffset;
-                }
-
-                if ((MatchOffset > MaxNearOffset) && (FL[Pos] < MatchLength) && (MatchLength > 2))
-                {
-                    FL[Pos] = MatchLength;
-                    FO[Pos] = MatchOffset;
-                }
-
-                if ((NL[Pos] == MaxLL) && (SL[Pos] == MaxSL))
-                {
-                    break;
-                }
-            }
-        }
-    }
-*/
-
-//----------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-void CalcBestSequence(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
-{
-    FindMatches(SeqHighestIndex, SeqLowestIndex, FirstRun);
-
-    //----------------------------------------------------------------------------------------------------------
-    //FIND BEST SEQUENCE FOR EACH POSITION
-    //----------------------------------------------------------------------------------------------------------
-
-    for (int Pos = SeqLowestIndex; Pos <= SeqHighestIndex; Pos++)
-    {
-        //Start with second element, first has been initialized above
-        Seq[Pos + 1].TotalBits = 0xffffff;
-        //Max block size=100 = $10000 bytes = $80000 bits, make default larger than this
-
-        if ((FL[Pos] != 0) || (FFL[Pos] != 0))
-        {
-            if (FL[Pos] >= FFL[Pos])
-            {
-                CheckMatchSeq(FL[Pos], FO[Pos], Pos);
-            }
-            else if (Pos < SeqHighestIndex)     //The last byte of the block MUST be a literal, we can't use Far Matches there
-            {
-                //If a reference is under I/O then this block also must be under I/O to be able to copy the reference
-                //If ((PrgAdd + Pos + FFO(Pos) >= &HD000) AndAlso (PrgAdd + Pos + FFO(Pos) < &HE000)) OrElse
-                //((PrgAdd + Pos + FFO(Pos) - FFL(Pos) >= &HD000) AndAlso (PrgAdd + Pos + FFO(Pos) - FFL(Pos) < &HE000)) Then
-                //BlockUnderIO = 1
-                //End If
-                CheckMatchSeq(FFL[Pos], FFO[Pos], Pos);
-            }
-        }
-        if ((NL[Pos] > 0) || (FNL[Pos] > 0))
-        {
-            if (NL[Pos] >= FNL[Pos])
-            {
-                CheckMatchSeq(NL[Pos], NO[Pos], Pos);
-            }
-            else if (Pos < SeqHighestIndex)
-            {
-                CheckMatchSeq(FNL[Pos], FNO[Pos], Pos);
-            }
-        }
-        if ((SL[Pos] > 0) || (FSL[Pos] > 0))
-        {
-            if (SL[Pos] >= FSL[Pos])
-            {
-                CheckMatchSeq(SL[Pos], SO[Pos], Pos);
-            }
-            else if (Pos < SeqHighestIndex)
-            {
-                CheckMatchSeq(FSL[Pos], FSO[Pos], Pos);
-            }
-        }
-        CheckLitSeq(Pos);
     }
 }
 
@@ -1765,236 +1945,6 @@ void SearchVirtualFile(int PrgMaxIndex, int RefIndex, int RefMaxAddress, int Ref
     {
         FindVirtualFarMatches(RefIndex,PrgMaxIndex, 1, RefMaxAddress, RefMinAddress + 1);
     }
-}
-
-//----------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-void SearchReferenceFile(int PrgMaxIndex, int RefIndex, int RefMaxAddress, int RefMinAddress)
-{
-    //PrgMaxIndex = relative address within Prg
-    //RefMaxAddress, RefMinAddress = absolute addresses within reference file
-    if (!Prgs[RefIndex].FileIO)
-    {
-        //Reference file is not under I/O, check if it is IN I/O
-        if (((RefMinAddress >= 0xd000) && (RefMinAddress < 0xe000)) || ((RefMaxAddress >= 0xd000) && (RefMaxAddress < 0xe000)))
-        {
-            //This reference file is IN the I/O registers, SKIP anything between $d000-$dfff
-            if (RefMinAddress + 1 < 0xd000)
-            {
-                //Search from start to $cfff
-                FindFarMatches(RefIndex,PrgMaxIndex, 1, 0xcfff, RefMinAddress + 1);
-            }
-            if (RefMaxAddress > 0xe000)
-            {
-                //Search from $e000 to end of file
-                FindFarMatches(RefIndex,PrgMaxIndex, 1, RefMaxAddress, 0xe000 + 1);
-            }
-        }
-        else
-        {
-            FindFarMatches(RefIndex,PrgMaxIndex, 1, RefMaxAddress, RefMinAddress + 1);
-        }
-    }
-    else
-    {
-        FindFarMatches(RefIndex,PrgMaxIndex, 1, RefMaxAddress, RefMinAddress + 1);
-    }
-}
-
-//----------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-bool CloseBuffer() {
-
-    AddMatchBit();
-
-    BlockCnt++;
-    BufferCnt++;
-
-    //This does not work here yet, Pack needs to be changed to a function
-    //If BufferCnt > BlocksFree Then
-    //MsgBox("Unable to add bundle to disk :(", vbOKOnly, "Not enough free space on disk")
-    //GoTo NoDisk
-    //End If
-
-    if (!UpdateByteStream())
-        return false;
-
-    ResetBuffer();                      //Resets buffer variables
-
-    NextFileInBuffer = false;           //Reset Next File flag
-
-    TransitionalBlock = false;          //Only the first block of a bundle is a transitional block
-
-    FirstLitOfBlock = true;
-
-    if (SI < 0)                         //We have reached the end of the file -> exit
-    {
-        return true;
-    }
-
-    //If we have not reached the end of the file, then update buffer
-
-    //------------------------------------------------------------------------------------------------------------------------------
-    //"COLOR BUG"
-    //Compression bug related to the transitional block (i.e. finding the last block of a bundle) - FIXED
-    //Fix: add 5 or 6 bytes + 2 bits to the calculation to find the last block of a bundle
-    //+2 new bundle tag, +2 NEXT Bundle address, +1 first literal byte of NEXT Bundle, +0/1 IO status of first literal byte of NEXT file
-    //+1 literal bit, +1 match bit (may or may not be needed, but we don't know until the end...)
-    //------------------------------------------------------------------------------------------------------------------------------
-
-    //Check if the first literal byte of the NEXT Bundle will go under I/O
-    //Bits needed for next bundle is calculated in ModDisk:SortPart
-    //(Next block = Second block) or (remaining bits of Last File in Bundle + Needed Bits fit in this block)
-
-    //LETHARGY BUG - Bits Left need to be calculated from Seq(SI+1) and NOT Seq(SI)
-    //Add 4 bits if number of nibbles is odd
-    int BitsLeftInBundle = Seq[SI + 1].TotalBits + ((Seq[SI + 1].Nibbles % 2) * 4);
-
-    //If the next block is the first one on a new track, no need to recalculate the sequence
-    //As all previous blocks will be loaded from the previous track before this block gets loaded
-    bool NewTrack = false;
-
-    if (BufferCnt < (17 * 21))
-    {
-        if (BufferCnt % 21 == 0) NewTrack = true;
-    }
-    else if (BufferCnt < ((17 * 21) + (6 * 19)))
-    {
-        if ((BufferCnt - (17 * 21)) % 19 == 0) NewTrack = true;
-    }
-    else if (BufferCnt < ((17 * 21) + (6 * 19) + (6 * 18)))
-    {
-        if ((BufferCnt - (17 * 21) - (6 * 19)) % 18 == 0) NewTrack = true;
-    }
-    else
-    {
-        if ((BufferCnt - (17 * 21) - (6 * 19) - (6 * 18)) % 17 == 0) NewTrack = true;
-    }
-
-    if ((BitsLeftInBundle + BitsNeededForNextBundle + ((MLen == 0) ? 0 : 1) + 8 <= ((LastByte - 1) * 8) + BitPos) && (LastFileOfBundle) && (!NewBlock))
-    {
-        //KARAOKE BUG - fixed in Sparkle 2.2
-        //BitsLeftInBundle = bits left to be compressed in bundle, add 1 bit if MLen>0, add 8 bits for Block Count (to simulate 'TransitionalBlock = True')
-        //If the result is less than the bits remaining free in the remaining data + the first byte of the next bundle should fit in the buffer
-        //I.e. we have identified the last block of the bundle (=transitional block)
-        LastBlockOfBundle = true;
-    }
-    else
-    {
-        LastBlockOfBundle = false;
-    }
-
-    if ((LastBlockOfBundle) || (NewTrack) || (BlockCnt == 1))
-    {
-        //Seq(SI+1).Bytes/Nibbles/Bits = to calculate remaining bits in file
-        //BitsNeededForNextBundle (5-6 bytes + 1/2 bits)
-        //+5/6 bytes +1/2 bits
-        //LastByte-1: subtract close tag/block count = Byte(1)
-        //Bits remaining in block: LastByte * 8 (+ remaining bits in last BitPtr (BitPos+1))
-        //But we are trying to overcalculate here to avoid misidentification of the last block
-        //Which would result in buggy decompression
-
-        //This is the last block ONLY IF the remainder of the bundle + the next bundle's info fits!!!
-        //AND THE NEXT Bundle IS NOT ALIGNED in which case the next block is the last one
-        //Seg(SI).bit includes both the byte stream in bits and the bit stream (total bits needed to compress the remainder of the bundle)
-        //+Close Tag: 8 bits
-        //+BitsNeeded: 5-6 bytes for next bundle's info + 1 lit bit + / -1 match bit(may or may not be needed, but we wouldn't know until the end)
-        //For the 2nd and last blocks of a bundle and the first blocks on a new track only recalculate the first byte's sequence
-        //If BlockCnt <> 1 Then MsgBox((BitsLeftInBundle + BitsNeededForNextBundle).ToString + vbNewLine + (Seq(SI + 1).TotalBits + BitsNeededForNextBundle).ToString + vbNewLine + ((LastByte - 1) * 8 + BitPos).ToString)
-
-        //Only recalculate the very first byte's sequence
-        CalcBestSequence(max(SI, 1), max(SI, 1), false); //'(If(SI > 1, SI, 1), If(SI > 1, SI, 1))
-
-        if (NewTrack)
-        {
-
-            if (CurrentFileIndex > PartialFileIndex)
-            {
-
-                if (PartialFileIndex > -1)
-                {
-                    //Search the finished segment of partial file
-                        //ReferenceFile = Prgs(PartialFileIndex).ToArray
-                    ReferenceFileStart = Prgs[PartialFileIndex].iFileAddr;
-
-                    SearchReferenceFile(SI, PartialFileIndex, ReferenceFileStart + PartialFileOffset, ReferenceFileStart + 1);
-                }
-
-                //Search any finished files on track (partial file < finished file < current file)
-                for (int I = PartialFileIndex + 1; I <= CurrentFileIndex - 1; I++)
-                {
-                    //ReferenceFile = Prgs(I).ToArray
-                    ReferenceFileStart = Prgs[I].iFileAddr;
-
-                    SearchReferenceFile(SI, I, ReferenceFileStart + Prgs[I].iFileLen - 1, ReferenceFileStart + 1);
-                }
-
-                //Search the finished segment of this file
-                //ReferenceFile = Prgs(CurrentFileIndex).ToArray
-                ReferenceFileStart = Prgs[CurrentFileIndex].iFileAddr;
-
-                SearchReferenceFile(SI, CurrentFileIndex, ReferenceFileStart + Prgs[CurrentFileIndex].iFileLen - 1, ReferenceFileStart + SI + 1);
-            }
-            else
-            {
-                //Partial file = CurrentFile (same file, spanning multiple tracks)
-                //ReferenceFile = Prgs(CurrentFileIndex).ToArray
-                ReferenceFileStart = Prgs[CurrentFileIndex].iFileAddr;
-
-                SearchReferenceFile(SI, CurrentFileIndex, ReferenceFileStart + PartialFileOffset, ReferenceFileStart + SI + 1);
-
-            }
-
-            //'The current file becomes the partial file, anything before it is now finished and can be used for search
-            PartialFileIndex = CurrentFileIndex;
-            PartialFileOffset = SI;
-
-        }
-
-        if ((BlockCnt != 1) && (!NewTrack))     //Do not recalculate the very first block and first blocks on each track
-        {
-            //Last/Transitional block
-            BitsLeftInBundle = Seq[SI + 1].TotalBits + ((Seq[SI + 1].Nibbles % 2) * 4);
-            //If the new bit count does not fit in the buffer then this is NOT the last block -> recalc sequence
-            //KARAOKE BUG - fixed in Sparkle 2.2
-            if (BitsLeftInBundle + BitsNeededForNextBundle + ((MLen == 0) ? 0 : 1) + 8 > ((LastByte - 1) * 8) + BitPos)
-            {
-                LastBlockOfBundle = false;
-                goto CalcAll;
-            }
-        }
-    }
-    else
-    {
-        //For all other blocks recalculate the first 256*3 bytes' sequence (MaxNearOffset * 3)
-    CalcAll:
-        CalcBestSequence(max(SI, 1), max(SI - MaxOffset, 1), false);   //If(SI > 1, SI, 1), If(SI - MaxOffset > 1, SI - MaxOffset, 1))
-    }
-
-    //----------------------------------------------------------------------------------------------------------
-    
-    //if ((PrgAdd + SI) == 0x666f)        //SABREWULF
-    //{
-    //    PrgAdd += 0;
-    //}
-    
-    AdLoPos = BytePtr;
-    Buffer[BytePtr--] = (PrgAdd + SI) % 256;
-
-    BlockUnderIO = CheckIO(SI, -1);          //Check if last byte of prg could go under IO
-
-    if (BlockUnderIO == 1)
-    {
-        BytePtr--;
-    }
-
-    AdHiPos = BytePtr;
-    Buffer[BytePtr--] = ((PrgAdd + SI) / 256) % 256;
-    LastByte = BytePtr;             //LastByte = the first byte of the ByteStream after and Address Bytes (253 or 252 with BlockCnt)
-
-    StartPtr = SI;
-
-    return true;
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------------

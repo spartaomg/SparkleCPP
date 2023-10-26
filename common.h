@@ -1,7 +1,5 @@
 #pragma once
 
-#define INCLTINYEXPR
-
 #include <algorithm>
 #include <iostream>
 #include <string>
@@ -16,10 +14,7 @@
 #include <sstream>
 #include <filesystem>
 #include "thirdparty/lodepng.h"
-
-#ifdef INCLTINYEXPR
 #include "thirdparty/tinyexpr.h"
-#endif
 
 using namespace std;
 

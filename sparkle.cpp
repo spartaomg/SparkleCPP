@@ -2,7 +2,7 @@
 
 //#define TESTDISK
 
-//#define DEBUG
+#define DEBUG
 
 //#defnie NEWIO
 
@@ -190,7 +190,7 @@ int BlocksUsedByPlugin = 0;
 int BytePtr;
 int BitPtr;
 
-bool LastFileOfBundle = false;
+bool LastFileOfBundle;
 
 int PartialFileIndex;
 size_t PartialFileOffset;
@@ -208,12 +208,10 @@ int TotalOrigSize{}, TotalCompSize{};
 
 unsigned char LoaderBlockCount = 0;
 
-#ifdef INCLTINYEXPR
 string ParameterString = "";
 te_parser tep;
 bool bEntryHasExpression = false;
 string ParsedEntries = "";
-#endif
 
 string HomeDir = "";
 
@@ -523,28 +521,26 @@ bool WriteDiskImage(const string& DiskName)
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 /*
-void WriteBinaryFile(const string& FileName, unsigned char* Buffer, streamsize Size) {
-
+void WriteBinaryFile(const string& FileName, unsigned char* Buffer, streamsize Size)
+{
     ofstream myFile(FileName, ios::out | ios::binary);
     myFile.write((char*)&Buffer[0], Size);
-
 }
 */
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool SectorOK(unsigned char T, unsigned char S) {
-
+bool SectorOK(unsigned char T, unsigned char S)
+{
     int BAMPos = Track[18] + (T * 4) + 1 + (S / 8) + ((T > 35) ? (7 * 4) : 0);
     int BAMBit = 1 << (S % 8);
 
     return (Disk[BAMPos] & BAMBit) != 0;
-
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool FindNextFreeSector() {
-
+bool FindNextFreeSector()
+{
     int Counter = 0;
     int MaxS = (CT < 18) ? 21 : (CT < 25) ? 19 : (CT < 31) ? 18 : 17;
 
@@ -596,16 +592,15 @@ void DeleteBit(unsigned char T, unsigned char S)
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool TrackIsFull(unsigned char T) {
-
+bool TrackIsFull(unsigned char T)
+{
     return (Disk[Track[18] + (T * 4) + ((T > 35) ? (7 * 4) : 0)] == 0);
-
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void CalcNextSector(unsigned char IL) {
-
+void CalcNextSector(unsigned char IL)
+{
     int MaxS = (CT < 18) ? 21 : (CT < 25) ? 19 : (CT < 31) ? 18 : 17;
 
     if (CS >= MaxS)
@@ -621,13 +616,12 @@ void CalcNextSector(unsigned char IL) {
         CS -= MaxS;
         CS -= ((CT < 18) && (CS > 0)) ? 1 : 0;
     }
-
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool AddInterleave(unsigned char IL) {
-
+bool AddInterleave(unsigned char IL)
+{
     //THIS IS ONLY USED BY InjectLoader()!!!
 
     if (TrackIsFull(CT))
@@ -653,13 +647,12 @@ bool AddInterleave(unsigned char IL) {
     }
 
     return FindNextFreeSector();
-
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-unsigned char EORtransform(unsigned char Input) {
-
+unsigned char EORtransform(unsigned char Input)
+{
     switch (Input & 0x09){
     case 0:
         return (Input ^ 0x7f);
@@ -676,8 +669,8 @@ unsigned char EORtransform(unsigned char Input) {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void InjectDirBlocks() {
-
+void InjectDirBlocks()
+{
     //DirBlocks(0) = EORtransform(Track), it is used by the drive code, current track
     //DirBlocks(1) = EORtransform(StartSector), it is used by the drive code, the first sector on the track after track change
     //DirBlocks(2) = EORtransform(Remaining sectors on track), it is used by the drive code, remaining sectors on the track
@@ -761,7 +754,7 @@ void InjectDirBlocks() {
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
-
+/*
 bool StringIsNumeric(string NumericString)
 {
     //Remove unwanted spaces
@@ -809,10 +802,8 @@ bool StringIsNumeric(string NumericString)
     return IsHexString(NumericString);
 
 }
-
+*/
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
-
-#ifdef INCLTINYEXPR
 
 string CreateExpressionString(int p)
 {
@@ -989,11 +980,9 @@ bool EvaluateParameterExpression()
     }
 
     return true;
-
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
-#endif
 
 bool ParameterIsNumeric(int i)
 {
@@ -1091,8 +1080,6 @@ bool AddHSFile()
 
     int NumParams = 1;
 
-#ifdef INCLTINYEXPR
-
     bEntryHasExpression = false;
 
     if (!EvaluateParameterExpression())
@@ -1108,7 +1095,6 @@ bool AddHSFile()
         }
         ParsedEntries += "\n";
     }
-#endif
 
     for (int i = 1; i <= NumScriptEntries; i++)
     {
@@ -1328,8 +1314,8 @@ void UpdateDiskSizeOnTheFly()
 }
 
 /*
-void SetMaxSector() {
-
+void SetMaxSector()
+{
     if (CT < 18)
     {
         MaxSector = 20;
@@ -1352,8 +1338,8 @@ void SetMaxSector() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool ResetBundleVariables() {
-
+bool ResetBundleVariables()
+{
     FileCnt = -1;
 
     tmpPrgs.clear();
@@ -1380,8 +1366,8 @@ bool ResetBundleVariables() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void NewDisk() {
-
+void NewDisk()
+{
     std::fill_n(Disk, ExtBytesPerDisk, 0);
     if(TracksPerDisk == ExtTracksPerDisk)
     {
@@ -1452,9 +1438,10 @@ void NewDisk() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool ResetDiskVariables() {
-
-    if (DiskCnt == 126) {
+bool ResetDiskVariables()
+{
+    if (DiskCnt == 126)
+    {
         cerr << "***CRITICAL***\tYou have reached the maximum number of disks (127) in this project.\n";
         return false;
     }
@@ -1545,8 +1532,8 @@ bool ResetDiskVariables() {
 
     //-------------------------------------------------------------
 
-    if (!ResetBundleVariables()) {            //Also adds first bundle
-
+    if (!ResetBundleVariables())
+    {            //Also adds first bundle
         return false;
     }
 
@@ -1558,22 +1545,24 @@ bool ResetDiskVariables() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool SplitScriptEntry() {
-
+bool SplitScriptEntry()
+{
     unsigned int Pos = 0;
     unsigned char ThisChar;
     ScriptEntryType = "";
 
-    while (Pos < ScriptEntry.length()) {
+    while (Pos < ScriptEntry.length())
+    {
         ThisChar = tolower(ScriptEntry[Pos++]);
-        if (ThisChar != '\t') {
+        if (ThisChar != '\t')
+        {
             ScriptEntryType += ThisChar;            //Entry Type to lower case
         }
         else
         {
             break;
         }
-     }
+    }
     std::fill_n(ScriptEntryArray, MaxNumEntries, "");
 
     NumScriptEntries = -1;
@@ -1586,7 +1575,8 @@ bool SplitScriptEntry() {
 
         ThisChar = ScriptEntry[Pos++];                  //Keep original D64 path
 
-        if (ThisChar != '\t') {
+        if (ThisChar != '\t')
+        {
             ScriptEntryArray[NumScriptEntries] += ThisChar;
         }
         else
@@ -1610,8 +1600,8 @@ bool SplitScriptEntry() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool FindNextScriptEntry() {
-    
+bool FindNextScriptEntry()
+{
     while ((LineEnd = Script.find("\n", LineStart)) == LineStart)
     {
         NewBundle = true;
@@ -1630,7 +1620,6 @@ bool FindNextScriptEntry() {
     LineStart = LineEnd + 1;
 
     return SplitScriptEntry();
-   
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1734,16 +1723,16 @@ bool InsertScript(string& SubScriptPath)
     LineEnd = LineStart++;
 
     return true;
-
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-int CheckNextIO(int Address, int Length, bool NextFileUnderIO) {
-
+int CheckNextIO(int Address, int Length, bool NextFileUnderIO)
+{
     int LastAddress = Address + Length - 1; //Address of the last byte of a file
 
-    if (LastAddress < 256) {                //On ZP
+    if (LastAddress < 256)
+    {                //On ZP
         return 1;
     }
     else
@@ -1754,8 +1743,8 @@ int CheckNextIO(int Address, int Length, bool NextFileUnderIO) {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool CompressBundle() {             //NEEDS PackFile() and CloseFile()
-
+bool CompressBundle()             //NEEDS PackFile() and CloseFile()
+{
     int PreBCnt = BufferCnt;
 
     if (Prgs.size() == 0)
@@ -1825,7 +1814,7 @@ bool CompressBundle() {             //NEEDS PackFile() and CloseFile()
     //-------------------------------------------------------
 
     NewBundle = true;
-    LastFileOfBundle = false;
+    //LastFileOfBundle = false;
 
     PartialFileIndex = -1;
     int OrigSize{};
@@ -1835,8 +1824,10 @@ bool CompressBundle() {             //NEEDS PackFile() and CloseFile()
     for (size_t i = 0; i < Prgs.size(); i++)
     {
         //Mark the last file in a bundle for better compression
-        if (i == Prgs.size() - 1)
-            LastFileOfBundle = true;
+        //if (i == Prgs.size() - 1)
+        //    LastFileOfBundle = true;
+
+        LastFileOfBundle = (i == Prgs.size() - 1);
 
         //The only two parameters that are needed are FA and FUIO... FileLenA(i) is not used
 
@@ -1901,10 +1892,9 @@ bool CompressBundle() {             //NEEDS PackFile() and CloseFile()
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool CompareFileAddress(FileStruct F1, FileStruct F2) {
-
+bool CompareFileAddress(FileStruct F1, FileStruct F2)
+{
     return (F1.iFileAddr > F2.iFileAddr);
-
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1928,7 +1918,8 @@ bool SortVirtualFiles()
                 //--|------+------|----OR----|------+------|----OR----|------+------|----OR-----|------+------|--
                 //  FSO    FSI    FEO        FSO    FEI    FEO        FSI    FSO    FEI        FSI    FEO    FEI
 
-                if (((FSI >= FSO) && (FSI <= FEO)) || ((FEI >= FSO) && (FEI <= FEO)) || ((FSO >= FSI) && (FSO <= FEI)) || ((FEO >= FSI) && (FEO <= FEI))) {
+                if (((FSI >= FSO) && (FSI <= FEO)) || ((FEI >= FSO) && (FEI <= FEO)) || ((FSO >= FSI) && (FSO <= FEI)) || ((FEO >= FSI) && (FEO <= FEI)))
+                {
                     int OLS = (FSO >= FSI) ? FSO : FSI;
                     int OLE = (FEO <= FEI) ? FEO : FEI;
 
@@ -2020,13 +2011,12 @@ bool SortVirtualFiles()
     }
 
     return true;
-
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool SortBundle() {
-
+bool SortBundle()
+{
     if (tmpPrgs.size() > 0)
     {
         if (tmpPrgs.size() > 1)
@@ -2046,7 +2036,8 @@ bool SortBundle() {
                 //--|------+------|----OR----|------+------|----OR----|------+------|----OR-----|------+------|--
                 //  FSO    FSI    FEO        FSO    FEI    FEO        FSI    FSO    FEI        FSI    FEO    FEI
 
-                    if(((FSI >= FSO) && (FSI <= FEO)) || ((FEI >= FSO) && (FEI <= FEO)) || ((FSO >= FSI) && (FSO <= FEI)) || ((FEO >= FSI) && (FEO <= FEI))) {
+                    if(((FSI >= FSO) && (FSI <= FEO)) || ((FEI >= FSO) && (FEI <= FEO)) || ((FSO >= FSI) && (FSO <= FEI)) || ((FEO >= FSI) && (FEO <= FEI)))
+                    {
                         int OLS = (FSO >= FSI) ? FSO : FSI;
                         int OLE = (FEO <= FEI) ? FEO : FEI;
 
@@ -2177,22 +2168,22 @@ bool SortBundle() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool BundleDone() {
-
+bool BundleDone()
+{
     //First finish last bundle, if it exists
     if (tmpPrgs.size() > 0)
     {
         CurrentBundle++;
 
-        //Sort files in bundle
+        //Sort files in NEXT bundle (tmpPrgs()) - this will also recalculate BitsNeededForNextbundle (48 vs 56 bits)
         if (!SortBundle())
             return false;
 
-        //Also sort virtual files in bundle
+        //Also sort virtual files in NEXT bundle (tmpVFiles())
         if (!SortVirtualFiles())
             return false;
 
-        //Then compress files and add them to bundle
+        //Then compress files in THIS bundle (Prgs())
         if (!CompressBundle())
             return false;                   //THIS WILL RESET NewBundle TO FALSE
 
@@ -2216,7 +2207,8 @@ bool BundleDone() {
 bool AddVirtualFile()
 {
 
-    if (NewBundle) {
+    if (NewBundle)
+    {
         NewBundle = false;
         if (!BundleDone())
             return false;
@@ -2232,6 +2224,22 @@ bool AddVirtualFile()
     bool FUIO = false;
 
     vector<unsigned char> P;
+
+    bEntryHasExpression = false;
+
+    if (!EvaluateParameterExpression())
+    {
+        return false;
+    }
+    if (bEntryHasExpression)
+    {
+        ParsedEntries += "Bundle #" + to_string(BundleCnt) + " Mem #" + to_string(VFileCnt + 1) + ":";
+        for (int i = 0; i <= NumScriptEntries; i++)
+        {
+            ParsedEntries += "\t" + ScriptEntryArray[i];
+        }
+        ParsedEntries += "\n";
+    }
 
     int NumParams = 1;
 
@@ -2378,8 +2386,8 @@ bool AddVirtualFile()
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool AddFileToBundle() {
-
+bool AddFileToBundle()
+{
     string FN = FindAbsolutePath(ScriptEntryArray[0], ScriptPath);
     string FA = "";
     string FO = "";
@@ -2391,9 +2399,6 @@ bool AddFileToBundle() {
 
     vector<unsigned char> P;
 
-    int NumParams = 1;
-
-#ifdef INCLTINYEXPR
     bEntryHasExpression = false;
 
     if (!EvaluateParameterExpression())
@@ -2409,7 +2414,8 @@ bool AddFileToBundle() {
         }
         ParsedEntries +=  "\n";
     }
-#endif
+
+    int NumParams = 1;
 
     for (int i = 1; i <= NumScriptEntries; i++)
     {
@@ -2569,8 +2575,8 @@ bool AddFileToBundle() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool AddFile() {
-
+bool AddFile()
+{
     if (NewBundle)
     {
         if (!BundleDone())
@@ -2590,8 +2596,8 @@ bool AddFile() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void FindNextDirSector() {
-
+void FindNextDirSector()
+{
     int LastDirSector = DirSector;
 
     if (DirSector < 6)
@@ -2626,7 +2632,8 @@ void FindNextDirSector() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void FindNextDirPos() {
+void FindNextDirPos()
+{
 
     DirPos = 0;
 
@@ -2976,8 +2983,8 @@ bool AddAsmDiskParameters()
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------
 
-void ImportDirArtFromAsm() {
-
+void ImportDirArtFromAsm()
+{
     DirArt = ReadFileToString(DirArtName, false);
 
     if (DirArt == "")
@@ -3180,8 +3187,8 @@ bool AddCArrayDirEntry(int RowLen)
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void ImportDirArtFromCArray() {
-
+void ImportDirArtFromCArray()
+{
     string DA = ReadFileToString(DirArtName, false);
 
     if (DA == "")
@@ -3275,8 +3282,8 @@ void ImportDirArtFromCArray() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void ImportDirArtFromBinary() {
-
+void ImportDirArtFromBinary()
+{
     vector<unsigned char> DA;
 
     if (ReadBinaryFile(DirArtName, DA)==-1)
@@ -3371,8 +3378,8 @@ void AddDirEntry(string DirEntry){
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void ImportDirArtFromTxt() {
-
+void ImportDirArtFromTxt()
+{
     DirArt = ReadFileToString(DirArtName, false);
 
     if (DirArt == "")
@@ -3412,8 +3419,8 @@ void ImportDirArtFromTxt() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void ImportDirArtFromPet() {
-
+void ImportDirArtFromPet()
+{
     //Binary file With a .pet extension that includes the following information, without any padding:
     //- 1 byte: screen width in chars (40 for whole C64 screen)
     //- 1 byte: screen height in chars (25 for whole C64 screen)
@@ -3480,8 +3487,8 @@ void ImportDirArtFromPet() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void ImportDirArtFromD64() {
-
+void ImportDirArtFromD64()
+{
     vector<unsigned char> DA;
 
     if(ReadBinaryFile(DirArtName, DA) == -1)
@@ -4115,7 +4122,8 @@ void ImportFromJson()
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void AddDirArt() {
+void AddDirArt()
+{
 
     if (DirArtName == "")
     {
@@ -4219,8 +4227,8 @@ void AddDirArt() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void AddDemoNameToDisk(unsigned char T, unsigned char S) {
-
+void AddDemoNameToDisk(unsigned char T, unsigned char S)
+{
     if ((DemoName == "") && (DirArtName != ""))
     {
         //No DemoName defined, but we have a DirArt attached, we will add first dir entry there
@@ -4285,8 +4293,8 @@ void AddDemoNameToDisk(unsigned char T, unsigned char S) {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void AddHeaderAndID() {
-
+void AddHeaderAndID()
+{
     //unsigned char B;
     size_t BAM = Track[18];
 
@@ -4331,8 +4339,8 @@ void AddHeaderAndID() {
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 #ifdef TESTDISK
 
-bool InjectTestPlugin() {
-
+bool InjectTestPlugin()
+{
     //Calculate sector pointer on disk (FT.cpp takes one block)
 
     //cout << BufferCnt << "\n";      //3
@@ -4472,8 +4480,8 @@ bool InjectTestPlugin() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool InjectSaverPlugin() {
-
+bool InjectSaverPlugin()
+{
     if (HSFile.size() == 0)
     {
         cerr << "***CRITICAL***\tThe Hi-Score File's size must be multiples of $100 bytes, but not greater than $f00 bytes.\n";
@@ -4803,8 +4811,8 @@ bool InjectSaverPlugin() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& idcNextID) {
-
+bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& idcNextID)
+{
     int BAM = Track[18];
 
     unsigned char Drive[6 * 256]{};
@@ -4955,8 +4963,8 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool UpdateZP() {
-
+bool UpdateZP()
+{
     if (LoaderZP.size() < 2)    //00 - need 2, 01 - need 1
     {
         string DefaultZP = "02";
@@ -5075,8 +5083,8 @@ bool UpdateZP() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL) {
-
+bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL)
+{
     int B{};
     unsigned char ST{}, SS{}, AdLo{}, AdHi{};
 
@@ -5166,8 +5174,8 @@ bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL) {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void CalcTabs() {
-
+void CalcTabs()
+{
     int SMax{}, IL{};
     char Sectors[ExtSectorsPerDisk + 19]{};
     int Tr[41]{};       //0-40
@@ -5278,8 +5286,8 @@ void CalcTabs() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool AddCompressedBundlesToDisk() {
-
+bool AddCompressedBundlesToDisk()
+{
     if (BlocksFree < BufferCnt)
     {
         cerr << "***CRITICAL***\t" << D64Name << " cannot be built because it would require " << BufferCnt << " blocks.\n"
@@ -5324,20 +5332,19 @@ bool AddCompressedBundlesToDisk() {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void UpdateBlocksFree() {
-
+void UpdateBlocksFree()
+{
     if (TracksPerDisk == ExtTracksPerDisk)
     {
         unsigned char ExtBlocksFree = (BlocksFree > ExtSectorsPerDisk - StdSectorsPerDisk) ? ExtSectorsPerDisk - StdSectorsPerDisk - BlocksUsedByPlugin : BlocksFree;
         Disk[Track[18] + 4] += ExtBlocksFree;
     }
-
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool FinishDisk(bool LastDisk) {
-
+bool FinishDisk(bool LastDisk)
+{
     if ((BundleCnt == 0) && (FileCnt == -1))
     {
         cerr << "***CRITICAL***\tThis disk does not contain any files!\n";
@@ -5346,6 +5353,10 @@ bool FinishDisk(bool LastDisk) {
 
     if (!BundleDone())
         return false;
+    
+    //BitsNeededForNextBundle is calculated during sorting the enxt bundle, but here we have no next bundle
+    BitsNeededForNextBundle = 48;       //This is the last bundle on the disk, there is no next bundle under I/O
+    
     if (!CompressBundle())
         return false;
     if (!CloseBundle(0, true))
@@ -5413,11 +5424,12 @@ bool FinishDisk(bool LastDisk) {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool Build() {
-    /* initialize random seed: */
+bool Build()
+{
+    //initialize random seed
     srand(time(NULL));
 
-    /* generate a random number between 0 and 0Xffffff: */
+    //generate a random number between 0 and 0Xffffff
     ProductID = (((rand() & 0xff0) << 16) + (rand() & 0xffff)) & 0xffffff;
 
     LineStart = 0;
@@ -5439,8 +5451,8 @@ bool Build() {
     NewBundle = false;
     TmpSetNewBlock = false;
 
-    while (LineEnd != string::npos) {
-
+    while (LineEnd != string::npos)
+    {
         if (FindNextScriptEntry())
         {
             //SplitScriptEntry();
@@ -5951,7 +5963,6 @@ bool Build() {
         return false;
 
     return true;
-
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -6016,25 +6027,10 @@ void SetScriptPath(string sPath, string aPath)
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
+
 void PrintInfo()
 {
     cout << "USAGE: sparkle2 script.sls\n\n";
-
-    /*        cout << "IMPORTANT LOADER FUNCTIONS:\n\n";
-
-            DWORD size = 0;
-            const char* data = NULL;
-            LoadFileInResource(IDR_INCFILE1, TEXTFILE, size, data);
-            // Access bytes in data - here's a simple example involving text output
-            // The text stored in the resource might not be NULL terminated.
-            char* buffer = new char[size + 1];
-            ::memcpy(buffer, data, size);
-            buffer[size] = 0; // NULL terminator
-            cout << buffer << "\n\n";
-
-            delete[] buffer;
-    */
-
     cout << "SCRIPT TEMPLATE:\n\n";
     //cout << "[Sparkle Loader Script]\n\n";
     cout << "Path:\t\tfilepath/diskname.d64\t\t\t\t\t<< path and file name of the D64 image <- THIS IS A COMMENT\n";
