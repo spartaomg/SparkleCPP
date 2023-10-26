@@ -7,7 +7,7 @@
 //#defnie NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR BUILD INFO 231021
+//  COMPILE TIME VARIABLES FOR BUILD INFO 231026
 //--------------------------------------------------------
 
 constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -2152,17 +2152,19 @@ bool SortBundle() {
        }
 #endif
 
-       //Once Bundle is sorted, calculate the I/O status of the last byte of the first file and the number of bits that will be needed
+        //Once Bundle is sorted, calculate the I/O status of the last byte of the first file and the number of bits that will be needed
         //to finish the last block of the previous bundle (when the I/O status of the just sorted bundle needs to be known)
         //This is used in CloseBuffer
 
-        //Bytes needed: (1)LongMatch Tag, (2)NextBundle Tag, (3)AdLo, (4)AdHi, (5)First Lit, (6)1 Bit Stream Byte (for 1 Lit Bit), (7)+/- I/O
+        //Bytes needed: (1)LongMatch Tag, (2)NextBundle Tag, (3)AdLo, (4)AdHi, (5)First Lit, (6)1 Bit Stream Byte (=BitPtr for 1st Lit Bit), (7)+/- I/O
         //+/- 1 Match Bit (if the last sequence of the last bundle is a match sequence, no Match Bit after a Literal sequence)
         //Match Bit will be determened by MLen in SequenceFits() function, NOT ADDED TO BitsNeededForNextBundle here!!!
 
         //We may be overcalculating here but that is safer than undercalculating which would result in buggy decompression
         //If the last block is not the actual last block of the bundle...
         //With overcalculation, worst case scenario is a little bit worse compression ratio of the last block
+
+        //DO NOT ADD A LITERAL BIT - WE ALREADY HAVE 1 BYTE ADDED HERE FOR THE FIRST BIT STREAM BYTE (=BitPtr)
 
        BitsNeededForNextBundle = (6 + CheckNextIO(tmpPrgs[0].iFileAddr, tmpPrgs[0].iFileLen, tmpPrgs[0].FileIO)) * 8;
 
@@ -6109,7 +6111,8 @@ int main(int argc, char* argv[])
 #ifdef DEBUG
 
         //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\SparkleFetchTest\\ExprTest.sls";
-        string ScriptFileName = "c:\\Users\\Tamas\\source\\repos\\X2024\\Main\\Sparkle\\X2024B.sls"; //WIN32
+        //string ScriptFileName = "c:\\Users\\Tamas\\source\\repos\\X2024\\Main\\Sparkle\\X2024B.sls"; //WIN32
+        string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\SabreWulfRemastered\\Bug\\SabreWulf.sls"; //WIN32
         //string ScriptFileName = "../../C64/NoBounds/Main/Sparkle/NoBounds.sls";   //UBUNTU
         Script = ReadFileToString(ScriptFileName, true);
         SetScriptPath(ScriptFileName, AppPath);

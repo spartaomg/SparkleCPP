@@ -631,14 +631,19 @@ bool CloseFile() {
 
 bool CloseBundle(int NextFileIO, bool LastPartOnDisk)
 {
-
+    //Can't use BitsNeededForNextBundle here, this could be the last bundle on the disk!!!
+    //So we re-calculate the number of bytes needed for the next (potentially dummy) bundle
     //BYTES NEEDED: (1)Long Match Tag + (2)End Tag + (3)BitPtr + (4)AdLo + (5)AdHi + (6)1st Literal +/- (7)I/O flag
-    int Bytes = 6 + NextFileIO;
-
-    //THE FIRST LITERAL ALSO NEEDS A LITERAL BIT
+    int BytesNeeded = 6 + NextFileIO;     //Next bundle is already sorted here, we know exactly which file is the next one
+    
+    //SABREWULF BUG - reported by Raistlin
+    //Adding a Literal Bit here resulted in overcalculating the space needed for the next block -AFTER- we already identified and compressed it
+    //and started a new block with a dummy write - this resulted in out-of-order loading of the last block with wrong match references
+    
+    //THE FIRST LITERAL OF THE NEXT BUNDLE DOES -NOT- NEED AN ADDITIONAL LITERAL BIT - it is already included in Bytes, see (3)BitPtr!!!
     //DO NOT ADD MATCH BIT HERE, IT WILL BE ADDED IN SequenceFits()
-    //Bug fixed based on CloseFile bug reported by Visage/Lethargy
-    int Bits = 1;
+    
+    int BitsNeeded = 0;
 
     TransitionalBlock = true;    //This is always a transitional block, unless close sequence does not fit, will add +1 for Block Count
 
@@ -656,7 +661,7 @@ bool CloseBundle(int NextFileIO, bool LastPartOnDisk)
     //Fix: include NEXT file's I / O status in calculation of needed bytes
     //-----------------------------------------------------------------------------------
 
-    if (SequenceFits(Bytes, Bits, 0))       //This will add the EndTag to the needed bytes
+    if (SequenceFits(BytesNeeded, BitsNeeded, 0))       //This will add the EndTag to the needed bytes
     {
         //Buffer has enough space for New Bundle Tag and New Bundle Info and first Literal byte (and IO flag if needed)
 
@@ -1693,12 +1698,13 @@ Restart:
     AddLitSequence();        //See if any remaining literals need to be added, space has been previously reserved for them
 
     //KARAOKE BUG - fixed in Sparkle 2.2 - making sure that the first byte of the next bundle fits in the transitional block
-    int BytesNeededForNextBundle = BitsNeededForNextBundle / 8;
+    int BytesNeeded = BitsNeededForNextBundle / 8;      //6 or 7 bytes, depending on I/O status of first file in next bundle
+    int BitsNeeded = 0;                                 //DO NOT ADD A LITERAL BIT HERE - WE INCLUDE A BitPtr IN BytesNeeded 
     if (LastBlockOfBundle)
     {
         LastBlockOfBundle = false;
         TransitionalBlock = true;
-        if (!SequenceFits(BytesNeededForNextBundle, 0, 0))  //Bits=0, MLen will be checked in SequenceFits
+        if (!SequenceFits(BytesNeeded, BitsNeeded, 0))  //Bits=1, we need 1 literal bit MLen will be checked in SequenceFits
         {
             //We have miscalculated the last block of the bundle, let's recompress it the conventional way!
             SI = StartPtr;
@@ -1967,11 +1973,11 @@ bool CloseBuffer() {
 
     //----------------------------------------------------------------------------------------------------------
     
-    //if ((PrgAdd + SI) == 0xdedd)        //729a
+    //if ((PrgAdd + SI) == 0x666f)        //SABREWULF
     //{
     //    PrgAdd += 0;
     //}
-
+    
     AdLoPos = BytePtr;
     Buffer[BytePtr--] = (PrgAdd + SI) % 256;
 

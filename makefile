@@ -1,4 +1,9 @@
-#define macros
+
+#---------------------------------------------------
+# This makefile requires GNU make, mkdir, and g++.
+# On Windows please use MinGW.
+#---------------------------------------------------
+
 ifeq ($(OS),Windows_NT)
 	DIR_BIN = bin/windows
 	DIR_OBJ = obj/windows
@@ -20,13 +25,17 @@ else
     endif
 endif
 
+CC = g++
 CFLAGS = -O3 -Wall -std=c++17 -fexceptions -c
 RESFLAGS = -J rc -O coff -i
 
-OBJ = $(DIR_OBJ)/ascii2dirart.o $(DIR_OBJ)/loader.o $(DIR_OBJ)/packer.o $(DIR_OBJ)/petscii2dirart.o $(DIR_OBJ)/sd.o $(DIR_OBJ)/sf.o $(DIR_OBJ)/sparkle.o
-OBJ += $(DIR_OBJ)/charsettab.o $(DIR_OBJ)/pixelcnttab.o $(DIR_OBJ)/ss.o $(DIR_OBJ)/ssio.o $(DIR_OBJ)/thirdparty/lodepng.o  $(DIR_OBJ)/thirdparty/tinyexpr.o
+OBJ = $(DIR_OBJ)/ascii2dirart.o $(DIR_OBJ)/charsettab.o $(DIR_OBJ)/loader.o $(DIR_OBJ)/packer.o $(DIR_OBJ)/petscii2dirart.o $(DIR_OBJ)/pixelcnttab.o
+OBJ += $(DIR_OBJ)/sd.o $(DIR_OBJ)/sf.o $(DIR_OBJ)/sparkle.o $(DIR_OBJ)/ss.o $(DIR_OBJ)/ssio.o $(DIR_OBJ)/thirdparty/lodepng.o  $(DIR_OBJ)/thirdparty/tinyexpr.o
 
-create_dir = @mkdir -p $(@D)
+# "mkdir" (with quotes) will force Windows to search for the executable (GNU) mkdir instead of the CMD command. Just make sure that its folder is in the system PATH.
+# It also works on Linux and macOS.
+
+create_dir = @"mkdir" -p $(@D)
 
 ifeq ($(OS),Windows_NT)
 	OBJ += $(DIR_OBJ)/sparkle.res
@@ -34,15 +43,15 @@ endif
 
 $(EXEC): $(OBJ)
 	$(create_dir)
-	g++ $(LINKFLAGS) $(EXEC) $(OBJ)
+	$(CC) $(LINKFLAGS) $(EXEC) $(OBJ)
 
 $(DIR_OBJ)/%.o: %.cpp common.h
 	$(create_dir)
-	g++ $(CFLAGS) $< -o $@
+	$(CC) $(CFLAGS) $< -o $@
 
 $(DIR_OBJ)/thirdparty/%.o: thirdparty/%.cpp thirdparty/%.h
 	$(create_dir)
-	g++ $(CFLAGS) $< -o $@
+	$(CC) $(CFLAGS) $< -o $@
 
 $(DIR_OBJ)/sparkle.res: sparkle.rc resource.h
 	$(create_dir)
