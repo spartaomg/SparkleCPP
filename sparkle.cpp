@@ -2,12 +2,12 @@
 
 //#define TESTDISK
 
-#define DEBUG
+//#define DEBUG
 
 //#defnie NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR BUILD INFO 231026
+//  COMPILE TIME VARIABLES FOR BUILD INFO 231027
 //--------------------------------------------------------
 
 constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -5447,6 +5447,9 @@ bool Build()
     {
         return false;
     }
+    
+    cout << "\t\t\t\t  Original\tCompressed\t Ratio\t\t T:S  -  T:S\n";
+        
     bool NewD = true;
     NewBundle = false;
     TmpSetNewBlock = false;
@@ -6049,13 +6052,13 @@ void PrintInfo()
     cout << "IL2:\t\t3\t\t\t\t\t\t\t<< 1-11 (hex) or .1-.17 (decimal), default: 3 if entry is omitted\n";
     cout << "IL3:\t\t3\t\t\t\t\t\t\t<< 1-10 (hex) or .1-.16 (decimal), default: 3 if entry is omitted\n";
     cout << "ZP:\t\t02\t\t\t\t\t\t\t<< 02-fd (hex), once per script, must be the same for disks of a multidisk prod, default: 02 if entry is omitted\n\n";
-    cout << "<< Bundle 0 - files marked with * will be loaded under I/O ($d000-$dfff)\n";
-    cout << "File:\t\tfilepath/file1.prg*\tabcd\tabcdabcd\tabcd\t<< (address) (offset) (length)\n";
+    cout << "<< Bundle 0 - bundles must be separated by at least one blank line!\n";
+    cout << "File:\t\tfilepath/file0.prg\t\t\t\t\t<< (default address) (default offset) (default length)\n\n";
+    cout << "<< Bundle 1 - files marked with * will be loaded under I/O ($d000-$dfff)\n";
+    cout << "DirIndex:\tab\t\t\t\t\t\t\t<< 01-7f (hex), if used, then only bundles with dir index will be added to the internal directory!!!\n";
+    cout << "File:\t\tfilepath/file1.kla\tabcd\t\t\t\t<< (address) (default offset) (default length)\n";
     cout << "File:\t\tfilepath/file2.bin\tabcd\tabcdabcd\t\t<< (address) (offset) (default length)\n";
-    cout << "File:\t\tfilepath/file3.kla\tabcd\t\t\t\t<< (address) (default offset) (default length)\n\n";
-    cout << "<< Bundle 1 - bundles must be separated by at least one blank line!\n";
-    //cout << "DirIndex:\tab\t\t\t\t\t\t\t<< 01-7f (hex), if used, then only bundles with dir index will be added to internal directory!!!\n";
-    cout << "File:\t\tfilepath/file4.prg\t\t\t\t\t<< (default address) (default offset) (default length)\n\n";
+    cout << "File:\t\tfilepath/file3.prg*\tabcd\tabcdabcd\tabcd\t<< (address) (offset) (length)\n\n";
     cout << "<< Bundle 2\n";
     cout << "Script:\t\tfilepath/scriptfile.sls\t\t\t\t\t<< this will import another script here...\n\n";
     cout << "<< Entries can be fully omitted if they are not needed or their default value is used.\n";
