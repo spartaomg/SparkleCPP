@@ -7,7 +7,7 @@
 //#defnie NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR BUILD INFO 231027
+//  COMPILE TIME VARIABLES FOR BUILD INFO 231028
 //--------------------------------------------------------
 
 constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -1819,6 +1819,11 @@ bool CompressBundle()             //NEEDS PackFile() and CloseFile()
     PartialFileIndex = -1;
     int OrigSize{};
 
+    if (BundleNo == 1)
+    {
+        cout << "\t\t\t\t  Original\tCompressed\t Ratio\t\t T:S  -  T:S\n";
+    }
+
     cout << "Compressing bundle #" << (BundleNo - 1) << "...\t";
 
     for (size_t i = 0; i < Prgs.size(); i++)
@@ -1846,7 +1851,8 @@ bool CompressBundle()             //NEEDS PackFile() and CloseFile()
             PrgAdd = Prgs[i + 1].iFileAddr;
             PrgLen = Prgs[i + 1].iFileLen;
             FileUnderIO = Prgs[i + 1].FileIO;
-            CloseFile();
+            if (!CloseFile())
+                return false;
         }
     }
     LastBlockCnt = BlockCnt;
@@ -5447,8 +5453,6 @@ bool Build()
     {
         return false;
     }
-    
-    cout << "\t\t\t\t  Original\tCompressed\t Ratio\t\t T:S  -  T:S\n";
         
     bool NewD = true;
     NewBundle = false;

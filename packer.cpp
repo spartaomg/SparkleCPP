@@ -128,7 +128,7 @@ int CheckIO(int Offset, int NextFileUnderIO) {
     }
     else
     {
-        return  ((Offset >= 0xd000) && (Offset <= 0xdfff) && (FileUnderIO)) ? 1 : 0;
+        return ((Offset >= 0xd000) && (Offset <= 0xdfff) && (FileUnderIO)) ? 1 : 0;
     }
 
 }
@@ -1104,22 +1104,25 @@ bool CloseBuffer() {
     //If the result is less than the bits remaining free in the remaining data + the first byte of the next bundle should fit in the buffer
     //I.e. we have identified the last block of the bundle (=transitional block)
 
-    //LastBlockOfBundle = ((BitsLeftInBundle + BitsNeededForNextBundle + ((MLen == 0) ? 0 : 1) + 8 <= ((LastByte - 1) * 8) + BitPos) && (LastFileOfBundle) && (!NewBlock));
-
+    LastBlockOfBundle = ((LastFileOfBundle) && (!NewBlock) && (BitsLeftInBundle + BitsNeededForNextBundle + ((MLen == 0) ? 0 : 1) + 8 <= ((LastByte - 1) * 8) + BitPos));
+    /*
     if ((LastFileOfBundle) && (!NewBlock))
     {
         int BitsNeeded = BitsLeftInBundle + BitsNeededForNextBundle + ((MLen == 0) ? 0 : 1) + 8;
         int BitsAvailable = ((LastByte - 1) * 8) + BitPos;
 
-        if (BitsNeeded <= BitsAvailable)
-        {
-            LastBlockOfBundle = true;
-        }
-        else
-        {
-            LastBlockOfBundle = false;
-        }
+        LastBlockOfBundle = (BitsNeeded <= BitsAvailable);
+        
+        //if (BitsNeeded <= BitsAvailable)
+        //{
+        //    LastBlockOfBundle = true;
+        //}
+        //else
+        //{
+        //    LastBlockOfBundle = false;
+        //}
     }
+    */  
     /*
         if ((BitsLeftInBundle + BitsNeededForNextBundle + ((MLen == 0) ? 0 : 1) + 8 <= ((LastByte - 1) * 8) + BitPos) && (LastFileOfBundle) && (!NewBlock))
         {
@@ -1257,12 +1260,12 @@ bool CloseFile() {
     int BytesNeededForNextFile = 4 + CheckIO(PrgLen - 1, -1);
 
     //THE FIRST LITERAL BYTE WILL ALSO NEED A LITERAL BIT
-    //DO NOT check whether Match Bit is needed for new file - will be checked in Sequencefits()
+    //DO NOT check whether Match Bit is needed for new file - will be checked in SequenceFits()
     //BUG reported by Visage/Lethargy
 
     int BitsNeededForNextFile = 1;
 
-    //Type selector bit  (match vs literal) is not needed, the first byte of a file is always literal
+    //Type selector bit (match vs literal) is not needed, the first byte of a file is always literal
     //So this is the literal length bit: 0 - 1 literal, 1 - more than 1 literals, would also need a Nibble...
     //...but here we only need to be able to fit 1 literal byte
 
@@ -1270,12 +1273,12 @@ bool CloseFile() {
 
     if (SequenceFits(BytesNeededForNextFile, BitsNeededForNextFile,0))
     {
-        //Buffer has enough space for New File Match Tag and New File Info and first Literal byte (and I/O flag if needed)
+        //Buffer has enough space for Next File Tag, New File Address and first Literal byte (and I/O flag if needed)
 
         //If last sequence was a match (no literals) then add a match bit
         if ((MLen > 0) || (LitCnt == -1)) AddBits(MatchSelector, 1);
 
-        Buffer[BytePtr--] = NextFileTag;                            //Then add New File Match Tag
+        Buffer[BytePtr--] = NextFileTag;                            //Then add Next File Tag
         FirstLitOfBlock = true;
     }
     else
