@@ -1104,25 +1104,24 @@ bool CloseBuffer() {
     //If the result is less than the bits remaining free in the remaining data + the first byte of the next bundle should fit in the buffer
     //I.e. we have identified the last block of the bundle (=transitional block)
 
-    LastBlockOfBundle = ((LastFileOfBundle) && (!NewBlock) && (BitsLeftInBundle + BitsNeededForNextBundle + ((MLen == 0) ? 0 : 1) + 8 <= ((LastByte - 1) * 8) + BitPos));
-    /*
+    //LastBlockOfBundle = ((LastFileOfBundle) && (!NewBlock) && (BitsLeftInBundle + BitsNeededForNextBundle + ((MLen == 0) ? 0 : 1) + 8 <= ((LastByte - 1) * 8) + BitPos));
+    
     if ((LastFileOfBundle) && (!NewBlock))
     {
         int BitsNeeded = BitsLeftInBundle + BitsNeededForNextBundle + ((MLen == 0) ? 0 : 1) + 8;
         int BitsAvailable = ((LastByte - 1) * 8) + BitPos;
-
-        LastBlockOfBundle = (BitsNeeded <= BitsAvailable);
         
-        //if (BitsNeeded <= BitsAvailable)
-        //{
-        //    LastBlockOfBundle = true;
-        //}
+        //if (BitsLeftInBundle + BitsNeededForNextBundle + ((MLen == 0) ? 0 : 1) + 8 <= ((LastByte - 1) * 8))
+        if (BitsNeeded <= BitsAvailable)
+        {
+            LastBlockOfBundle = true;
+        }
         //else
         //{
         //    LastBlockOfBundle = false;
         //}
     }
-    */  
+
     /*
         if ((BitsLeftInBundle + BitsNeededForNextBundle + ((MLen == 0) ? 0 : 1) + 8 <= ((LastByte - 1) * 8) + BitPos) && (LastFileOfBundle) && (!NewBlock))
         {
