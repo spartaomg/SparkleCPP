@@ -233,10 +233,11 @@
     <None Include="makefile" />
     <None Include="Resources\Ascii2DirArt.bin" />
     <None Include="Resources\Petscii2DirArt.bin" />
-    <None Include="Resources\SD.asm" />
-    <None Include="Resources\SL.asm" />
+    <None Include="Resources\sd.asm" />
+    <None Include="resources\sf.asm" />
+    <None Include="Resources\sl.asm" />
     <None Include="Resources\Sparkle.inc" />
-    <None Include="Resources\SS.asm" />
+    <None Include="Resources\ss.asm" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

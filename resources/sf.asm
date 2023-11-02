@@ -1,6 +1,6 @@
 //TAB=4
 //----------------------------
-//	Sparkle 2
+//	SPARKLE
 //	Fetch and Transfer Test
 //	DRIVE CODE
 //----------------------------

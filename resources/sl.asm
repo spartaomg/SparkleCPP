@@ -5,7 +5,6 @@
 .const	Sp			=<$ff+$52	//#$51 - Spartan Stepping constant
 .const	InvSp		=Sp^$ff		//#$ae
 
-//.const	ZPSrc		=$02		//$02/$03
 .label	ZPDst		=$02		//$02/$03
 .label	Bits		=$04
 
@@ -212,9 +211,9 @@ NDWEnd:
 //-----------------------------------------------------------------------------------
 
 Cmd:
-//Load all 5 drive code blocks into buffers 0-4 at $300-$7ff on drive in one command!
+//Load all 5 drive code blocks into buffers 0-4 at $300-$7ff on drive in one command
 
-.byte	'M','-','E',$05,$02		//-0204	Command buffer: $0200-$0228
+.byte	'M','-','E',$05,$02			//-0204	Command buffer: $0200-$0228
 
 			ldx	#$08				//-0206
 			lda	#$12				//-0208	Track 18

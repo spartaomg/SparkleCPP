@@ -14,11 +14,11 @@
 //----------------------------------------------------------------------------------------
 //	Revision history
 //
-//	v00 - initial version based on Sparkle 1 Drive Code
+//	v00	- initial version based on Sparkle 1 Drive Code
 //		- 128-cycle on-the-fly GCR read-decode-verify loop
 //		- introducing Spartan Stepping (TM)
 //
-//	v01 - 127-cycle GCR RDV loop
+//	v01	- 127-cycle GCR RDV loop
 //		  tolerates disk speeds 291-307 rpm
 //		- new disk sector layout
 //		  tracks start with Sector 2

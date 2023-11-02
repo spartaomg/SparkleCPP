@@ -1,6 +1,6 @@
 //TAB=4
 //----------------------------
-//	Sparkle 2
+//	SPARKLE
 //	Hi-Score File Saver
 //	C64 CODE
 //----------------------------
@@ -246,7 +246,7 @@ BHdrEnd:
 }
 
 //----------------------------
-//	Sparkle 2
+//	SPARKLE
 //	Hi-Score File Saver
 //	DRIVE CODE
 //----------------------------
