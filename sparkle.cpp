@@ -2847,7 +2847,7 @@ bool AddAsmDirEntry(string AsmDirEntry)
                     for (size_t i = 0; (i < ThisEntry.length()) && (i < 16); i++)
                     {
                         unsigned char NextChar = toupper(ThisEntry[i]);
-                        Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Ascii2DirArt[NextChar];
+                        Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = ascii2dirart[NextChar];
                     }
                 }
             }
@@ -2943,7 +2943,7 @@ bool AddAsmDiskParameters()
         {
             if (i < AsmDiskHeader.size())
             {
-                Disk[Track18 + 0x90 + i] = Ascii2DirArt[(size_t)AsmDiskHeader[i]];
+                Disk[Track18 + 0x90 + i] = ascii2dirart[(size_t)AsmDiskHeader[i]];
             }
         }
     }
@@ -2979,7 +2979,7 @@ bool AddAsmDiskParameters()
         {
             if (i < AsmDiskID.size())
             {
-                Disk[Track18 + 0xa2 + i] = Ascii2DirArt[(size_t)AsmDiskID[i]];
+                Disk[Track18 + 0xa2 + i] = ascii2dirart[(size_t)AsmDiskID[i]];
             }
         }
     }
@@ -3169,7 +3169,7 @@ bool AddCArrayDirEntry(int RowLen)
 
                 for (size_t i = 0; i < 16; i++)
                 {
-                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Petscii2DirArt[bEntry[i]];
+                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = petscii2dirart[bEntry[i]];
                 }
                 if ((DirTrack == 18) && (DirSector == 1) && (DirPos == 2))
                 {
@@ -3329,7 +3329,7 @@ void ImportDirArtFromBinary()
 
                     for (size_t i = 0; i < DAPtr - EntryStart; i++) //Then copy dir entry
                     {
-                        Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Petscii2DirArt[DA[EntryStart + i]];
+                        Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = petscii2dirart[DA[EntryStart + i]];
                     }
 
                     if ((DirTrack == 18) && (DirSector == 1) && (DirPos == 2))
@@ -3481,7 +3481,7 @@ void ImportDirArtFromPet()
 
             for (size_t i = 0; (i < RowLen) && (i < 16); i++)
             {
-                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Petscii2DirArt[PetFile[5 + (rc * RowLen) + i]];
+                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = petscii2dirart[PetFile[5 + (rc * RowLen) + i]];
             }
         }
         else
@@ -3924,7 +3924,7 @@ void ImportDirArtFromImage()
 
             for (size_t i = 0; i < 256; i++)
             {
-                if (PixelCnt == PixelCntTab[i])
+                if (PixelCnt == pixelcnttab[i])
                 {
                     size_t px = i % 16;
                     size_t py = i / 16;
@@ -3944,7 +3944,7 @@ void ImportDirArtFromImage()
 
                             size_t CharSetPos = (py * 8 * 128) + (y * 128) + (px * 8) + x;
 
-                            if (DACol != CharSetTab[CharSetPos])
+                            if (DACol != charsettab[CharSetPos])
                             {
                                 Match = false;
                                 break;
@@ -3975,7 +3975,7 @@ void ImportDirArtFromImage()
             for (int i = 0; i < 16; i++)
             {
                 unsigned int C = Entry[i];
-                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Petscii2DirArt[C];
+                Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = petscii2dirart[C];
             }
 
             if ((DirTrack == 18) && (DirSector == 1) && (DirPos == 2))
@@ -4107,7 +4107,7 @@ void ImportFromJson()
 
                 for (int i = 0; i < min(16, RowLen); i++)
                 {
-                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Petscii2DirArt[ScreenCodes[(rc * RowLen) + i]];
+                    Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = petscii2dirart[ScreenCodes[(rc * RowLen) + i]];
                 }
 
                 if ((DirTrack == 18) && (DirSector == 1) && (DirPos == 2))
@@ -4291,7 +4291,7 @@ void AddDemoNameToDisk(unsigned char T, unsigned char S)
 
     for (size_t W = 0; W < DemoName.length(); W++)
     {
-        Disk[DirEntryOffset + 3 + W] = Ascii2DirArt[(size_t)DemoName[W]];
+        Disk[DirEntryOffset + 3 + W] = ascii2dirart[(size_t)DemoName[W]];
     }
     Disk[DirEntryOffset + 0x1c] = LoaderBlockCount;    //Length of boot loader in blocks
 
@@ -4321,7 +4321,7 @@ void AddHeaderAndID()
         for (size_t i = 0; i < ((DiskHeader.size() <= 16) ? DiskHeader.size() : 16); i++)
         {
             int DH = DiskHeader[i];
-            Disk[BAM + 0x90 + i] = Ascii2DirArt[DH];
+            Disk[BAM + 0x90 + i] = ascii2dirart[DH];
         }
     }
 
@@ -4337,7 +4337,7 @@ void AddHeaderAndID()
         for (size_t i = 0; i < ((DiskID.size() <= 5) ? DiskID.size() : 5); i++)
         {
             int DI = DiskID[i];
-            Disk[BAM + 0xa2 + i] = Ascii2DirArt[DI];         //Overwrites Disk ID and DOS type (5 characters max.)
+            Disk[BAM + 0xa2 + i] = ascii2dirart[DI];         //Overwrites Disk ID and DOS type (5 characters max.)
         }
     }
 }
@@ -4455,13 +4455,13 @@ bool InjectTestPlugin()
 
     unsigned char FTCode[256]{};
 
-    for (int i = 0; i < SF_size; i++)
+    for (int i = 0; i < sf_size; i++)
     {
-        FTCode[i] = SF[i];
+        FTCode[i] = sf[i];
     }
 
     //Copy first block of saver plugin to disk
-    for (int i = 0; i < SF_size; i++)
+    for (int i = 0; i < sf_size; i++)
     {
         int j = 0 - i;
         if (j < 0)
@@ -4524,21 +4524,21 @@ bool InjectSaverPlugin()
         SaverSupportsIO = true;
         HSFileName.replace(HSFileName.length() - 1, 1, "");
 
-        for(int i = 0; i < SSIO_size; i++)
+        for(int i = 0; i < ssio_size; i++)
         {
-            SaveCode[i] = SSIO[i];
+            SaveCode[i] = ssio[i];
         }
-        SaveCodeSize = SSIO_size;
+        SaveCodeSize = ssio_size;
     }
     else
     {
         SaverSupportsIO = false;
 
-        for (int i = 0; i < SS_size; i++)
+        for (int i = 0; i < ss_size; i++)
         {
-            SaveCode[i] = SS[i];
+            SaveCode[i] = ss[i];
         }
-        SaveCodeSize = SS_size;
+        SaveCodeSize = ss_size;
     }
 
     //UpdateZP BUG REPORTED BY Rico/Pretzel Logic
@@ -4823,9 +4823,9 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
 
     unsigned char Drive[6 * 256]{};
 
-    for (int i = 0; i < SD_size; i++)
+    for (int i = 0; i < sd_size; i++)
     {
-        Drive[i] = SD[i];
+        Drive[i] = sd[i];
     }
 
     unsigned char B3[256]{};
@@ -5014,9 +5014,9 @@ bool UpdateZP()
 
     //Find the JMP $0700 sequence in the code to identify the beginning of loader
     int LoaderBase = 0xffff;
-    for (int i = 0; i < Loader_size - 1 - 2; i++)
+    for (int i = 0; i < loader_size - 1 - 2; i++)
     {
-        if ((Loader[i] == 0x4c) && (Loader[i + 1] == 0x00) && (Loader[i + 2] == 0x07))
+        if ((loader[i] == 0x4c) && (loader[i + 1] == 0x00) && (loader[i + 2] == 0x07))
         {
             LoaderBase = i + 3;
             break;
@@ -5046,39 +5046,39 @@ bool UpdateZP()
     const unsigned char ZPBits = 0x04;
 
     //Update STA ZPDst, ADC ZPDst, STA (ZPDst),Y
-    for (int i = LoaderBase; i < Loader_size - 1; i++)
+    for (int i = LoaderBase; i < loader_size - 1; i++)
     {
-        if ((Loader[i] == OPC_STAZP) || (Loader[i] == OPC_ADCZP) || (Loader[i] == OPC_STAZPY))
+        if ((loader[i] == OPC_STAZP) || (loader[i] == OPC_ADCZP) || (loader[i] == OPC_STAZPY))
         {
-            if (Loader[i + 1] == ZPDstLo)
+            if (loader[i + 1] == ZPDstLo)
             {
-                Loader[i + 1] = ZP;
+                loader[i + 1] = ZP;
                 i++;
             }
         }
     }
 
     //Update STA ZPDst+1, DEC ZPDst+1, ADC ZPDst+1
-    for (int i = LoaderBase; i < Loader_size - 1; i++)
+    for (int i = LoaderBase; i < loader_size - 1; i++)
     {
-        if ((Loader[i] == OPC_STAZP) || (Loader[i] == OPC_DECZP) || (Loader[i] == OPC_ADCZP))
+        if ((loader[i] == OPC_STAZP) || (loader[i] == OPC_DECZP) || (loader[i] == OPC_ADCZP))
         {
-            if (Loader[i + 1] == ZPDstHi)
+            if (loader[i + 1] == ZPDstHi)
             {
-                Loader[i + 1] = ZP + 1;
+                loader[i + 1] = ZP + 1;
                 i++;
             }
         }
     }
 
     //Update STA Bits, ROR Bits, ASL Bits,
-    for (int i = LoaderBase; i < Loader_size - 1; i++)
+    for (int i = LoaderBase; i < loader_size - 1; i++)
     {
-        if ((Loader[i] == OPC_STAZP) || (Loader[i] == OPC_RORZP) || (Loader[i] == OPC_ASLZP))
+        if ((loader[i] == OPC_STAZP) || (loader[i] == OPC_RORZP) || (loader[i] == OPC_ASLZP))
         {
-            if (Loader[i + 1] == (ZPBits))
+            if (loader[i + 1] == (ZPBits))
             {
-                Loader[i + 1] = ZP + 2;
+                loader[i + 1] = ZP + 2;
                 i++;
             }
         }
@@ -5119,19 +5119,19 @@ bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL)
     unsigned char LDA_IMM = 0xa9;
     unsigned char PHA = 0x48;
 
-    for (int i = 0; i < Loader_size - 5; i++)      //Find STA $fffb instruction which is 14 bytes from AdLo
+    for (int i = 0; i < loader_size - 5; i++)      //Find STA $fffb instruction which is 14 bytes from AdLo
     {
-        if ((Loader[i] == LDA_IMM) && (Loader[i + 2] == PHA) && (Loader[i + 3] == LDA_IMM) && (Loader[i + 5] == PHA))
+        if ((loader[i] == LDA_IMM) && (loader[i + 2] == PHA) && (loader[i + 3] == LDA_IMM) && (loader[i + 5] == PHA))
         {
-            Loader[i + 1] = AdHi;                  //Hi Byte return address at the end of Loader
-            Loader[i + 4] = AdLo;                  //Lo Byte return address at the end of Loader
+            loader[i + 1] = AdHi;                  //Hi Byte return address at the end of Loader
+            loader[i + 4] = AdLo;                  //Lo Byte return address at the end of Loader
             break;
         }
     }
 
     //Number of blocks in Loader
-    LoaderBlockCount = Loader_size / 254;
-    if (Loader_size % 254 != 0)
+    LoaderBlockCount = loader_size / 254;
+    if (loader_size % 254 != 0)
     {
         LoaderBlockCount += 1;
     }
@@ -5145,9 +5145,9 @@ bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL)
         SS = CS;
         for (int c = 0; c < 254; c++)
         {
-            if ((i * 254) + c < Loader_size)
+            if ((i * 254) + c < loader_size)
             {
-                Disk[Track[CT] + (CS * 256) + 2 + c] = Loader[(i * 254) + c];
+                Disk[Track[CT] + (CS * 256) + 2 + c] = loader[(i * 254) + c];
             }
         }
         DeleteBit(CT, CS);
@@ -5162,13 +5162,13 @@ bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL)
         else
         {
             Disk[Track[ST] + (SS * 256) + 0] = 0;
-            if (Loader_size % 254 == 0)
+            if (loader_size % 254 == 0)
             {
                 Disk[Track[ST] + (SS * 256) + 1] = 255;     //254+1
             }
             else
             {
-                Disk[Track[ST] + (SS * 256) + 1] = ((Loader_size) % 254) + 1;
+                Disk[Track[ST] + (SS * 256) + 1] = ((loader_size) % 254) + 1;
             }
         }
     }
