@@ -7,10 +7,10 @@
 ifeq ($(OS),Windows_NT)
 	DIR_BIN = bin/windows
 	DIR_OBJ = obj/windows
-	EXEC = $(DIR_BIN)/Sparkle2.exe
+	EXEC = $(DIR_BIN)/Sparkle.exe
 	LINKFLAGS = -static -static-libgcc -static-libstdc++ -s -std=c++17 -o
 else
-	EXEC = $(DIR_BIN)/sparkle2
+	EXEC = $(DIR_BIN)/sparkle
 
 	UNAME = $(shell uname)
     ifeq ($(UNAME),Linux)

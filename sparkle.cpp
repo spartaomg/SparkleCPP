@@ -7,7 +7,7 @@
 //#defnie NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR BUILD INFO 231028
+//  COMPILE TIME VARIABLES FOR BUILD INFO 231102
 //--------------------------------------------------------
 
 constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -17,7 +17,7 @@ constexpr unsigned int Year = ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
 constexpr unsigned int Month = (__DATE__[0] == 'J') ? ((__DATE__[1] == 'a') ? 1 : ((__DATE__[2] == 'n') ? 6 : 7))    // Jan, Jun or Jul
                              : (__DATE__[0] == 'F') ? 2                                                              // Feb
                              : (__DATE__[0] == 'M') ? ((__DATE__[2] == 'r') ? 3 : 5)                                 // Mar or May
-                             : (__DATE__[0] == 'A') ? ((__DATE__[2] == 'p') ? 4 : 8)                                 // Apr or Aug
+                             : (__DATE__[0] == 'A') ? ((__DATE__[1] == 'p') ? 4 : 8)                                 // Apr or Aug
                              : (__DATE__[0] == 'S') ? 9                                                              // Sep
                              : (__DATE__[0] == 'O') ? 10                                                             // Oct
                              : (__DATE__[0] == 'N') ? 11                                                             // Nov
@@ -25,10 +25,10 @@ constexpr unsigned int Month = (__DATE__[0] == 'J') ? ((__DATE__[1] == 'a') ? 1 
                              : 0;
 constexpr unsigned int Day = (__DATE__[4] == ' ') ? (__DATE__[5] - '0') : (__DATE__[4] - '0') * 10 + (__DATE__[5] - '0');
 
-constexpr unsigned long int VersionBuild = ((Year / 10) * 0x100000) + ((Year % 10) * 0x10000) + ((Month / 10) * 0x1000) + ((Month % 10) * 0x100) + ((Day / 10) * 0x10) + (Day % 10);
+constexpr unsigned int VersionBuild = ((Year / 10) * 0x100000) + ((Year % 10) * 0x10000) + ((Month / 10) * 0x1000) + ((Month % 10) * 0x100) + ((Day / 10) * 0x10) + (Day % 10);
 
-constexpr int VersionMajor = 2;
-constexpr int VersionMinor = 3;
+constexpr int VersionMajor = 3;
+constexpr int VersionMinor = 0;
 
 string Script = "";
 string ScriptPath = "";
@@ -6005,31 +6005,25 @@ void SetScriptPath(string sPath, string aPath)
     }
 #endif
 
+#if _WIN32
+    for (size_t i = 0; i < sPath.length(); i++)
+    {
+        if (sPath[i] == '\\')
+        {
+            sPath.replace(i, 1, "/");
+        }
+    }
+#endif
+
     ScriptName = sPath;                             //Absolute script path + file name
 
     ScriptPath = sPath;                             //Absolute script path
 
-    for (int i = sPath.length() - 1; i >= 0; i--)
+    size_t i = sPath.length() - 1;
+
+    while ((i >= 0) && (sPath[i] != '/'))
     {
-#if _WIN32
-        if ((sPath[i] != '\\') && (sPath[i] != '/'))
-        {
-            ScriptPath.replace(i, 1, "");
-        }
-        else
-        {
-            break;
-        }
-#elif __APPLE__ || __linux__
-        if (sPath[i] != '/')
-        {
-            ScriptPath.replace(i, 1, "");
-        }
-        else
-        {
-            break;
-        }
-#endif
+        ScriptPath.replace(i--, 1, "");
     }
 }
 
@@ -6037,7 +6031,7 @@ void SetScriptPath(string sPath, string aPath)
 
 void PrintInfo()
 {
-    cout << "USAGE: sparkle2 script.sls\n\n";
+    cout << "USAGE: sparkle script.sls\n\n";
     cout << "SCRIPT TEMPLATE:\n\n";
     //cout << "[Sparkle Loader Script]\n\n";
     cout << "Path:\t\tfilepath/diskname.d64\t\t\t\t\t<< path and file name of the D64 image <- THIS IS A COMMENT\n";
