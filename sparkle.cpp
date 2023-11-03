@@ -5492,16 +5492,16 @@ bool Build()
                 {
                     if (IsHexString(ScriptEntryArray[0]))
                     {
-                        ThisID = ConvertHexStringToInt(ScriptEntryArray[0]) % 256;
-                        if (ThisID > 127)
+                        ThisID = ConvertHexStringToInt(ScriptEntryArray[0]);
+                        if (ThisID > 126)   //0x00-0x7e; called with A=$80+ID, 0x7f is reserved for disk reset (called with A=$ff)
                         {
-                            cerr << "***CRITICAL***\tThis Side Index must be a hex number and cannot be greater than $7f!\n";
+                            cerr << "***CRITICAL***\tThis Side Index must be a hex number and cannot be greater than $7e!\n";
                             return false;
                         }
                     }
                     else
                     {
-                        cerr << "***CRITICAL***\tThis Side Index must be a hex number and cannot be greater than $7f!\n";
+                        cerr << "***CRITICAL***\tThis Side Index must be a hex number betweem $00-$7e!\n";
                         return false;
                     }
                 }
@@ -5520,11 +5520,16 @@ bool Build()
                 {
                     if (IsHexString(ScriptEntryArray[0]))
                     {
-                        NextID = ConvertHexStringToInt(ScriptEntryArray[0]) % 256;
+                        NextID = ConvertHexStringToInt(ScriptEntryArray[0]);
+                        if (NextID > 126)   //0x00-0x7e; called with A=$80+ID, 0x7f is reserved for disk reset (called with A=$ff)
+                        {
+                            cerr << "***CRITICAL***\tNext Side Index must be a hex number and cannot be greater than $7e!\n";
+                            return false;
+                        }
                     }
                     else
                     {
-                        cerr << "***CRITICAL***\tNext Side Index must be a hex number!\n";
+                        cerr << "***CRITICAL***\tNext Side Index must be a hex number between $00-$7e!\n";
                         return false;
                     }
                 }

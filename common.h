@@ -22,18 +22,17 @@ namespace fs = filesystem;
 
 extern const int StdSectorsPerDisk;                 //Standard disk
 extern const int StdTracksPerDisk;
-extern const int StdBytesPerDisk;                   //including track 18
+extern const int StdBytesPerDisk;                   //Includes track 18
 
-extern const int ExtSectorsPerDisk;                 //Exnteded disk
+extern const int ExtSectorsPerDisk;                 //Extended disk
 extern const int ExtTracksPerDisk;
-extern const int ExtBytesPerDisk;                   //Including track 18
+extern const int ExtBytesPerDisk;                   //Includes track 18
 
 extern int SectorsPerDisk;
 extern int BlocksUsedByPlugin;
 
 extern int BytePtr, BitPtr, NibblePtr, BitPos, BitsLeft;
 
-//extern vector<array<unsigned char, 256>> ByteSt;
 extern unsigned char ByteSt[] ;
 
 extern int PartialFileIndex;
@@ -120,4 +119,3 @@ bool CloseBuffer();
 bool CloseFile();
 bool CloseBundle(int NextFileIO, bool LastPartOnDisk);
 unsigned char EORtransform(unsigned char Input);
-//string ExprTK(string expression_string);
