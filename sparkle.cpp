@@ -7,7 +7,7 @@
 //#defnie NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR BUILD INFO 231102
+//  COMPILE TIME VARIABLES FOR BUILD INFO 231104
 //--------------------------------------------------------
 
 constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -460,7 +460,7 @@ bool CreateDirectory(const string& DiskDir)
 
     if (!fs::exists(DiskDir))
     {
-        cerr << "***CRITICAL***\tUnable to create the following folder: " << DiskDir << "\n\n";
+        cerr << "***CRITICAL***\tUnable to create the following folder: " << DiskDir << "\n";
         return false;
     }
     return true;
@@ -514,7 +514,7 @@ bool WriteDiskImage(const string& DiskName)
     }
     else
     {
-        cerr << "***CRITICAL***\tError during writing disk image: " << DiskName << "\n\n";
+        cerr << "***CRITICAL***\tError during writing disk image: " << DiskName << "\n";
         return false;
     }
 }
@@ -2318,7 +2318,7 @@ bool AddVirtualFile()
             FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
             if (FON > P.size() - 1)
             {
-                cerr << "***CRITICAL***\tInvalid file offset detected in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                cerr << "***CRITICAL***\tInvalid file offset in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                 return false;
             }
             FL = ConvertIntToHextString(P.size() - FON, 4);             //Length=prg length-offset
@@ -2331,7 +2331,7 @@ bool AddVirtualFile()
             FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
             if (FON > P.size() - 1)
             {
-                cerr << "***CRITICAL***\tInvalid file offset detected in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                cerr << "***CRITICAL***\tInvalid file offset in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                 return false;
             }
         }
@@ -2343,21 +2343,21 @@ bool AddVirtualFile()
         //File length cannot be 0 bytes
         if (FLN == 0)
         {
-            cerr << "***CRITICAL***\tInvalid file length detected in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+            cerr << "***CRITICAL***\tInvalid file length in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
             return false;
         }
 
         //Make sure file length is not longer than actual file
         if (FON + FLN > P.size())
         {
-            cerr << "***CRITICAL***\tInvalid file length detected in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+            cerr << "***CRITICAL***\tInvalid file length in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
             return false;
         }
 
         //Make sure file address+length<=&H10000
         if (FAN + FLN > 0x10000)
         {
-            cerr << "***CRITICAL***\tInvalid file address and/or length detected in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+            cerr << "***CRITICAL***\tInvalid file address and/or length in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
             return false;
         }
 
@@ -2496,7 +2496,7 @@ bool AddFileToBundle()
             FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
             if (FON > P.size() - 1)
             {
-                cerr << "***CRITICAL***\tInvalid file offset detected in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                cerr << "***CRITICAL***\tInvalid file offset in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                 return false;
             }
             FL = ConvertIntToHextString(P.size() - FON, 4);             //Length=prg length-offset
@@ -2509,7 +2509,7 @@ bool AddFileToBundle()
             FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
             if (FON > P.size() - 1)
             {
-                cerr << "***CRITICAL***\tInvalid file offset detected in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                cerr << "***CRITICAL***\tInvalid file offset in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                 return false;
             }
         }
@@ -2521,20 +2521,20 @@ bool AddFileToBundle()
         //File length cannot be 0 bytes
         if (FLN == 0)
         {
-            cerr << "***CRITICAL***\tInvalid file length detected in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+            cerr << "***CRITICAL***\tInvalid file length in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
             return false;
         }
         //Make sure file length is not longer than actual file
         if(FON + FLN > P.size())
         {
-            cerr << "***CRITICAL***\tInvalid file length detected in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+            cerr << "***CRITICAL***\tInvalid file length in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
             return false;
         }
 
         //Make sure file address+length<=&H10000
         if (FAN + FLN > 0x10000)
         {
-            cerr << "***CRITICAL***\tInvalid file address and/or length detected in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+            cerr << "***CRITICAL***\tInvalid file address and/or length in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
             return false;
         }
 
@@ -2995,7 +2995,7 @@ void ImportDirArtFromAsm()
 
     if (DirArt == "")
     {
-        cerr << "***INFO***\tUnable to open the following DirArt file: " << DirArtName << "\n The disk will be built without DirArt.\n";
+        cerr << "***INFO***\tUnable to open the following DirArt file: " << DirArtName << "\nThe disk will be built without DirArt.\n";
         return;
     }
 
@@ -3199,7 +3199,7 @@ void ImportDirArtFromCArray()
 
     if (DA == "")
     {
-        cerr << "***INFO***\tUnable to open the following DirArt file: " << DirArtName << "\n The disk will be built without DirArt.\n";
+        cerr << "***INFO***\tUnable to open the following DirArt file: " << DirArtName << "\nThe disk will be built without DirArt.\n";
         return;
     }
 
@@ -3390,7 +3390,7 @@ void ImportDirArtFromTxt()
 
     if (DirArt == "")
     {
-        cerr << "***INFO***\tUnable to open the following DirArt file: " << DirArtName << "\n The disk will be built without DirArt.\n";
+        cerr << "***INFO***\tUnable to open the following DirArt file: " << DirArtName << "\nThe disk will be built without DirArt.\n";
         return;
     }
 
@@ -3499,7 +3499,7 @@ void ImportDirArtFromD64()
 
     if(ReadBinaryFile(DirArtName, DA) == -1)
     {
-        cerr << "***INFO***\tUnable to open the following DirArt file: " << DirArtName << "\n The disk will be built without DirArt.\n";
+        cerr << "***INFO***\tUnable to open the following DirArt file: " << DirArtName << "\nThe disk will be built without DirArt.\n";
         return;
     }
     else if ((DA.size() != 174848) && (DA.size() != 196608))
@@ -4490,7 +4490,7 @@ bool InjectSaverPlugin()
 {
     if (HSFile.size() == 0)
     {
-        cerr << "***CRITICAL***\tThe Hi-Score File's size must be multiples of $100 bytes, but not greater than $f00 bytes.\n";
+        cerr << "***CRITICAL***\tThe Hi-Score File's size must be a multiple of $100 bytes, but not greater than $f00 bytes.\n";
         return false;
     }
     if (HSFileName == "")
@@ -5025,7 +5025,7 @@ bool UpdateZP()
 
     if (LoaderBase == 0xffff)
     {
-        cerr << "***CRITICAL***\tZeropage offset could not updated.\n";
+        cerr << "***CRITICAL***\tZeropage offset could not be updated.\n";
         return false;
     }
 
@@ -5297,7 +5297,7 @@ bool AddCompressedBundlesToDisk()
     if (BlocksFree < BufferCnt)
     {
         cerr << "***CRITICAL***\t" << D64Name << " cannot be built because it would require " << BufferCnt << " blocks.\n"
-             << "This disk only has " << SectorsPerDisk << " blocks.";
+             << "This disk only has " << SectorsPerDisk << " blocks.\n";
         return false;
     }
 
@@ -5373,7 +5373,7 @@ bool FinishDisk(bool LastDisk)
     if (MaxBundleNoExceeded)
     {
         cerr << "***INFO***\tThe number of file bundles is greater than 128 on this disk!\n"
-             << "You can only access bundles 0-127 by bundle index. The rest can only be loaded using the LoadNext function.";
+             << "You can only access bundles 0-127 by bundle index. The rest can only be loaded using the LoadNext function.\n";
     }
 
     //Now add compressed parts to disk
@@ -5919,7 +5919,7 @@ bool Build()
 
                         if ((tmp == 0) || (tmp > 127))
                         {
-                            cerr << "***CRITICAL***\tThe DirEntry value must be a hex number between $01 and $7f!\n";
+                            cerr << "***CRITICAL***\tThe DirIndex value must be a hex number between $01 and $7f!\n";
                             return false;
                         }
                         DirEntriesUsed = true;      //We have a valid DirEntry -> we will use the alternative directory
@@ -5927,13 +5927,13 @@ bool Build()
                     }
                     else
                     {
-                        cerr << "***CRITICAL***\tThe DirEntry value must be a hex number between $01 and $7f!\n";
+                        cerr << "***CRITICAL***\tThe DirIndex value must be a hex number between $01 and $7f!\n";
                         return false;
                     }
                 }
                 else
                 {
-                    cerr << "***CRITICAL***\tThe DirEntry value must be a hex number between $01 and $7f!\n";
+                    cerr << "***CRITICAL***\tThe DirIndex value must be a hex number between $01 and $7f!\n";
                     return false;
                 }
 
