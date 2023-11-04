@@ -2,9 +2,9 @@
 
 //#define TESTDISK
 
-#define DEBUG
+//#define DEBUG
 
-//#defnie NEWIO
+//#define NEWIO
 
 //--------------------------------------------------------
 //  COMPILE TIME VARIABLES FOR BUILD INFO 231104
@@ -5846,11 +5846,18 @@ bool Build()
                 {
                     if (IsHexString(ScriptEntryArray[0]))
                     {
-                        ProductID = ConvertHexStringToInt("0x" + ScriptEntryArray[0]) & 0xffffff;
+                        
+                        ProductID = ConvertHexStringToInt(ScriptEntryArray[0]);
+                        if (ProductID > 0xffffff)
+                        {
+                            cerr << "***CRITICAL***\tThe Product ID must be a maximum 6-digit long hexadecimal number!\n";
+                            return false;
+                        }
                     }
                     else
                     {
-                        cerr << "***INFO***\tThe Product ID must be a maximum 6-digit long hexadecimal number!\nSparkle will use the following pseudorandom Product ID: " << hex << ProductID <<"\n";
+                        cerr << "***CRITICAL***\tThe Product ID must be a maximum 6-digit long hexadecimal number!\n";
+                        return false;
                     }
                 }
 
@@ -6149,10 +6156,7 @@ int main(int argc, char* argv[])
 
 #ifdef DEBUG
 
-        //string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\SparkleFetchTest\\ExprTest.sls";
-        //string ScriptFileName = "c:\\Users\\Tamas\\source\\repos\\X2024\\Main\\Sparkle\\X2024B.sls"; //WIN32
-        string ScriptFileName = "c:\\Users\\Tamas\\OneDrive\\C64\\Coding\\SabreWulfRemastered\\Bug\\SabreWulf.sls"; //WIN32
-        //string ScriptFileName = "../../C64/NoBounds/Main/Sparkle/NoBounds.sls";   //UBUNTU
+        string ScriptFileName = "c:/Sparkle3/Example/Sparkle3.sls";
         Script = ReadFileToString(ScriptFileName, true);
         SetScriptPath(ScriptFileName, AppPath);
 
