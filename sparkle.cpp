@@ -2,7 +2,7 @@
 
 //#define TESTDISK
 
-//#define DEBUG
+#define DEBUG
 
 //#defnie NEWIO
 
@@ -1907,10 +1907,10 @@ bool CompareFileAddress(FileStruct F1, FileStruct F2)
 
 bool SortVirtualFiles()
 {
+    int FSO{}, FEO{}, FSI{}, FEI{};
+
     if (tmpVFiles.size() > 1)
     {
-        int FSO{}, FEO{}, FSI{}, FEI{};
-
         //Check for overlaps
         for (size_t o = 0; o < tmpVFiles.size() - 1; o++)
         {
@@ -2014,6 +2014,43 @@ bool SortVirtualFiles()
         }
         //Sort files by length (short files first, thus, last block will more likely contain 1 file only = faster depacking)
         sort(tmpVFiles.begin(), tmpVFiles.end(), CompareFileAddress);
+    }
+    
+    if ((tmpVFiles.size() > 0) && (tmpPrgs.size() > 0))
+    {
+        //Check for overlaps with FILES in the same bundle
+        for (size_t o = 0; o < tmpVFiles.size(); o++)
+        {
+            int FSO = tmpVFiles[o].iFileAddr;               //Outer loop virtual file start
+            int FEO = FSO + tmpVFiles[o].iFileLen - 1;      //Outer loop virtual file end
+
+            for (size_t i = 0; i < tmpPrgs.size(); i++)
+            {
+                int FSI = tmpPrgs[i].iFileAddr;             //Inner loop file start
+                int FEI = FSI + tmpPrgs[i].iFileLen - 1;    //Inner loop file end
+
+                //--|------+------|----OR----|------+------|----OR----|------+------|----OR-----|------+------|--
+                //  FSO    FSI    FEO        FSO    FEI    FEO        FSI    FSO    FEI        FSI    FEO    FEI
+
+                if (((FSI >= FSO) && (FSI <= FEO)) || ((FEI >= FSO) && (FEI <= FEO)) || ((FSO >= FSI) && (FSO <= FEI)) || ((FEO >= FSI) && (FEO <= FEI)))
+                {
+                    int OLS = (FSO >= FSI) ? FSO : FSI;
+                    int OLE = (FEO <= FEI) ? FEO : FEI;
+
+                    if ((OLS >= 0xD000) && (OLE <= 0xDFFF) && (tmpVFiles[o].FileIO != tmpPrgs[i].FileIO))
+                    {
+                        //Overlap is IO memory only and different IO status - NO OVERLAP
+                    }
+                    else
+                    {
+                        cerr << "***CRITICAL***\tThe following file and virtual file overlap in Bundle " << dec << (BundleCnt - 1) << ":\n"
+                            << "File:\t" << tmpPrgs[i].FileName << " ($" << tmpPrgs[i].FileAddr << " - $" << hex << FEI << ")\n"
+                            << "Mem:\t" << tmpVFiles[o].FileName << " ($" << tmpVFiles[o].FileAddr << " - $" << hex << FEO << ")\n";
+                        return false;
+                    }
+                }
+            }
+        }
     }
 
     return true;
@@ -2185,7 +2222,7 @@ bool BundleDone()
         if (!SortBundle())
             return false;
 
-        //Also sort virtual files in NEXT bundle (tmpVFiles())
+        //Also sort virtual files in NEXT bundle (tmpVFiles()), here we will also make sure files and virtual files do not overlap in the NEXT bundle
         if (!SortVirtualFiles())
             return false;
 
