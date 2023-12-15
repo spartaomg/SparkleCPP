@@ -179,7 +179,7 @@
 //----------------------------------------------------------------------------------------
 //	Track 18
 //
-//	00	BAM
+//	00		BAM
 //	01-06	DirArt
 //	07-10	C64 Code
 //	11-16	Drive Code
@@ -216,92 +216,92 @@
 //----------------------------------------------------------------------------------------
 
 //Constants:
-.const VerifSctHdrs	= true
+.const VerifSctHdrs	=true
 
-.label	CSV			=$07		//Checksum Verification Counter Default Value (3 1-bits, 3 data blocks to be verified)
+.label CSV			=$07		//Checksum Verification Counter Default Value (3 1-bits, 3 data blocks to be verified)
 
-.label	DO			=$02
-.label	CO			=$08
-.label	AA			=$10
-.label 	busy		=AA			//DO=0,CO=0,AA=1	$1800=#$10	dd00=010010xx (#$4b)
-.label	ready		=CO			//DO=0,CO=1,AA=0	$1800=#$08	dd00=100000xx (#$83)
+.label DO			=$02
+.label CO			=$08
+.label AA			=$10
+.label busy			=AA			//DO=0,CO=0,AA=1	$1800=#$10	dd00=010010xx (#$4b)
+.label ready		=CO			//DO=0,CO=1,AA=0	$1800=#$08	dd00=100000xx (#$83)
 
-.label	Sp			=$52		//Spartan Stepping constant (=82*72=5904=$1710=$17 bycles delay)
+.label Sp			=$52		//Spartan Stepping constant (=82*72=5904=$1710=$17 bycles delay)
 
 //ZP Usage:
-.label	cT			=$00		//Current Track
-.label	cS			=$01		//Current Sector
-.label	nS			=$02		//Next Sector
-.label	BlockCtr	=$03		//No. of blocks in Bundle, stored as the last byte of first block
-.label	WantedCtr	=$08		//Wanted Sector Counter
-.label	Random		=$18		//Marks random file access
-.label	VerifCtr	=$19		//Checksum Verification Counter
-.label	LastT		=$20		//Track number of last block of a Bundle, initial value=#$01
-.label	LastS		=$21		//Sector number of last block of a Bundle, initial value=#$00
-.label	SCtr		=$22		//Sector Counter, sectors left unfetched in track
-.label	BPtr		=$23		//Byte Pointer within block for random access
-.label	StepDir		=$28		//Stepping  Direction
-.label	ScndBuff	=$29		//#$01 if last block of a Bundle is fetched, otherwise $00
-.label	WList		=$3e		//Wanted Sector list ($3e-$52) ([0]=unfetched, [-]=wanted, [+]=fetched)
-.label	NewBundle	=$54		//New Bundle Flag, #$00->#$01, stop motor if #$01
-.label	DirSector	=$56		//Initial value=#$c5 (<>#$10 or #$11)
-.label	NBC			=$5c		//New Block Count temporary storage
-.label	TrackChg	=$5e		//Indicates whether Track change is needed AFTER CATN (last block of bundle=last sector of track)
+.label cT			=$00		//Current Track
+.label cS			=$01		//Current Sector
+.label nS			=$02		//Next Sector
+.label BlockCtr		=$03		//No. of blocks in Bundle, stored as the last byte of first block
+.label WantedCtr	=$08		//Wanted Sector Counter
+.label Random		=$18		//Marks random file access
+.label VerifCtr		=$19		//Checksum Verification Counter
+.label LastT		=$20		//Track number of last block of a Bundle, initial value=#$01
+.label LastS		=$21		//Sector number of last block of a Bundle, initial value=#$00
+.label SCtr			=$22		//Sector Counter, sectors left unfetched in track
+.label BPtr			=$23		//Byte Pointer within block for random access
+.label StepDir		=$28		//Stepping  Direction
+.label ScndBuff		=$29		//#$01 if last block of a Bundle is fetched, otherwise $00
+.label WList		=$3e		//Wanted Sector list ($3e-$52) ([0]=unfetched, [-]=wanted, [+]=fetched)
+.label NewBundle	=$54		//New Bundle Flag, #$00->#$01, stop motor if #$01
+.label DirSector	=$56		//Initial value=#$c5 (<>#$10 or #$11)
+.label NBC			=$5c		//New Block Count temporary storage
+.label TrackChg		=$5e		//Indicates whether Track change is needed AFTER CATN (last block of bundle=last sector of track)
 
-.label	ILTab		=$60		//Inverted Custom Interleave Table ($60-$64)
-.label	NextID		=$63		//Next Side's ID - will be updated from 18:00:$fd of next side
+.label ILTab		=$60		//Inverted Custom Interleave Table ($60-$64)
+.label NextID		=$63		//Next Side's ID - will be updated from 18:00:$fd of next side
 
-.label	StepTmrRet	=$66		//Indicates whether StepTimer code is called in subroutine
-.label	BitRateRet	=$6c		//Indicates whether Store code is called in subroutine
-.label	EoD			=$6e		//End of Disk flag, only used with sequential loading
-.label	IncSaver	=$74		//=#$02 if Saver Code is included, otherwise #$00
-.label	SaverCode	=$76		//Indicates whether Saver Code Drive code is in the buffer
+.label StepTmrRet	=$66		//Indicates whether StepTimer code is called in subroutine
+.label BitRateRet	=$6c		//Indicates whether Store code is called in subroutine
+.label EoD			=$6e		//End of Disk flag, only used with sequential loading
+.label IncSaver		=$74		//=#$02 if Saver Code is included, otherwise #$00
+.label SaverCode	=$76		//Indicates whether Saver Code Drive code is in the buffer
 
-.label	ZPIncSav	=$10
-.label	ZPILTab		=$70
-.label	ZPProdID	=$78
+.label ZPIncSav		=$10
+.label ZPILTab		=$70
+.label ZPProdID		=$78
 
-.label	ZP7f		=$30		//BitShufTab
-.label	ZP3e		=$32		//TabC value
-.label	ZP12		=$3b		//TabF value
-.label	ZP07		=$57		//TabF value
-.label	ZP00		=$6b		//TabF value
-.label	ZP01ff		=$58		//$58/$59 = $01ff
-.label	ZP0101		=$59		//$59/$5a = $0101
-.label	ZP0200		=$7a		//$7a/$7b = $0200
+.label ZP7f			=$30		//BitShufTab
+.label ZP3e			=$32		//TabC value
+.label ZP12			=$3b		//TabF value
+.label ZP07			=$57		//TabF value
+.label ZP00			=$6b		//TabF value
+.label ZP01ff		=$58		//$58/$59 = $01ff
+.label ZP0101		=$59		//$59/$5a = $0101
+.label ZP0200		=$7a		//$7a/$7b = $0200
 
 //BAM constants:
-.label	BAM_DiskID	=$0101
-.label	BAM_NextID	=$0105
-.label	BAM_IncSave	=$0107
-.label	BAM_ProdID	=$0108
+.label BAM_DiskID	=$0101
+.label BAM_NextID	=$0105
+.label BAM_IncSave	=$0107
+.label BAM_ProdID	=$0108
 
 //Other constants:
-.label	SF			=$012a		//SS drive code Fetch vector
-.label	SH			=$012f		//SS drive code Got Header vector
+.label SF			=$012a		//SS drive code Fetch vector
+.label SH			=$012f		//SS drive code Got Header vector
 
-.label	OPC_BNE		=$d0
+.label OPC_BNE		=$d0
 
 //GCR Decoding Tables:
-.label	TabZP		=$00
-.label	BitShufTab	=TabZP+$30
+.label TabZP		=$00
+.label BitShufTab	=TabZP+$30
 
-.label	TabA		=Tab300+$12
-.label	TabB		=Tab300
-.label	TabC		=TabZP
-.label	TabD		=Tab300+$01
-.label	TabE		=TabZP
-.label	TabF		=TabZP+$01
-.label	TabG		=Tab300+$100
-.label	TabH		=Tab300+$1e
+.label TabA			=Tab300+$12
+.label TabB			=Tab300
+.label TabC			=TabZP
+.label TabD			=Tab300+$01
+.label TabE			=TabZP
+.label TabF			=TabZP+$01
+.label TabG			=Tab300+$100
+.label TabH			=Tab300+$1e
 
-.label	XX1			=$c3
-.label	XX2			=$9d
-.label	XX3			=$e5
-.label	XX4			=$67
+.label XX1			=$c3
+.label XX2			=$9d
+.label XX3			=$e5
+.label XX4			=$67
 
-*=$2300	"Drive Code"
-.pseudopc $0300	{
+*=$2300 "Drive Code"
+.pseudopc $0300 {
 Tab300:
 //0300
 ClearList:	clc					//00
@@ -631,7 +631,7 @@ StoreLoop:	pla
 			bne ToBneFetch		//ALWAYS
 
 //--------------------------------------
-//		Check Last Block	//Y=#$00 here
+//		Check Last Block		//Y=#$00 here
 //--------------------------------------
 
 ChkLastBlock:
@@ -1032,7 +1032,7 @@ ChkPt:		bpl Loop			//16-18
 .print "Loop:  $0" + toHexString(Loop)
 .print "ChkPt: $0" + toHexString(ChkPt)
 
-.if ([>Loop] != [>ChkPt])	{
+.if ([>Loop] != [>ChkPt]) {
 .error "ERROR!!! Transfer loop crosses pages!!!"
 }
 
@@ -1110,9 +1110,9 @@ EndOfDriveCode:
 
 //----------------------------------------------------------
 
-*=$2800	"Installer"
+*=$2800 "Installer"
 
-.pseudopc	$0700	{
+.pseudopc $0700 {
 
 //--------------------------------------
 //		Initialization	//$0700
@@ -1184,8 +1184,8 @@ CD:
 //
 //-----------------------------------------------------------------
 
-*=$2700	"ZP Tabs and GCR Loop"
-.pseudopc	$0600	{
+*=$2700 "ZP Tabs and GCR Loop"
+.pseudopc $0600 {
 ZPTab:
 //		 x0  x1  x2  x3  x4  x5  x6  x7  x8  x9  xa  xb  xc  xd  xe  xf
 .byte	$12,$00,$04,$01,$f0,$60,$b0,$20,$01,$40,$80,$00,$e0,$c0,$a0,$80	//0x
@@ -1202,14 +1202,14 @@ ZPTab:
 }
 //007c
 GCRLoop:
-.pseudopc GCRLoop-$2700	{
+.pseudopc GCRLoop-$2700 {
 
 //--------------------------------------
-//	124-CYCLE GCR LOOP ON ZP
+//		124-CYCLE GCR LOOP ON ZP
 //--------------------------------------
 
 //------------------------------------------------------------------------------------------------------
-								//						Cycles							Address	
+								//						Cycles							Address
 								//						Zone 3	Zone 2	Zone 1	Zone 0
 Mod2:		//bne Mod2b			//										--		85
 Mod2b:		cmp ($08,x)			//$08 =TabF value						--		91		7c	7d

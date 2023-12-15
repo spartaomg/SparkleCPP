@@ -7,7 +7,7 @@
 //#define NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR BUILD INFO 231104
+//  COMPILE TIME VARIABLES FOR BUILD INFO 231214
 //--------------------------------------------------------
 
 constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -28,7 +28,7 @@ constexpr unsigned int Day = (__DATE__[4] == ' ') ? (__DATE__[5] - '0') : (__DAT
 constexpr unsigned int VersionBuild = ((Year / 10) * 0x100000) + ((Year % 10) * 0x10000) + ((Month / 10) * 0x1000) + ((Month % 10) * 0x100) + ((Day / 10) * 0x10) + (Day % 10);
 
 constexpr int VersionMajor = 3;
-constexpr int VersionMinor = 0;
+constexpr int VersionMinor = 1;
 
 string Script = "";
 string ScriptPath = "";
@@ -809,9 +809,9 @@ string CreateExpressionString(int p)
 {
 
     //Remove unwanted spaces
-    while (ScriptEntryArray[p].find(" ") != string::npos)
+    while (ScriptEntryArray[p].find(' ') != string::npos)
     {
-        int Pos = ScriptEntryArray[p].find(" ");
+        int Pos = ScriptEntryArray[p].find(' ');
         ScriptEntryArray[p].replace(Pos, 1, "");
     }
 
@@ -834,7 +834,7 @@ string CreateExpressionString(int p)
         }
         else if ((NextChar == '&') && (i < ScriptEntryArray[p].size()))         //Identify '&H' hex prefix
         {
-            if (tolower(ScriptEntryArray[p].at(i) == 'h'))
+            if (tolower(ScriptEntryArray[p].at(i)) == 'h')
             {
                 i++;
                 IsDecimal = false;
@@ -842,7 +842,7 @@ string CreateExpressionString(int p)
         }
         else if ((NextChar == '0') && (i < ScriptEntryArray[p].size()))         //Identify '0x' hex prefix
         {
-            if (tolower(ScriptEntryArray[p].at(i) == 'x'))
+            if (tolower(ScriptEntryArray[p].at(i)) == 'x')
             {
                 i++;
                 IsDecimal = false;
@@ -935,7 +935,7 @@ bool EvaluateParameterExpression()
                     return false;
                 }
 
-                unsigned int Result = (unsigned int)r;
+                unsigned long long Result = (unsigned long long)r;
 
                 if ((i == 2) && (Result > 0xffff))
                 {
@@ -946,7 +946,7 @@ bool EvaluateParameterExpression()
                     }
                     else
                     {
-                        ParameterString = ConvertIntToHextString(Result, 8);
+                        ParameterString = ConvertIntToHextString((int)Result, 8);
                     }
                 }
                 else
@@ -2502,7 +2502,7 @@ bool AddFileToBundle()
         {
         case 1:  //No parameters in script
 
-            if ((FN[FN.length() - 4] == '.') && (tolower(FN[FN.length() - 3]) == 's')&& (tolower(FN[FN.length() - 2]) == 'i')&& (tolower(FN[FN.length() - 1]) == 'd'))
+            if ((FN[FN.length() - 4] == '.') && (tolower(FN[FN.length() - 3]) == 's') && (tolower(FN[FN.length() - 2]) == 'i') && (tolower(FN[FN.length() - 1]) == 'd'))
             {   //SID file
                 size_t P7 = P[7];
                 FA = ConvertIntToHextString(P[P7] + (P[P7 + 1] * 256), 4);
@@ -3628,7 +3628,7 @@ unsigned int GetPixel(size_t X, size_t Y)
     unsigned char B = Image[Pos + 2];
     unsigned char A = Image[Pos + 3];
 
-    unsigned int Col = (R * 0x1000000) + (G * 0x10000) + (B * 0100) + A;
+    unsigned int Col = (R * 0x1000000) + (G * 0x10000) + (B * 0x100) + A;
 
     return Col;
 }
@@ -3809,7 +3809,7 @@ bool DecodeBmp()
     }
 
     //Calculate data offset
-    size_t DataOffset = (size_t)ImgRaw[DATA_OFFSET] + (size_t)(ImgRaw[DATA_OFFSET + 1] * 0x100) + (size_t)(ImgRaw[DATA_OFFSET + 2] * 0x10000) + (size_t)(ImgRaw[DATA_OFFSET + 3] * 01000000);
+    size_t DataOffset = (size_t)ImgRaw[DATA_OFFSET] + (size_t)(ImgRaw[DATA_OFFSET + 1] * 0x100) + (size_t)(ImgRaw[DATA_OFFSET + 2] * 0x10000) + (size_t)(ImgRaw[DATA_OFFSET + 3] * 0x1000000);
 
     //Calculate length of pixel rows in bytes
     size_t RowLen = ((size_t)BmpInfo->bmiHeader.biWidth * (size_t)BmpInfo->bmiHeader.biBitCount) / 8;
@@ -3880,6 +3880,8 @@ bool DecodeBmp()
 
     ImgWidth = BmpInfo->bmiHeader.biWidth;
     ImgHeight = BmpInfo->bmiHeader.biHeight;
+
+    delete[] BmpInfo;
 
     return true;
 }
@@ -4159,6 +4161,8 @@ void ImportFromJson()
             }
         }
     }
+
+    delete[] ScreenCodes;
 
     return;
 }
@@ -6068,7 +6072,7 @@ void SetScriptPath(string sPath, string aPath)
 
     ScriptPath = sPath;                             //Absolute script path
 
-    size_t i = sPath.length() - 1;
+    int i = sPath.length() - 1;
 
     while ((i >= 0) && (sPath[i] != '/'))
     {
@@ -6187,7 +6191,7 @@ int main(int argc, char* argv[])
     CalcTabs();     //IS THIS NEEDED HERE???
 
     if (!Build())
-        return -1;
+        return EXIT_FAILURE;
 
     auto cend = std::chrono::system_clock::now();
     std::chrono::duration<double> elapsed_seconds = cend - cstart;

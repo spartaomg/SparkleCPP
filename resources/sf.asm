@@ -12,9 +12,9 @@
 .const ZPSum		= $68		//Save checksum on ZP
 .const ZPTmp		= $69
 
-*=$2b00	"Drive Save Code"
+*=$2b00 "Drive Save Code"
 
-.pseudopc $0100	{				//Stack pointer =#$00 at start
+.pseudopc $0100 {				//Stack pointer =#$00 at start
 
 			lda #<OPC_NOP_IMM	//Disable copying last block to second buffer to avoid overwriting this code at $0200
 			sta ChkScnd+2
@@ -46,7 +46,7 @@ CopyFromHere:
 
 //--------------------------
 
-.pseudopc $0200	{
+.pseudopc $0200 {
 
 ToTrack18:	jmp SkipCSLoop		//Track 18 - return to drive code to fetch dir sector
 
@@ -134,12 +134,12 @@ DEX:		dex
 
 			lda cT
 			jsr ShufToRaw
-			sta $0105			//Current Track	($03fb)
+			sta $0105			//Current Track ($03fb)
 
 			ldy Ctr+1
 			tya
 			jsr ShufToRaw
-			sta $0104			//Sector Table Counter	($03fc)
+			sta $0104			//Sector Table Counter ($03fc)
 
 !:			lda SectorTable-1,y
 			jsr ShufToRaw
