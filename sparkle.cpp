@@ -3836,6 +3836,9 @@ bool DecodeBmp()
     if (ImgRaw.size() != CalcSize)
     {
         cerr << "***INFO***\tCorrupted BMP file size.\nThe disk will be built without DirArt.\n";
+
+        delete[] BmpInfo;
+
         return false;
     }
 
