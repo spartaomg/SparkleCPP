@@ -7,7 +7,7 @@
 //#define NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR BUILD INFO 231214
+//  COMPILE TIME VARIABLES FOR BUILD INFO 231217
 //--------------------------------------------------------
 
 constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -272,7 +272,7 @@ string FindAbsolutePath(string FilePath, string ScriptFilePath)
         if ((FilePath.size() > 1) && (FilePath[0] == '~') && (FilePath[1] == '/'))
         {
             //Home directory (~/...) -> replace "~" with HomeDir if known
-            if (HomeDir != "")
+            if (!HomeDir.empty())
             {
                 FilePath = HomeDir + FilePath.substr(1);
             }
@@ -294,7 +294,7 @@ string FindAbsolutePath(string FilePath, string ScriptFilePath)
 }
 //------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-string ConvertIntToHextString(const int& i, const int& hexlen)
+string ConvertIntToHextString(const int i, const int hexlen)
 {
     std::stringstream hexstream;
     hexstream << setfill('0') << setw(hexlen) << hex << i;
@@ -396,6 +396,8 @@ int ReadBinaryFile(const string& FileName, vector<unsigned char>& prg)
 
     copy(istreambuf_iterator<char>(infile), istreambuf_iterator<char>(), back_inserter(prg));
 
+    infile.close();
+
     return length;
 }
 
@@ -409,20 +411,20 @@ string ReadFileToString(const string& FileName, bool CorrectFilePath)
         return "";
     }
 
-    ifstream t(FileName);
+    ifstream infile(FileName);
 
-    if (t.fail())
+    if (infile.fail())
     {
         return "";
     }
 
     string str;
 
-    t.seekg(0, ios::end);
-    str.reserve(t.tellg());
-    t.seekg(0, ios::beg);
+    infile.seekg(0, ios::end);
+    str.reserve(infile.tellg());
+    infile.seekg(0, ios::beg);
 
-    str.assign((istreambuf_iterator<char>(t)), istreambuf_iterator<char>());
+    str.assign((istreambuf_iterator<char>(infile)), istreambuf_iterator<char>());
 
     for (int i = str.length() - 1; i >= 0; i--)         //Done from end to start as the length of the string may change
     {
@@ -435,6 +437,8 @@ string ReadFileToString(const string& FileName, bool CorrectFilePath)
             str.replace(i, 1, "/");     //Replace '\' with '/' in file paths, Windows can also handle this
         }
     }
+
+    infile.close();
 
     return str;
 }
@@ -510,11 +514,20 @@ bool WriteDiskImage(const string& DiskName)
     {
         cout << "Writing disk image: " << DiskName << "\n\n";
         myFile.write((char*)&Disk[0], BytesPerDisk);
+
+        if (!myFile.good())
+        {
+            cerr << "***CRITICAL***\tError during writing " << DiskName << "\n";
+            myFile.close();
+            return false;
+        }
+
+        myFile.close();
         return true;
     }
     else
     {
-        cerr << "***CRITICAL***\tError during writing disk image: " << DiskName << "\n";
+        cerr << "***CRITICAL***\tError opening file for writing disk image: " << DiskName << "\n";
         return false;
     }
 }
@@ -877,13 +890,13 @@ string CreateExpressionString(int p)
         }
         else
         {
-            Expr += (HexString != "" ? ConvertHexStringToDecimalString(HexString) : "") + NextChar;
+            Expr += (!HexString.empty() ? ConvertHexStringToDecimalString(HexString) : "") + NextChar;
             IsDecimal = false;
             HexString = "";
         }
     }
 
-    Expr += (HexString != "" ? ConvertHexStringToDecimalString(HexString) : "");
+    Expr += (!HexString.empty() ? ConvertHexStringToDecimalString(HexString) : "");
 
     return Expr;
 }
@@ -907,7 +920,7 @@ bool EvaluateParameterExpression()
                     cerr << "***CRITICAL***\tBundle #" << BundleCnt << " File #" << (FileCnt + 1) << "\tError the following file parameter expression:\t'" << ScriptEntryArray[i] << "'\n";
                     //cout << "\t\t\t\t\t\t\t\t      Error near here:\t  " << setfill(' ') << setw(tep.get_last_error_position()) << "^\n";
                     string EM = tep.get_last_error_message();
-                    if (EM != "")
+                    if (!EM.empty())
                     {
                         cerr << "Error message:\t" << EM << "\n";
                     }
@@ -921,7 +934,7 @@ bool EvaluateParameterExpression()
                     cerr << "***CRITICAL***\tBundle #" << BundleCnt << " File #" << (FileCnt + 1) << "\tError the following file parameter expression:\t'" << ScriptEntryArray[i] << "'\n";
                     //cout << "\t\t\t\t\t\t\t\t      Error near here:\t  " << setfill(' ') << setw(tep.get_last_error_position()) << "^\n";
                     string EM = tep.get_last_error_message();
-                    if (EM != "")
+                    if (!EM.empty())
                     {
                         cerr << "Error message:\t" << EM << "\n";
                     }
@@ -964,7 +977,7 @@ bool EvaluateParameterExpression()
 
                 //cout << "Result: " << ParameterString << "\n";
 
-                if (ParameterString != "")
+                if (!ParameterString.empty())
                 {
                     ScriptEntryArray[i] = ParameterString;
                     bEntryHasExpression = true;
@@ -1581,7 +1594,7 @@ bool SplitScriptEntry()
         }
         else
         {
-            if (ScriptEntryArray[NumScriptEntries] != "")
+            if (!ScriptEntryArray[NumScriptEntries].empty())
             {
                 if (NumScriptEntries < MaxNumEntries - 1)
                 {
@@ -1689,7 +1702,7 @@ bool InsertScript(string& SubScriptPath)
         //Skip Script Header
         if (Lines[i] != EntryTypeScriptHeader)
         {
-            if (S != "")
+            if (!S.empty())
                 S += "\n";
 
             //Add relative path of subscript to relative path of subscript entries
@@ -2820,7 +2833,7 @@ bool AddAsmDirEntry(string AsmDirEntry)
                     while ((EntrySegments[1].find(delimiter) != string::npos) && (NumValues < 15))
                     {
                         string ThisValue = EntrySegments[1].substr(0, EntrySegments[1].find(delimiter));
-                        if (ThisValue != "")
+                        if (!ThisValue.empty())
                         {
                             Values[NumValues++] = ThisValue;
                         }
@@ -2832,7 +2845,7 @@ bool AddAsmDirEntry(string AsmDirEntry)
 
                     for (int v = 0; v < NumValues; v++)
                     {
-                        if (Values[v] != "")
+                        if (!Values[v].empty())
                         {
                             unsigned char NextChar = 0x20;          //SPACE default char - if conversion is not possible
                             if (Values[v].find("$") == 0)
@@ -2944,7 +2957,7 @@ bool AddAsmDiskParameters()
         }
     }
 
-    if ((AsmD64Name != "") && (D64Name == ""))
+    if ((!AsmD64Name.empty()) && (D64Name.empty()))
     {
         D64Name = FindAbsolutePath(AsmD64Name, ScriptPath);
     }
@@ -2974,7 +2987,7 @@ bool AddAsmDiskParameters()
         }
     }
 
-    if ((AsmDiskHeader != "") && (DiskHeader == ""))
+    if ((!AsmDiskHeader.empty()) && (DiskHeader.empty()))
     {
         for (size_t i = 0; i < 16; i++)
         {
@@ -3010,7 +3023,7 @@ bool AddAsmDiskParameters()
         }
     }
 
-    if ((AsmDiskID != "") && (DiskID == ""))
+    if ((!AsmDiskID.empty()) && (DiskID.empty()))
     {
         for (size_t i = 0; i < 5; i++)
         {
@@ -3030,7 +3043,7 @@ void ImportDirArtFromAsm()
 {
     DirArt = ReadFileToString(DirArtName, false);
 
-    if (DirArt == "")
+    if (DirArt.empty())
     {
         cerr << "***INFO***\tUnable to open the following DirArt file: " << DirArtName << "\nThe disk will be built without DirArt.\n";
         return;
@@ -3070,7 +3083,7 @@ void ImportDirArtFromAsm()
         }
     }
 
-    if ((DirArt != "") && (DirPos != 0))
+    if ((!DirArt.empty()) && (DirPos != 0))
     {
         DirEntry = DirArt;
         string EntryType = DirEntry.substr(0, DirEntry.find("["));
@@ -3112,7 +3125,7 @@ bool AddCArrayDirEntry(int RowLen)
 
     while ((EntryStart = DirEntry.find(delimiter)) != string::npos)
     {
-        if (DirEntry.substr(0, EntryStart) != "")
+        if (!DirEntry.substr(0, EntryStart).empty())
         {
             Entry[NumEntries++] = DirEntry.substr(0, EntryStart);
         }
@@ -3125,7 +3138,7 @@ bool AddCArrayDirEntry(int RowLen)
         }
     }
 
-    if ((NumEntries < 16) && (DirEntry != ""))
+    if ((NumEntries < 16) && (!DirEntry.empty()))
     {
         for (size_t i = 0; i < DirEntry.length(); i++)
         {
@@ -3234,7 +3247,7 @@ void ImportDirArtFromCArray()
 {
     string DA = ReadFileToString(DirArtName, false);
 
-    if (DA == "")
+    if (DA.empty())
     {
         cerr << "***INFO***\tUnable to open the following DirArt file: " << DirArtName << "\nThe disk will be built without DirArt.\n";
         return;
@@ -3425,7 +3438,7 @@ void ImportDirArtFromTxt()
 {
     DirArt = ReadFileToString(DirArtName, false);
 
-    if (DirArt == "")
+    if (DirArt.empty())
     {
         cerr << "***INFO***\tUnable to open the following DirArt file: " << DirArtName << "\nThe disk will be built without DirArt.\n";
         return;
@@ -3450,7 +3463,7 @@ void ImportDirArtFromTxt()
         }
     }
 
-    if ((DirArt != "") && (DirPos != 0))
+    if ((!DirArt.empty()) && (DirPos != 0))
     {
         FindNextDirPos();
         if (DirPos != 0)
@@ -3599,7 +3612,7 @@ void ImportDirArtFromD64()
 
     size_t Track18 = Track[18];
 
-    if(DiskHeader == "")
+    if(DiskHeader.empty())
     {
         for (size_t i = 0; i < 16; i++)
         {
@@ -3607,7 +3620,7 @@ void ImportDirArtFromD64()
         }
     }
 
-    if (DiskID == "")
+    if (DiskID.empty())
     {
         for (size_t i = 0; i < 5; i++)
         {
@@ -4039,7 +4052,7 @@ void ImportFromJson()
 {
     DirArt = ReadFileToString(DirArtName, false);
 
-    if (DirArt == "")
+    if (DirArt.empty())
     {
         cerr << "***INFO***\tUnable to open the following .JSON DirArt file: " << DirArtName << "\nThe disk will be built without DirArt.\n";
         return;
@@ -4172,7 +4185,7 @@ void ImportFromJson()
 void AddDirArt()
 {
 
-    if (DirArtName == "")
+    if (DirArtName.empty())
     {
         return;
     }
@@ -4276,12 +4289,12 @@ void AddDirArt()
 
 void AddDemoNameToDisk(unsigned char T, unsigned char S)
 {
-    if ((DemoName == "") && (DirArtName != ""))
+    if ((DemoName.empty()) && (!DirArtName.empty()))
     {
         //No DemoName defined, but we have a DirArt attached, we will add first dir entry there
         return;
     }
-    else if (DemoName == "")
+    else if (DemoName.empty())
     {
         //No DemoName, no DirArt - use the script's file name as DemoName
         DemoName = ScriptName.substr(ScriptPath.length());
@@ -4350,7 +4363,7 @@ void AddHeaderAndID()
         Disk[BAM + i] = 0xa0;
     }
 
-    if (DiskHeader == "")
+    if (DiskHeader.empty())
     {
         for (int i = 0; i < 16; i++)
         {
@@ -4366,7 +4379,7 @@ void AddHeaderAndID()
         }
     }
 
-    if (DiskID == "")
+    if (DiskID.empty())
     {
         for (int i = 0; i < 5; i++)
         {
@@ -4534,7 +4547,7 @@ bool InjectSaverPlugin()
         cerr << "***CRITICAL***\tThe Hi-Score File's size must be a multiple of $100 bytes, but not greater than $f00 bytes.\n";
         return false;
     }
-    if (HSFileName == "")
+    if (HSFileName.empty())
     {
         cerr << "***CRITICAL***\tThe Hi-Score File's name is not defined.\n";
         return false;
@@ -5136,11 +5149,11 @@ bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL)
     unsigned char ST{}, SS{}, AdLo{}, AdHi{};
 
 
-    if (DemoStart != "")                            //Check if we have a Demo Start Address
+    if (!DemoStart.empty())                            //Check if we have a Demo Start Address
     {
         B = ConvertHexStringToInt(DemoStart);
     }
-    else if (FirstFileStart != "")                  //No Demo Start Address, check if we have the first file's start address
+    else if (!FirstFileStart.empty())                  //No Demo Start Address, check if we have the first file's start address
     {
         B = ConvertHexStringToInt(FirstFileStart);
     }
@@ -5449,12 +5462,12 @@ bool FinishDisk(bool LastDisk)
     cout << "\nFinal disk: " << TotalOrigSize << " block" << (TotalOrigSize == 1 ? "" : "s") << " compressed to " << BlocksUsed << " block" << (BlocksUsed == 1 ? ", " : "s, ")
         << BlocksFree << " block" << (BlocksFree == 1 ? "" : "s") << " remaining free. Overall compression ratio: " << setprecision(2) << fixed << CompRatio << " %\n\n";
 
-    if (ParsedEntries != "")
+    if (!ParsedEntries.empty())
     {
         cout << "File entries with parameter expressions after evaluation:\n" << ParsedEntries << "\n";
     }
 
-    if (D64Name == "")
+    if (D64Name.empty())
     {
         //No D64Name provided, use the script's path and file name
         D64Name = ScriptName.substr(0, ScriptName.length() - 3) + "d64";
@@ -6041,7 +6054,7 @@ void SetScriptPath(string sPath, string aPath)
         if ((sPath.size() > 1) && (sPath[0] == '~') && (sPath[1] == '/'))
         {
             //Home directory (~/...) -> replace "~" with HomeDir if known
-            if (HomeDir != "")
+            if (!HomeDir.empty())
             {
                 sPath = HomeDir + sPath.substr(1);
             }
@@ -6182,7 +6195,7 @@ int main(int argc, char* argv[])
         SetScriptPath(ScriptFileName, AppPath);
     }
 
-    if (Script == "")
+    if (Script.empty())
     {
         cerr <<"***CRITICAL***\tUnable to load script file or the file is empty!\n";
         return EXIT_FAILURE;
