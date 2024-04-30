@@ -10,7 +10,7 @@
 .const Sparkle_LoadA		=$19d	//Index-based loader call (A=#$00-#$7f), or
 					//Requests a new disk & loads first bundle (A=#$80-#$fe [#$80 + disk index])
 .const Sparkle_LoadFetched	=$1a0	//Loads prefetched bundle, use only after Sparkle_SendCmd (A=bundle index)
-.const Sparkle_LoadNext		=$21d	//Sequential loader call, parameterless, loads next bundle in sequence
+.const Sparkle_LoadNext		=$21c	//Sequential loader call, parameterless, loads next bundle in sequence
 .const Sparkle_IRQ		=$160	//Fallback IRQ vector
 .const Sparkle_IRQ_JSR		=$16e	//Fallback IRQ subroutine/music player JSR instruction
 .const Sparkle_IRQ_RTI		=$179	//Fallback IRQ RTI instruction, used as NMI vector

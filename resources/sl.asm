@@ -311,8 +311,8 @@ Sparkle_LoadFetched:
 			bit $dd00				//Wait for Drive
 			bvs *-3					//$dd00=#$cx - drive is busy, $0x - drive is ready	00,01	(BMI would also work)
 			stx $dd00				//Release ATN										02-05
-			dex						//													06,07
-			jsr Set01				//Waste a few cycles... (drive takes 16 cycles)		08-24 minimum needed here is 8 cycles
+			//dex					//DEX is included in Delay!!!
+			jsr Delay				//Waste a few cycles... (drive takes 16 cycles)		06-28 (minimum needed here is 06-15, 10 cycles, including DEX!!!)
 
 //-------------------------------------
 //
@@ -380,8 +380,8 @@ LongMatch:	lsr
 //----------------------------
 
 EndOfBundle:
-			dex						//Or finish bundle (A=#$00)
-			stx Buffer+$ff
+Delay:		dex						//Or finish bundle (A=#$00) - Also used as Delay for LoadFetched and Set01
+			stx Buffer+$ff			//This write doesn't make any difference in Delay, but used in EndOfBundle
 Set01:		lda #$35
 			sta $01
 Done:		rts
@@ -430,9 +430,10 @@ NextFile:	dex						//Entry point for next file in block, C must be 0 here for su
 			dex
 			lda Buffer,x			//Hi Byte vs IO Flag=#$00
 			bne SkipIO
-			dey						//Y=#$34, turn IO off
 			dex
 			lda Buffer,x			//This version can also load to zeropage!!!
+			beq SkipIO				//We are loading to ZP -> do not turn off IO!!!
+			dey						//Y=#$34, turn IO off
 
 SkipIO:		sta ZPDst+1				//Hi Byte of Dest Address
 			sty $01					//Update $01
