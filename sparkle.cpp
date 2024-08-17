@@ -7,7 +7,7 @@
 //#define NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR BUILD INFO 231217
+//  COMPILE TIME VARIABLES FOR BUILD INFO 240817
 //--------------------------------------------------------
 
 constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -36,7 +36,7 @@ string ScriptName = "";
 string ScriptEntry = "";
 string ScriptLine = "";
 string ScriptEntryType = "";
-const int MaxNumEntries = 5;
+const int MaxNumEntries = 5;                                                //file name + 3 parameters + comment
 string ScriptEntryArray[MaxNumEntries]{};
 int NumScriptEntries = -1;
 
@@ -93,6 +93,7 @@ const string EntryTypeAlign = "align";
     const string EntryTypeTestDisk = "testdisk";
 #endif // TESTDISK
 const string EntryTypeDirIndex = "dirindex:";
+const string EntryTypeComment = "comment:";
 
 int ProductID = 0;
 size_t LineStart, LineEnd;
@@ -1055,6 +1056,11 @@ bool ParameterIsNumeric(int i)
 
 void CorrectParameterStringLength(const int& i)
 {
+    if ((i == 1) && (ScriptEntryArray[i] == "-"))
+    {
+        return;
+    }
+    
     size_t MaxNumChars = 0;
     if (i == 2)
     {
@@ -1117,7 +1123,14 @@ bool AddHSFile()
         }
         else
         {
-            break;
+            if ((i == 1) && (ScriptEntryArray[i] == "-"))
+            {
+                NumParams++;
+            }
+            else
+            {
+                break;
+            }
         }
         CorrectParameterStringLength(i);
     }
@@ -1160,31 +1173,75 @@ bool AddHSFile()
             break;
         case 2:  //One parameter in script
             FA = ScriptEntryArray[1];                                   //Load address from script
-            FO = "00000000";                                            //Offset will be 0, length=prg length
-            FL = ConvertIntToHextString(HSFile.size(), 4);
-            break;
-
-        case 3:  //Two parameters in script
-            FA = ScriptEntryArray[1];                                   //Load address from script
-            FO = ScriptEntryArray[2];                                   //Offset from script
-            FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
-            if (FON > HSFile.size() - 1)
+            if (FA == "-")
             {
-                FON = HSFile.size() - 1;                                //If offset>prg length-1 then correct it
-                FO = ConvertIntToHextString(FON, 8);
+                //PRG file - load the whole file less the first two address bytes
+                FA = ConvertIntToHextString(HSFile[0] + (HSFile[1] * 256), 4);
+                FO = "00000002";
+                FL = ConvertIntToHextString(HSFile.size() - 2, 4);
             }
-            FL = ConvertIntToHextString(HSFile.size() - FON, 4);        //Length=prg length-offset
+            else
+            {
+                FO = "00000000";                                            //Offset will be 0, length=prg length
+                FL = ConvertIntToHextString(HSFile.size(), 4);
+            }
             break;
-
+        case 3:  //Two parameters in script          
+            FA = ScriptEntryArray[1];                                   //Load address from script
+            if (FA == "-")
+            {
+                //PRG file
+                FAN = (size_t)(HSFile[0] + HSFile[1] * 256);
+                FA = ConvertIntToHextString(FAN, 4);
+                FO = ScriptEntryArray[2];
+                int iFON = ConvertHexStringToInt(FO) + 2 - (int)FAN;
+                if ((iFON < 0) || ((size_t)iFON > HSFile.size() - 1))
+                {
+                    cerr << "***CRITICAL***\tInvalid memory segment start parameter in the Hi-Score File: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                    return false;
+                }
+                FO = ConvertIntToHextString(iFON, 4);
+                FL = ConvertIntToHextString(HSFile.size() - iFON, 4);             //Length=prg length-offset
+            }
+            else
+            {
+                FO = ScriptEntryArray[2];                                   //Offset from script
+                FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
+                if (FON > HSFile.size() - 1)
+                {
+                    cerr << "***CRITICAL***\tInvalid file offset in the following Hi-Score File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                    return false;
+                }
+                FL = ConvertIntToHextString(HSFile.size() - FON, 4);             //Length=prg length-offset
+            }
+            break;
         case 4:  //Three parameters in script
             FA = ScriptEntryArray[1];                                   //Load address from script
             FO = ScriptEntryArray[2];                                   //Offset from script
             FL = ScriptEntryArray[3];                                   //Length from script
-            FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
-            if (FON > HSFile.size() - 1)
+            if (FA == "-")
             {
-                FON = HSFile.size() - 1;                                //If offset>prg length-1 then correct it
-                FO = ConvertIntToHextString(FON, 8);
+                //PRG file
+                FAN = (size_t)(HSFile[0] + HSFile[1] * 256);
+                FA = ConvertIntToHextString(FAN, 4);
+                int iFLN = ConvertHexStringToInt(FL) - ConvertHexStringToInt(FO) + 1;
+                FL = ConvertIntToHextString(iFLN, 4);
+                int iFON = ConvertHexStringToInt(FO) + 2 - (int)FAN;
+                if ((iFON < 0) || ((size_t)iFON > HSFile.size() - 1))
+                {
+                    cerr << "***CRITICAL***\tInvalid memory segment start parameter in the following File entry: " << ScriptEntry << "\n";
+                    return false;
+                }
+                FO = ConvertIntToHextString(iFON, 8);
+            }
+            else
+            {
+                FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
+                if (FON > HSFile.size() - 1)
+                {
+                    cerr << "***CRITICAL***\tInvalid file offset in the Hi-Score File: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                    return false;
+                }
             }
         }
 
@@ -1561,13 +1618,16 @@ bool ResetDiskVariables()
 bool SplitScriptEntry()
 {
     unsigned int Pos = 0;
-    unsigned char ThisChar;
+    unsigned char ThisChar = 0;
     ScriptEntryType = "";
+    NumScriptEntries = -1;
+
+    std::fill_n(ScriptEntryArray, MaxNumEntries, "");
 
     while (Pos < ScriptEntry.length())
     {
         ThisChar = tolower(ScriptEntry[Pos++]);
-        if (ThisChar != '\t')
+        if ((ThisChar != ' ') && (ThisChar != '\t'))
         {
             ScriptEntryType += ThisChar;            //Entry Type to lower case
         }
@@ -1576,33 +1636,90 @@ bool SplitScriptEntry()
             break;
         }
     }
-    std::fill_n(ScriptEntryArray, MaxNumEntries, "");
 
-    NumScriptEntries = -1;
+    if (ScriptEntryType == EntryTypeAlign)
+    {
+        return true;    //This is an Align entry, rest of the script entry is ignored (it has no parameters)
+    }
 
+    //Find beginning of first script entry parameter - here both space and tAB are allowed
     while (Pos < ScriptEntry.length())
     {
+        ThisChar = ScriptEntry[Pos];
 
-        if (NumScriptEntries == -1)
-            NumScriptEntries++;
-
-        ThisChar = ScriptEntry[Pos++];                  //Keep original D64 path
-
-        if (ThisChar != '\t')
+        if ((ThisChar == ' ') || (ThisChar == '\t'))
         {
-            ScriptEntryArray[NumScriptEntries] += ThisChar;
+            Pos++;
         }
         else
         {
-            if (!ScriptEntryArray[NumScriptEntries].empty())
+            break;
+        }
+    }
+
+    NumScriptEntries = 0;
+
+    bool BracketsOn = false;
+    bool FileNameInBrackets = false;
+
+    while (Pos < ScriptEntry.length())
+    {
+        ThisChar = ScriptEntry[Pos++];
+
+        //If the file name/first parameter is between quotation marks then allow space as entry parameter separator OUTSIDE quotation marks
+            
+        if (ThisChar == '\"')               //File:    "C:\demo\part\file 1.prg*"    -    2000    2fff
+        {
+            BracketsOn = !BracketsOn;       //We are within quotaiton marks
+            FileNameInBrackets = true;      //we can use space as entry parameter separator OUTSIDE quotes
+        }
+        else if (FileNameInBrackets)
+        {
+            if (BracketsOn)
             {
-                if (NumScriptEntries < MaxNumEntries - 1)
+                ScriptEntryArray[NumScriptEntries] += ThisChar; //We are within curley brackets -> this is a file name
+            }
+            else
+            {
+                if ((ThisChar != '\t') && (ThisChar != ' '))
                 {
-                    NumScriptEntries ++;
+                    ScriptEntryArray[NumScriptEntries] += ThisChar;
                 }
                 else
                 {
-                    ScriptEntryArray[NumScriptEntries] += ThisChar;
+                    if (!ScriptEntryArray[NumScriptEntries].empty())
+                    {
+                        if (NumScriptEntries < MaxNumEntries - 1)
+                        {
+                            NumScriptEntries++;
+                        }
+                        else
+                        {
+                            ScriptEntryArray[NumScriptEntries] += ThisChar;
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            //File name/first parameter is NOT between quotation marks - we can only allow TAB as entry parameter separator
+            if (ThisChar != '\t')
+            {
+                ScriptEntryArray[NumScriptEntries] += ThisChar;
+            }
+            else
+            {
+                if (!ScriptEntryArray[NumScriptEntries].empty())
+                {
+                    if (NumScriptEntries < MaxNumEntries - 1)
+                    {
+                        NumScriptEntries++;
+                    }
+                    else
+                    {
+                        ScriptEntryArray[NumScriptEntries] += ThisChar;
+                    }
                 }
             }
         }
@@ -1610,6 +1727,8 @@ bool SplitScriptEntry()
 
     return true;
 }
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -2191,7 +2310,7 @@ bool SortBundle()
        {
            vector<unsigned char> IOOff;
            IOOff.push_back(0x34);
-           tmpPrgs.insert(tmpPrgs.begin(), FileStruct(IOOff, "IOOff", "02fe", "00", "01", false));
+           tmpPrgs.insert(tmpPrgs.begin(), FileStruct(IOOff, "IOOff", "023bfe", "00", "01", false));
 
            vector<unsigned char> IOOn;
            IOOn.push_back(0x35);
@@ -2308,7 +2427,14 @@ bool AddVirtualFile()
         }
         else
         {
-            break;
+            if ((i == 1) && (ScriptEntryArray[i] == "-"))
+            {
+                NumParams++;
+            }
+            else
+            {
+                break;
+            }
         }
         CorrectParameterStringLength(i);
     }
@@ -2358,31 +2484,75 @@ bool AddVirtualFile()
             break;
         case 2:  //One parameter in script
             FA = ScriptEntryArray[1];                                   //Load address from script
-            FO = "00000000";                                            //Offset will be 0, length=prg length
-            FL = ConvertIntToHextString(P.size(), 4);
-            break;
-
-        case 3:  //Two parameters in script
-            FA = ScriptEntryArray[1];                                   //Load address from script
-            FO = ScriptEntryArray[2];                                   //Offset from script
-            FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
-            if (FON > P.size() - 1)
+            if (FA == "-")
             {
-                cerr << "***CRITICAL***\tInvalid file offset in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
-                return false;
+                //PRG file - load the whole file less the first two address bytes
+                FA = ConvertIntToHextString(P[0] + (P[1] * 256), 4);
+                FO = "00000002";
+                FL = ConvertIntToHextString(P.size() - 2, 4);
             }
-            FL = ConvertIntToHextString(P.size() - FON, 4);             //Length=prg length-offset
+            else
+            {
+                FO = "00000000";                                            //Offset will be 0, length=prg length
+                FL = ConvertIntToHextString(P.size(), 4);
+            }
             break;
-
+        case 3:  //Two parameters in script          
+            FA = ScriptEntryArray[1];                                   //Load address from script
+            if (FA == "-")
+            {
+                //PRG file
+                FAN = (size_t)(P[0] + P[1] * 256);
+                FA = ConvertIntToHextString(FAN, 4);
+                FO = ScriptEntryArray[2];
+                int iFON = ConvertHexStringToInt(FO) + 2 - (int)FAN;
+                if ((iFON < 0) || ((size_t)iFON > P.size() - 1))
+                {
+                    cerr << "***CRITICAL***\tInvalid memory segment start parameter in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                    return false;
+                }
+                FO = ConvertIntToHextString(iFON, 4);
+                FL = ConvertIntToHextString(P.size() - iFON, 4);             //Length=prg length-offset
+            }
+            else
+            {
+                FO = ScriptEntryArray[2];                                   //Offset from script
+                FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
+                if (FON > P.size() - 1)
+                {
+                    cerr << "***CRITICAL***\tInvalid file offset in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                    return false;
+                }
+                FL = ConvertIntToHextString(P.size() - FON, 4);             //Length=prg length-offset
+            }
+            break;
         case 4:  //Three parameters in script
             FA = ScriptEntryArray[1];                                   //Load address from script
             FO = ScriptEntryArray[2];                                   //Offset from script
             FL = ScriptEntryArray[3];                                   //Length from script
-            FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
-            if (FON > P.size() - 1)
+            if (FA == "-")
             {
-                cerr << "***CRITICAL***\tInvalid file offset in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
-                return false;
+                //PRG file
+                FAN = (size_t)(P[0] + P[1] * 256);
+                FA = ConvertIntToHextString(FAN, 4);
+                int iFLN = ConvertHexStringToInt(FL) - ConvertHexStringToInt(FO) + 1;
+                FL = ConvertIntToHextString(iFLN, 4);
+                int iFON = ConvertHexStringToInt(FO) + 2 - (int)FAN;
+                if ((iFON < 0) || ((size_t)iFON > P.size() - 1))
+                {
+                    cerr << "***CRITICAL***\tInvalid memory segment start parameter in the following File entry: " << ScriptEntry << "\n";
+                    return false;
+                }
+                FO = ConvertIntToHextString(iFON, 8);
+            }
+            else
+            {
+                FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
+                if (FON > P.size() - 1)
+                {
+                    cerr << "***CRITICAL***\tInvalid file offset in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                    return false;
+                }
             }
         }
 
@@ -2481,13 +2651,30 @@ bool AddFileToBundle()
         }
         else
         {
-            break;
+            if ((i == 1) && (ScriptEntryArray[i] == "-"))
+            {
+                NumParams++;
+            }
+            else
+            {
+                break;
+            }
         }
         CorrectParameterStringLength(i);
     }
 
     //Get file variables from script, or get default values if there were none in the script entry
+/*
     if (FN.find("*") == FN.length() - 1)
+    {
+#ifdef NEWIO
+        BundleUnderIO = true;
+#endif
+        FUIO = true;
+        FN.replace(FN.length() - 1, 1, "");
+    }
+*/
+    if (FN.at(FN.length() - 1) == '*')
     {
 #ifdef NEWIO
         BundleUnderIO = true;
@@ -2536,31 +2723,75 @@ bool AddFileToBundle()
             break;
         case 2:  //One parameter in script
             FA = ScriptEntryArray[1];                                   //Load address from script
-            FO = "00000000";                                            //Offset will be 0, length=prg length
-            FL = ConvertIntToHextString(P.size(), 4);
-            break;
-
-        case 3:  //Two parameters in script
-            FA = ScriptEntryArray[1];                                   //Load address from script
-            FO = ScriptEntryArray[2];                                   //Offset from script
-            FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
-            if (FON > P.size() - 1)
+            if (FA == "-")
             {
-                cerr << "***CRITICAL***\tInvalid file offset in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
-                return false;
+                //PRG file - load the whole file less the first two address bytes
+                FA = ConvertIntToHextString(P[0] + (P[1] * 256), 4);
+                FO = "00000002";
+                FL = ConvertIntToHextString(P.size() - 2, 4);
             }
-            FL = ConvertIntToHextString(P.size() - FON, 4);             //Length=prg length-offset
+            else
+            {
+                FO = "00000000";                                            //Offset will be 0, length=prg length
+                FL = ConvertIntToHextString(P.size(), 4);
+            }
             break;
-
+        case 3:  //Two parameters in script          
+            FA = ScriptEntryArray[1];                                   //Load address from script
+            if (FA == "-")
+            {
+                //PRG file
+                FAN = (size_t)(P[0] + P[1] * 256);
+                FA = ConvertIntToHextString(FAN, 4);
+                FO = ScriptEntryArray[2];
+                int iFON = ConvertHexStringToInt(FO) + 2 - (int)FAN;
+                if ((iFON < 0) || ((size_t)iFON > P.size() - 1))
+                {
+                    cerr << "***CRITICAL***\tInvalid memory segment start parameter in the following File entry: " << ScriptEntry << "\n";
+                    return false;
+                }
+                FO = ConvertIntToHextString(iFON, 4);
+                FL = ConvertIntToHextString(P.size() - iFON, 4);             //Length=prg length-offset
+            }
+            else
+            {
+                FO = ScriptEntryArray[2];                                   //Offset from script
+                FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
+                if (FON > P.size() - 1)
+                {
+                    cerr << "***CRITICAL***\tInvalid file offset in the following File entry: " << ScriptEntry << "\n";
+                    return false;
+                }
+                FL = ConvertIntToHextString(P.size() - FON, 4);             //Length=prg length-offset
+            }
+            break;
         case 4:  //Three parameters in script
             FA = ScriptEntryArray[1];                                   //Load address from script
             FO = ScriptEntryArray[2];                                   //Offset from script
             FL = ScriptEntryArray[3];                                   //Length from script
-            FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
-            if (FON > P.size() - 1)
+            if (FA == "-")
             {
-                cerr << "***CRITICAL***\tInvalid file offset in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
-                return false;
+                //PRG file
+                FAN = (size_t)(P[0] + P[1] * 256);
+                FA = ConvertIntToHextString(FAN, 4);
+                int iFLN = ConvertHexStringToInt(FL) - ConvertHexStringToInt(FO) + 1;
+                FL = ConvertIntToHextString(iFLN, 4);
+                int iFON = ConvertHexStringToInt(FO) + 2 - (int)FAN;
+                if ((iFON < 0) || ((size_t)iFON > P.size() - 1))
+                {
+                    cerr << "***CRITICAL***\tInvalid memory segment start parameter in the following File entry: " << ScriptEntry << "\n";
+                    return false;
+                }
+                FO = ConvertIntToHextString(iFON, 8);
+            }
+            else
+            {
+                FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
+                if (FON > P.size() - 1)
+                {
+                    cerr << "***CRITICAL***\tInvalid file offset in the following File entry: " << ScriptEntry << "\n";
+                    return false;
+                }
             }
         }
 
@@ -2571,20 +2802,20 @@ bool AddFileToBundle()
         //File length cannot be 0 bytes
         if (FLN == 0)
         {
-            cerr << "***CRITICAL***\tInvalid file length in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+            cerr << "***CRITICAL***\tInvalid file length in the following File entry: " << ScriptEntry << "\n";
             return false;
         }
         //Make sure file length is not longer than actual file
         if(FON + FLN > P.size())
         {
-            cerr << "***CRITICAL***\tInvalid file length in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+            cerr << "***CRITICAL***\tInvalid file length in the following File entry: " << ScriptEntry << "\n";
             return false;
         }
 
         //Make sure file address+length<=&H10000
         if (FAN + FLN > 0x10000)
         {
-            cerr << "***CRITICAL***\tInvalid file address and/or length in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+            cerr << "***CRITICAL***\tInvalid file address and/or length in the following File entry: " << ScriptEntry << "\n";
             return false;
         }
 
@@ -5472,9 +5703,16 @@ bool FinishDisk(bool LastDisk)
 
     if (D64Name.empty())
     {
-        //No D64Name provided, use the script's path and file name
-        D64Name = ScriptName.substr(0, ScriptName.length() - 3) + "d64";
-    }
+        //No D64Name provided, use the script's path and file name, add _SideA etc. if multidisk
+        D64Name = ScriptName.substr(0, ScriptName.length() - 4);
+        if ((!LastDisk) || (DiskCnt > 0))
+        {
+            D64Name += "_Side";
+            char DiskSide = 'A' + DiskCnt;
+            D64Name += DiskSide;
+            D64Name += ".d64";
+        }
+   }
 
     if (!WriteDiskImage(D64Name))
     {
@@ -6200,14 +6438,20 @@ int main(int argc, char* argv[])
 
     if (Script.empty())
     {
-        cerr <<"***CRITICAL***\tUnable to load script file or the file is empty!\n";
+        cerr << "***CRITICAL***\tUnable to load script file or the file is empty!\n";
+        cout << "\nPress Enter to continue...\n";
+        cin.get();
         return EXIT_FAILURE;
     }
 
-    CalcTabs();     //IS THIS NEEDED HERE???
+    //CalcTabs();     //IS THIS NEEDED HERE???
 
     if (!Build())
+    {
+        cout << "\nPress Enter to continue...\n";
+        cin.get();
         return EXIT_FAILURE;
+    }
 
     auto cend = std::chrono::system_clock::now();
     std::chrono::duration<double> elapsed_seconds = cend - cstart;

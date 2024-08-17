@@ -12,7 +12,7 @@
 .const ZPSum		= $68		//Save checksum on ZP
 .const ZPTmp		= $69
 
-*=$2b00 "Drive Save Code"
+*=$2b00 "Drive Fetch and Transfer Test"
 
 .pseudopc $0100 {				//Stack pointer =#$00 at start
 

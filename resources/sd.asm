@@ -860,10 +860,11 @@ DelayIn:	lda $1c05
 			
 ChkLines:	lda $1800
 			bpl Reset			//ATN released - C64 got reset, reset the drive too
-			lsr					//A=#$00/#$02 after this, if C=1 then no change
+			//lsr					//A=#$00/#$02 after this, if C=1 then no change
+			alr #$05			//A=#$00/#$02 after this, if C=1 then no change
 			bcs DelayIn
-			lda $1800
-			and #$04
+			//lda $1800
+			//and #$04
 								//C=0, file requested
 Restart:	stx $1c00			//Restart Motor and turn LED on if they were turned off
 			beq SeqLoad			//A=#$00 - sequential load
@@ -878,9 +879,9 @@ Restart:	stx $1c00			//Restart Motor and turn LED on if they were turned off
 GetByte:	lda #$80			//$dd00=#$9b, $1800=#$94
 			ldx #busy			//X=#$10 (AA=1, CO=0, DO=0) - WILL BE USED LATER IF SAVER CODE IS NEEDED
 
-			jsr RcvByte			//OK to use stack here
+TrRnd:		jsr RcvByte			//OK to use stack here
 
-			cmp #$ff
+TrRndRet:	cmp #$ff
 			beq Reset			//C64 requests drive reset
 
 TestRet:	ldy #$00			//Needed later (for FetchBAM if this is a flip request, and FetchDir too)
@@ -899,7 +900,7 @@ CheckDir:	ldx #$11			//A=#$00-#$7f, X=#$11 (dir sector 17) - DO NOT CHANGE TO IN
 			inx					//A=#$40-#$7f, X=#$12 (dir sector 18)
 			cmp #$f8			//Index=#$7e - check if we are loading the Saver Code
 			bne CompareDir
-			lda IncSaver		//A=#$02 if Saver Code is included on Disk, #$00 otherwise
+			lda IncSaver		//A=#$02 if Saver Code is included on Disk, #$01 for transfer test, #$00 otherwise
 			sta SaverCode
 
 CompareDir:	cpx DirSector		//Dir Sector, initial value=#$c5
@@ -980,7 +981,7 @@ SeqLoad:	tay					//A=#$00 here -> Y=#$00
 StartTr:	ldy #$00			//transfer loop counter
 			ldx #$ef			//bit mask for SAX
 			lda #ready			//A=#$08, ATN=0, AA not needed
-			sta $1800
+TrSeq:		sta $1800
 
 //--------------------------------------
 //		Transfer loop
@@ -990,7 +991,7 @@ Loop:		lda $0100,y			//03-06			19-22			00-03
 			bit $1800			//07-10			23-26			04-07
 			bmi *-3				//11 12			27 28			08 09
 W1:			sax $1800			//13-16			29-32			10-13
-								//(17 cycles)	 	(33 cycles)
+								//(17 cycles) 	(33 cycles)
 
 			dey					//00 01
 			asl					//02 03
@@ -1038,8 +1039,8 @@ ChkPt:		bpl Loop			//16-18
 
 //--------------------------------------
 
-			lda #busy			//16,17 	A=#$10
-			bit $1800			//18,19,20,21	Last bitpair received by C64?
+			lda #busy			//16,17 		A=#$10
+			bit $1800			//18,19,20,21 	Last bitpair received by C64?
 			bmi *-3				//22,23
 			sta $1800			//24,25,26,27	Transfer finished, send Busy Signal to C64
 			
@@ -1048,7 +1049,7 @@ ChkPt:		bpl Loop			//16-18
 								//resulting in early reset of the drive
 
 			iny					//Y=#$01
-			sty Loop+2			//Restore transfer loop
+TrSeqRet:	sty Loop+2			//Restore transfer loop
 			
 			jsr ToggleLED		//Transfer complete - turn LED off, leave motor on
 
