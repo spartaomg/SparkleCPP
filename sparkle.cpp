@@ -6444,7 +6444,7 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
-    //CalcTabs();     //IS THIS NEEDED HERE???
+    CalcTabs();     //THIS IS NEEDED HERE!!!
 
     if (!Build())
     {
