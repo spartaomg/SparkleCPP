@@ -5710,9 +5710,9 @@ bool FinishDisk(bool LastDisk)
             D64Name += "_Side";
             char DiskSide = 'A' + DiskCnt;
             D64Name += DiskSide;
-            D64Name += ".d64";
         }
-   }
+        D64Name += ".d64";
+    }
 
     if (!WriteDiskImage(D64Name))
     {
