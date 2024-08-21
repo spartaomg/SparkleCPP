@@ -30,6 +30,8 @@ constexpr unsigned int VersionBuild = ((Year / 10) * 0x100000) + ((Year % 10) * 
 constexpr int VersionMajor = 3;
 constexpr int VersionMinor = 1;
 
+string OptionPause = "";
+
 string Script = "";
 string ScriptPath = "";
 string ScriptName = "";
@@ -1200,6 +1202,7 @@ bool AddHSFile()
                     cerr << "***CRITICAL***\tInvalid memory segment start parameter in the Hi-Score File: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                     return false;
                 }
+                FA = ScriptEntryArray[2];
                 FO = ConvertIntToHextString(iFON, 4);
                 FL = ConvertIntToHextString(HSFile.size() - iFON, 4);             //Length=prg length-offset
             }
@@ -1232,6 +1235,7 @@ bool AddHSFile()
                     cerr << "***CRITICAL***\tInvalid memory segment start parameter in the following File entry: " << ScriptEntry << "\n";
                     return false;
                 }
+                FA = ScriptEntryArray[2];
                 FO = ConvertIntToHextString(iFON, 8);
             }
             else
@@ -2511,6 +2515,7 @@ bool AddVirtualFile()
                     cerr << "***CRITICAL***\tInvalid memory segment start parameter in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                     return false;
                 }
+                FA = ScriptEntryArray[2];
                 FO = ConvertIntToHextString(iFON, 4);
                 FL = ConvertIntToHextString(P.size() - iFON, 4);             //Length=prg length-offset
             }
@@ -2543,6 +2548,7 @@ bool AddVirtualFile()
                     cerr << "***CRITICAL***\tInvalid memory segment start parameter in the following File entry: " << ScriptEntry << "\n";
                     return false;
                 }
+                FA = ScriptEntryArray[2];
                 FO = ConvertIntToHextString(iFON, 8);
             }
             else
@@ -2750,6 +2756,7 @@ bool AddFileToBundle()
                     cerr << "***CRITICAL***\tInvalid memory segment start parameter in the following File entry: " << ScriptEntry << "\n";
                     return false;
                 }
+                FA = ScriptEntryArray[2];
                 FO = ConvertIntToHextString(iFON, 4);
                 FL = ConvertIntToHextString(P.size() - iFON, 4);             //Length=prg length-offset
             }
@@ -2782,6 +2789,7 @@ bool AddFileToBundle()
                     cerr << "***CRITICAL***\tInvalid memory segment start parameter in the following File entry: " << ScriptEntry << "\n";
                     return false;
                 }
+                FA = ScriptEntryArray[2];
                 FO = ConvertIntToHextString(iFON, 8);
             }
             else
@@ -6375,6 +6383,30 @@ void PrintInfo()
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
+void ExitPause()
+{
+    if (OptionPause == "a")
+    {
+        cout << "\nPress Enter to continue...\n";
+        cin.get();
+    }
+
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+void ErrorPause()
+{
+    if (!OptionPause.empty())
+    {
+        cout << "\nPress Enter to continue...\n";
+        cin.get();
+    }
+
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
 int main(int argc, char* argv[])
 {
     auto cstart = std::chrono::system_clock::now();
@@ -6428,19 +6460,81 @@ int main(int argc, char* argv[])
 #endif
 
     }
-    else
+/*    else
     {
         string ScriptFileName(argv[1]);
         Script = ReadFileToString(ScriptFileName, true);
 
         SetScriptPath(ScriptFileName, AppPath);
     }
+*/
+    vector <string> args;
+    args.resize(argc);
 
+    for (int c = 0; c < argc; c++)
+    {
+        args[c] = argv[c];
+    }
+
+    int i = 1;
+
+    while (i < argc)
+    {      
+        if (i == 1)
+        {
+            string ScriptFileName(argv[1]);
+            Script = ReadFileToString(ScriptFileName, true);
+
+            SetScriptPath(ScriptFileName, AppPath);
+        }
+        else if ((args[i] == "-p") || (args[i] == "-P"))        //output file base name
+        {
+            if (i + 1 < argc)
+            {
+                OptionPause = args[++i];
+
+                if (OptionPause.length() != 1)
+                {
+                    cerr << "***CRITICAL***\tUnrecognized -p [pause on exit] parameter: " << OptionPause << "\n";
+                    cerr << "-p accepts a (always) or e (on error) for value.\n";
+                    OptionPause = "e";
+                    ErrorPause();
+                    return EXIT_FAILURE;
+                }
+                
+                OptionPause = tolower(OptionPause.at(0));   //only one letter is allowed
+                
+                if ((OptionPause != "a") && (OptionPause != "e"))
+                {
+                    cerr << "***CRITICAL***\tUnrecognized -p [pause on exit] parameter: " << OptionPause << "\n";
+                    cerr << "-p accepts a (always) or e (on error) for value.\n";
+                    OptionPause = "e";
+                    ErrorPause();
+                    return EXIT_FAILURE;
+                }
+            }
+            else
+            {
+                cerr << "***CRITICAL***\tMissing -p [pause on exit] parameter.\n";
+                cerr << "-p accepts a (always) or e (on error) for value.\n";
+                OptionPause = "e";
+                ErrorPause();
+                return EXIT_FAILURE;
+            }
+        }
+        else
+        {
+            cerr << "***CRITICAL***\tUnrecognized option: " << args[i] << "\n";
+            ErrorPause();
+            return EXIT_FAILURE;
+        }
+        i++;
+    }
+    
     if (Script.empty())
     {
         cerr << "***CRITICAL***\tUnable to load script file or the file is empty!\n";
-        cout << "\nPress Enter to continue...\n";
-        cin.get();
+        ErrorPause();
         return EXIT_FAILURE;
     }
 
@@ -6448,15 +6542,15 @@ int main(int argc, char* argv[])
 
     if (!Build())
     {
-        cout << "\nPress Enter to continue...\n";
-        cin.get();
+        ErrorPause();
         return EXIT_FAILURE;
     }
 
     auto cend = std::chrono::system_clock::now();
     std::chrono::duration<double> elapsed_seconds = cend - cstart;
 
-    std::cout << "Elapsed time: " << elapsed_seconds.count() << "s\n\n";
+    cout << "Elapsed time: " << elapsed_seconds.count() << "s\n\n";
 
+    ExitPause();
     return EXIT_SUCCESS;
 }
