@@ -65,17 +65,19 @@ struct FileStruct {
     string FileOffs;
     string FileLen;
     bool FileIO;
+    bool FileUncompressed;
     int iFileAddr;
     int iFileOffs;
     int iFileLen;
 
-    FileStruct(vector<unsigned char> Prg, string FileName, string FileAddr, string FileOffs, string FileLen, bool FileIO) {
+    FileStruct(vector<unsigned char> Prg, string FileName, string FileAddr, string FileOffs, string FileLen, bool FileIO, bool FileUncompressed) {
         this->Prg = Prg;
         this->FileName = FileName;
         this->FileAddr = FileAddr;
         this->FileOffs = FileOffs;
         this->FileLen = FileLen;
         this->FileIO = FileIO;
+        this->FileUncompressed = FileUncompressed;
         this->iFileAddr = stoul(FileAddr, nullptr, 16);
         this->iFileOffs = stoul(FileOffs, nullptr, 16);
         this->iFileLen = stoul(FileLen, nullptr, 16);

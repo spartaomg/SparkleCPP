@@ -121,6 +121,8 @@ vector<FileStruct> tmpPrgs;
 vector<FileStruct> VFiles;
 vector<FileStruct> tmpVFiles;
 
+bool UncompressedFile = false;
+
 unsigned char DirBlocks[512]{};
 int DirPtr[128]{};
 
@@ -281,7 +283,7 @@ string FindAbsolutePath(string FilePath, string ScriptFilePath)
             }
             else
             {
-                cerr << "***INFO***\tUnable to identify the user's Home directory...\n";
+                cout << "***INFO***\tUnable to identify the user's Home directory...\n";
             }
         }
         else
@@ -1663,8 +1665,12 @@ bool SplitScriptEntry()
 
     NumScriptEntries = 0;
 
+    bool QuotesOn = false;
+    bool FileNameInQuotes = false;
     bool BracketsOn = false;
     bool FileNameInBrackets = false;
+    UncompressedFile = false;
+
 
     while (Pos < ScriptEntry.length())
     {
@@ -1674,12 +1680,22 @@ bool SplitScriptEntry()
             
         if (ThisChar == '\"')               //File:    "C:\demo\part\file 1.prg*"    -    2000    2fff
         {
-            BracketsOn = !BracketsOn;       //We are within quotaiton marks
-            FileNameInBrackets = true;      //we can use space as entry parameter separator OUTSIDE quotes
+            QuotesOn = !QuotesOn;       //We are within quotation marks
+            FileNameInQuotes = true;      //we can use space as entry parameter separator OUTSIDE quotes/brackets
         }
-        else if (FileNameInBrackets)
+        else if (ThisChar == '{')
         {
-            if (BracketsOn)
+            BracketsOn = true;
+            FileNameInBrackets = true;      //we can use space as entry parameter separator OUTSIDE quotes/brackets
+        }
+        else if (ThisChar == '}')
+        {
+            BracketsOn = false;
+            UncompressedFile = FileNameInBrackets;
+        }
+        else if ((FileNameInQuotes) || (FileNameInBrackets))
+        {
+            if ((QuotesOn) || (BracketsOn))
             {
                 ScriptEntryArray[NumScriptEntries] += ThisChar; //We are within curley brackets -> this is a file name
             }
@@ -1928,7 +1944,7 @@ bool CompressBundle()             //NEEDS PackFile() and CloseFile()
         }
         else
         {
-            cerr << "***INFO***\tThe number of file bundles is greater than 256 on this disk!\n"
+            cout << "***INFO***\tThe number of file bundles is greater than 256 on this disk!\n"
                 << "A DirEntry value can only be assigned to bundles 1-255.\n";
             return false;
         }
@@ -2611,7 +2627,7 @@ bool AddVirtualFile()
 
     VFileCnt += 1;
 
-    tmpVFiles.push_back(FileStruct(P, FN, FA, FO, FL, FUIO));
+    tmpVFiles.push_back(FileStruct(P, FN, FA, FO, FL, FUIO, false));
 
     return true;
 }
@@ -2863,7 +2879,7 @@ bool AddFileToBundle()
 
     FileCnt++;
 
-    tmpPrgs.push_back(FileStruct(P, FN, FA, FO, FL, FUIO));
+    tmpPrgs.push_back(FileStruct(P, FN, FA, FO, FL, FUIO, UncompressedFile));
 
     return true;
 }
@@ -3284,7 +3300,7 @@ void ImportDirArtFromAsm()
 
     if (DirArt.empty())
     {
-        cerr << "***INFO***\tUnable to open the following DirArt file: " << DirArtName << "\nThe disk will be built without DirArt.\n";
+        cout << "***INFO***\tUnable to open the following DirArt file: " << DirArtName << "\nThe disk is built without DirArt.\n";
         return;
     }
 
@@ -3488,7 +3504,7 @@ void ImportDirArtFromCArray()
 
     if (DA.empty())
     {
-        cerr << "***INFO***\tUnable to open the following DirArt file: " << DirArtName << "\nThe disk will be built without DirArt.\n";
+        cout << "***INFO***\tUnable to open the following DirArt file: " << DirArtName << "\nThe disk is built without DirArt.\n";
         return;
     }
 
@@ -3583,12 +3599,12 @@ void ImportDirArtFromBinary()
 
     if (ReadBinaryFile(DirArtName, DA)==-1)
     {
-        cerr << "***INFO***\tUnable to open the following DirArt file: " << DirArtName << "\nThe disk will be built without DirArt.\n";
+        cout << "***INFO***\tUnable to open the following DirArt file: " << DirArtName << "\nThe disk is built without DirArt.\n";
         return;
     }
     else if (DA.size() == 0)
     {
-        cerr << "***INFO***\t The DirArt file is 0 bytes long.\nThe disk will be built without DirArt.\n";
+        cout << "***INFO***\t The DirArt file is 0 bytes long.\nThe disk is built without DirArt.\n";
         return;
     }
 
@@ -3679,7 +3695,7 @@ void ImportDirArtFromTxt()
 
     if (DirArt.empty())
     {
-        cerr << "***INFO***\tUnable to open the following DirArt file: " << DirArtName << "\nThe disk will be built without DirArt.\n";
+        cout << "***INFO***\tUnable to open the following DirArt file: " << DirArtName << "\nThe disk is built without DirArt.\n";
         return;
     }
 
@@ -3729,12 +3745,12 @@ void ImportDirArtFromPet()
 
     if (ReadBinaryFile(DirArtName, PetFile) == -1)
     {
-        cerr << "***INFO***\tUnable to open the following file: " << DirArtName << "\nThe disk will be built without DirArt.\n";
+        cout << "***INFO***\tUnable to open the following file: " << DirArtName << "\nThe disk is built without DirArt.\n";
         return;
     }
     else if (PetFile.size() == 0)
     {
-        cerr << "***INFO***\t The DirArt file is 0 bytes long: " << DirArtName << "\nThe disk will be built without DirArt.\n";
+        cout << "***INFO***\t The DirArt file is 0 bytes long: " << DirArtName << "\nThe disk is built without DirArt.\n";
         return;
     }
 
@@ -3788,12 +3804,12 @@ void ImportDirArtFromD64()
 
     if(ReadBinaryFile(DirArtName, DA) == -1)
     {
-        cerr << "***INFO***\tUnable to open the following DirArt file: " << DirArtName << "\nThe disk will be built without DirArt.\n";
+        cout << "***INFO***\tUnable to open the following DirArt file: " << DirArtName << "\nThe disk is built without DirArt.\n";
         return;
     }
     else if ((DA.size() != 174848) && (DA.size() != 196608))
     {
-        cerr << "***INFO***\t Invalid D64 DirArt file size.\nThe disk will be built without DirArt.\n";
+        cout << "***INFO***\t Invalid D64 DirArt file size.\nThe disk is built without DirArt.\n";
         return;
     }
 
@@ -3905,7 +3921,7 @@ bool IdentifyColors()
             }
             else if ((ThisCol != Col1) && (ThisCol != Col2))
             {
-                cerr << "***INFO***\tThis image contains more than two colors.\nThe disk will be built without DirArt.\n";
+                cout << "***INFO***\tThis image contains more than two colors.\nThe disk is built without DirArt.\n";
                 return false;
             }
         }
@@ -3913,7 +3929,7 @@ bool IdentifyColors()
 
     if (Col1 == Col2)
     {
-        cerr << "***INFO***Unable to determine foreground and background colors in DirArt image file.\nThe disk will be built without DirArt.\n";
+        cout << "***INFO***Unable to determine foreground and background colors in DirArt image file.\nThe disk is built without DirArt.\n";
         return false;
     }
 
@@ -4012,7 +4028,7 @@ bool IdentifyColors()
 
     if (BGCol == FGCol)
     {
-        cerr << "***INFO***Unable to determine foreground and background colors in DirArt image file.\nThe disk will be built without DirArt.\n";
+        cout << "***INFO***Unable to determine foreground and background colors in DirArt image file.\nThe disk is built without DirArt.\n";
         return false;
     }
 
@@ -4029,7 +4045,7 @@ bool DecodeBmp()
 
     if (ImgRaw.size() < MINSIZE)
     {
-        cerr << "***INFO***\tThe size of this BMP file is smaller than the minimum size allowed.\nThe disk will be built without DirArt.\n";
+        cout << "***INFO***\tThe size of this BMP file is smaller than the minimum size allowed.\nThe disk is built without DirArt.\n";
         return false;
     }
 
@@ -4037,13 +4053,13 @@ bool DecodeBmp()
 
     if (BmpInfoHeader.biWidth % 128 != 0)
     {
-        cerr << "***INFO***\tUnsupported BMP size. The image must be 128 pixels (16 chars) wide or a multiple of it if resized.\nThe disk will be built without DirArt.\n";
+        cout << "***INFO***\tUnsupported BMP size. The image must be 128 pixels (16 chars) wide or a multiple of it if resized.\nThe disk is built without DirArt.\n";
         return false;
     }
 
     if ((BmpInfoHeader.biCompression != 0) && (BmpInfoHeader.biCompression != 3))
     {
-        cerr << "***INFO***\tUnsupported BMP format. Sparkle can only work with uncompressed BMP files.\nThe disk will be built without DirArt.\n";
+        cout << "***INFO***\tUnsupported BMP format. Sparkle can only work with uncompressed BMP files.\nThe disk is built without DirArt.\n";
         return false;
     }
 
@@ -4074,7 +4090,7 @@ bool DecodeBmp()
 
     if (ImgRaw.size() != CalcSize)
     {
-        cerr << "***INFO***\tCorrupted BMP file size.\nThe disk will be built without DirArt.\n";
+        cout << "***INFO***\tCorrupted BMP file size.\nThe disk is built without DirArt.\n";
 
         delete[] BmpInfo;
 
@@ -4150,12 +4166,12 @@ void ImportDirArtFromImage()
 
     if (ReadBinaryFile(DirArtName, ImgRaw) == -1)
     {
-        cerr << "***INFO***\tUnable to open image DirArt file.\nThe disk will be built without DirArt.\n";
+        cout << "***INFO***\tUnable to open image DirArt file.\nThe disk is built without DirArt.\n";
         return;
     }
     else if (ImgRaw.size() == 0)
     {
-        cerr << "***INFO***\tThe DirArt file cannot be 0 bytes long.\nThe disk will be built without DirArt.\n";
+        cout << "***INFO***\tThe DirArt file cannot be 0 bytes long.\nThe disk is built without DirArt.\n";
         return;
     }
 
@@ -4166,7 +4182,7 @@ void ImportDirArtFromImage()
 
         if (error)
         {
-            cout << "***INFO***\tPNG decode error: " << error << ": " << lodepng_error_text(error) << "\nThe disk will be built without DirArt.\n";
+            cout << "***INFO***\tPNG decode error: " << error << ": " << lodepng_error_text(error) << "\nThe disk is built without DirArt.\n";
             return;
         }
     }
@@ -4182,7 +4198,7 @@ void ImportDirArtFromImage()
 
     if (ImgWidth % 128 != 0)
     {
-        cerr << "***INFO***\tUnsupported image size. The image must be 128 pixels (16 chars) wide or a multiple of it if resized.\nThe disk will be built without DirArt.\n";
+        cout << "***INFO***\tUnsupported image size. The image must be 128 pixels (16 chars) wide or a multiple of it if resized.\nThe disk is built without DirArt.\n";
         return;
     }
 
@@ -4296,7 +4312,7 @@ void ImportFromJson()
 
     if (DirArt.empty())
     {
-        cerr << "***INFO***\tUnable to open the following .JSON DirArt file: " << DirArtName << "\nThe disk will be built without DirArt.\n";
+        cout << "***INFO***\tUnable to open the following .JSON DirArt file: " << DirArtName << "\nThe disk is built without DirArt.\n";
         return;
     }
 
@@ -4434,7 +4450,7 @@ void AddDirArt()
 
     if (!fs::exists(DirArtName))
     {
-        cerr << "***INFO***\tThe following DirArt file does not exist: " << DirArtName << "\nThe disk will be built without DirArt.\n";
+        cout << "***INFO***\tThe following DirArt file does not exist: " << DirArtName << "\nThe disk is built without DirArt.\n";
         return;
     }
 
@@ -5668,7 +5684,7 @@ bool FinishDisk(bool LastDisk)
 
     if (MaxBundleNoExceeded)
     {
-        cerr << "***INFO***\tThe number of file bundles is greater than 128 on this disk!\n"
+        cout << "***INFO***\tThe number of file bundles is greater than 128 on this disk!\n"
              << "You can only access bundles 0-127 by bundle index. The rest can only be loaded using the LoadNext function.\n";
     }
 
@@ -5912,7 +5928,7 @@ bool Build()
                 }
                 else
                 {
-                    cerr << "***INFO***\tThe following DirArt file does not exist: " << DAN << "\nThe disk will be built without DirArt.\n";
+                    cout << "***INFO***\tThe following DirArt file does not exist: " << DAN << "\nThe disk is built without DirArt.\n";
                 }
 
                 NewBundle = true;
@@ -6309,7 +6325,7 @@ void SetScriptPath(string sPath, string aPath)
             }
             else
             {
-                cerr << "***INFO***\tUnable to identify the user's Home directory...\n";
+                cout << "***INFO***\tUnable to identify the user's Home directory...\n";
             }
         }
         else
@@ -6446,7 +6462,7 @@ int main(int argc, char* argv[])
 
 #ifdef DEBUG
 
-        string ScriptFileName = "c:/Sparkle3/Example/Sparkle3.sls";
+        string ScriptFileName = "c:/Users/Tamas/source/repos/X2024/Parts/MCKefrens/MCKefrens.sls";   //"c:/Sparkle3/Example/Sparkle3.sls";
         Script = ReadFileToString(ScriptFileName, true);
         SetScriptPath(ScriptFileName, AppPath);
 

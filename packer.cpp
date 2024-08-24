@@ -83,6 +83,8 @@ unsigned char* SL, * NL, * FL, * FSL, * FNL, * FFL;
 int NibblePtr, BitPos, BitsLeft;
 unsigned char LastByte;
 
+bool Uncompressed = false;
+
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 /*
 void WriteBinaryFile(const string& FileName, unsigned char* Buffer, streamsize Size) {
@@ -1960,6 +1962,8 @@ bool PackFile(int Index) {
     FileUnderIO = Prgs[Index].FileIO;
     PrgAdd = Prgs[Index].iFileAddr;
     PrgLen = Prgs[Index].iFileLen;
+
+    Uncompressed = Prgs[Index].FileUncompressed;
 
     SL = new unsigned char[PrgLen] {};
     NL = new unsigned char[PrgLen] {};
