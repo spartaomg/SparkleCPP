@@ -1680,8 +1680,8 @@ bool SplitScriptEntry()
             
         if (ThisChar == '\"')               //File:    "C:\demo\part\file 1.prg*"    -    2000    2fff
         {
-            QuotesOn = !QuotesOn;       //We are within quotation marks
-            FileNameInQuotes = true;      //we can use space as entry parameter separator OUTSIDE quotes/brackets
+            QuotesOn = !QuotesOn;           //We are within quotation marks
+            FileNameInQuotes = true;        //we can use space as entry parameter separator OUTSIDE quotes/brackets
         }
         else if (ThisChar == '{')
         {
@@ -1697,7 +1697,7 @@ bool SplitScriptEntry()
         {
             if ((QuotesOn) || (BracketsOn))
             {
-                ScriptEntryArray[NumScriptEntries] += ThisChar; //We are within curley brackets -> this is a file name
+                ScriptEntryArray[NumScriptEntries] += ThisChar; //We are within quotes or curley brackets -> this is a file name
             }
             else
             {
