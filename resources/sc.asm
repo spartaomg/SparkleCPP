@@ -171,14 +171,14 @@ SC_SkipSend:
 			bmi SC_DriveReset
 
 //----------------------------------
-//		Receive Drive Blocks from C64
+//		Retrieve Drive Blocks from C64
 //----------------------------------
 
 SC_RcvDriveBlocks:
 			sta NumDriveBlocks
 			ldy #$00
 RcvDLoop:	jsr SC_NewByte
-			ldx #$09
+			ldx #$09				//Drive code blocks must be EOR-transformed
 			axs #$00
 			eor EorTab,x
 RcvDTo:		sta $0000,y
@@ -186,7 +186,7 @@ RcvDTo:		sta $0000,y
 			bne RcvDLoop
 			lda RcvDTo+2
 			bne *+4
-			lda #$02				//Skip $0100-$02ff (Buffer and secondary buffer)
+			lda #$02				//Skip $0100-$02ff (stack/buffer [this page] and secondary buffer)
 			clc
 			adc #$01
 			sta RcvDTo+2
@@ -238,27 +238,6 @@ SC_NewByte:
 //----------------------------------------------------------------------------------------------------------------------------------------------
 
 //----------------------------------
-//		Receive Code Blocks from C64
-//----------------------------------
-
-SC_RcvCodeBlocks:
-			sta NumCodeBlocks
-			ldy #$00
-RcvCLoop:	jsr SC_NewByte
-RcvCTo:		sta $0000,y
-			iny
-			bne RcvCLoop
-			lda RcvCTo+2
-			bne *+4
-			lda #$01				//Skip $0100-$01ff
-			clc
-			adc #$01
-			sta RcvCTo+2
-			dec NumCodeBlocks
-			bne RcvCLoop
-			rts
-
-//----------------------------------
 //		Send Drive Blocks to C64
 //----------------------------------
 
@@ -303,6 +282,27 @@ DLoop:		lda $0000,y				//4	11	33
 			sta DLoop+2				//4		20
 			dec NumDriveBlocks		//6		26
 			bne DLoop				//3		29
+			rts
+
+//----------------------------------
+//		Receive Code Blocks from C64
+//----------------------------------
+
+SC_RcvCodeBlocks:
+			sta NumCodeBlocks
+			ldy #$00
+RcvCLoop:	jsr SC_NewByte
+RcvCTo:		sta $0000,y
+			iny
+			bne RcvCLoop
+			lda RcvCTo+2
+			bne *+4
+			lda #$01				//Skip $0100-$01ff
+			clc
+			adc #$01
+			sta RcvCTo+2
+			dec NumCodeBlocks
+			bne RcvCLoop
 			rts
 }
 
