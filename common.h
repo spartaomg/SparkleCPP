@@ -57,6 +57,8 @@ extern const int pixelcnttab_size;
 extern unsigned char pixelcnttab[];
 extern const int charsettab_size;
 extern unsigned char charsettab[];
+extern const int sc_size;
+extern unsigned char sc[];
 
 struct FileStruct {
     vector<unsigned char> Prg;

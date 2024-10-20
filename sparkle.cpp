@@ -87,13 +87,11 @@ const string EntryTypeIL3 = "il3:";
 const string EntryTypeProdID = "prodid:";
 const string EntryTypeTracks = "tracks:";
 const string EntryTypeHSFile = "hsfile:";
+const string EntryTypePlugin = "plugin:";
 const string EntryTypeScript = "script:";
 const string EntryTypeFile = "file:";
 const string EntryTypeMem = "mem:";
 const string EntryTypeAlign = "align";
-#ifdef TESTDISK
-    const string EntryTypeTestDisk = "testdisk";
-#endif // TESTDISK
 const string EntryTypeDirIndex = "dirindex:";
 const string EntryTypeComment = "comment:";
 
@@ -139,6 +137,7 @@ size_t HSAddress = 0;
 size_t HSOffset = 0;
 size_t HSLength = 0;
 bool bSaverPlugin = false;
+bool bCustomCodePlugin = false;
 
 #ifdef TESTDISK
     bool bTestDisk = false;
@@ -1536,8 +1535,11 @@ bool ResetDiskVariables()
     //Reset disk system to support 35 tracks
     TracksPerDisk = StdTracksPerDisk;
 
-    //Reset Hi-Score Saver plugin variables
+    //Reset Hi-Score Saver plugin variable
     bSaverPlugin = false;
+
+    //Reset Custom Drive Code plugin variable
+    bCustomCodePlugin = false;
     HSFileName = "";
     HSAddress = 0;
     HSOffset = 0;
@@ -1670,7 +1672,6 @@ bool SplitScriptEntry()
     bool BracketsOn = false;
     bool FileNameInBrackets = false;
     UncompressedFile = false;
-
 
     while (Pos < ScriptEntry.length())
     {
@@ -4798,6 +4799,80 @@ bool InjectTestPlugin()
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
+bool InjectCustomCodePlugin()
+{
+
+    BlocksUsedByPlugin = 2;
+
+    if (BlocksFree < BlocksUsedByPlugin)
+    {
+        cerr << "***CRITICAL***\tThe Custom Drive Code Plugin cannot be added because there is not enough free space on the disk!\n";
+        return false;
+    }
+
+    unsigned char CustomCode[512]{};
+    int CustomCodeSize{};
+
+    for (int i = 0; i < sc_size; i++)
+    {
+        CustomCode[i] = sc[i];
+    }
+    CustomCodeSize = sc_size;
+
+    //Calculate sector pointer on disk
+    int SctPtr = SectorsPerDisk - 2;
+
+    //Identify first T/S of the saver plugin
+    CT = TabT[SctPtr];
+    CS = TabS[SctPtr];
+    int FirstT = CT;
+    int FirstS = CS;
+    int LastT = TabT[SctPtr + 1];
+    int LastS = TabS[SctPtr + 1];
+
+    cout << "Adding Custom Drive Code Plugin...\t    ->    2 blocks\t\t\t";
+    cout << ((FirstT < 10) ? "0" : "") << FirstT << ":" << ((FirstS < 10) ? "0" : "") << FirstS << " - " << ((LastT < 10) ? "0" : "") << LastT << ":" << ((LastS < 10) ? "0" : "") << LastS << "\n";
+
+    //Copy first block of custom code plugin to disk
+    for (int i = 0; i < 256; i++)
+    {
+        Disk[Track[CT] + (CS * 256) + i] = CustomCode[i];
+    }
+
+    //Mark sector off in BAM
+    DeleteBit(CT, CS);
+
+    //Add plugin to directory
+    Disk[Track[18] + (18 * 256) + 8] = EORtransform(CT);               //DirBlocks(0) = EORtransform(Track) = 35
+    Disk[Track[18] + (18 * 256) + 7] = EORtransform(TabStartS[CT]);    //DirBlocks(1) = EORtransform(Sector) = First sector of Track(35) (not first sector of file!!!)
+    Disk[Track[18] + (18 * 256) + 6] = EORtransform(TabSCnt[SctPtr]);  //DirBlocks(2) = EORtransform(Remaining sectors on track)
+    Disk[Track[18] + (18 * 256) + 5] = 0xfe;                                //DirBlocks(3) = BitPtr
+
+    //Next Sector
+    SctPtr++;
+
+    //Second T/S of saver plugin
+    CT = TabT[SctPtr];
+    CS = TabS[SctPtr];
+
+    //Copy second block of custom drive code plugin to disk
+    for (int i = 0; i < CustomCodeSize - 256; i++)
+    {
+        int j = 0 - i;
+        if (j < 0)
+            j += 256;
+        Disk[Track[CT] + (CS * 256) + j] = EORtransform(CustomCode[256 + i]);
+    }
+
+    //Mark sector off in BAM
+    DeleteBit(CT, CS);
+
+    return true;
+
+}
+
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
 bool InjectSaverPlugin()
 {
     if (HSFile.size() == 0)
@@ -5205,7 +5280,7 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
     else
     {
 #endif // TESTDISK
-        if (bSaverPlugin)
+        if ((bSaverPlugin) || (bCustomCodePlugin))
         {
             Drive[(3 * 256) + ZPIncPluginLoc] = 2;
         }
@@ -5259,6 +5334,13 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
             //Add "IncludeSaveCode" flag and Saver plugin
             Disk[BAM + 249] = EORtransform(2);
             if (!InjectSaverPlugin())
+                return false;
+        }
+        if (bCustomCodePlugin)
+        {
+            //Add "IncludeCustomCode" flag and Saver plugin
+            Disk[BAM + 249] = EORtransform(2);
+            if (!InjectCustomCodePlugin())
                 return false;
         }
         else
@@ -6183,15 +6265,14 @@ bool Build()
                 {
                     if (ScriptEntryArray[0] !="")
                     {
-                        if (AddHSFile() == false)
+                        if (!AddHSFile())
                             return false;
                     }
                 }
 
                 NewBundle = true;
             }
-#ifdef TESTDISK
-            else if (ScriptEntryType == EntryTypeTestDisk)
+            else if (ScriptEntryType == EntryTypePlugin)
             {
                 if (!NewD)
                 {
@@ -6199,11 +6280,35 @@ bool Build()
                     if ((!FinishDisk(false)) || (!ResetDiskVariables()))
                         return false;
                 }
-
-                bTestDisk = true;
-                NewBundle = true;
+                if (NumScriptEntries > -1)
+                {
+                    string PluginParam = "";
+                    for (size_t Pos = 0; Pos < ScriptEntryArray[0].length(); Pos++)
+                    {
+                        if (ScriptEntryArray[0].at(Pos) != ' ') //Skip spaces
+                        {
+                            PluginParam += tolower(ScriptEntryArray[0].at(Pos));
+                        }
+                    }
+                    
+                    if ((PluginParam == "cdc") || (PluginParam == "custom") || (PluginParam == "customdrivecode"))
+                    {
+                        bCustomCodePlugin = true;
+                    }
+                    else if (PluginParam == "saver")
+                    {
+                        //not used ATM, save plugin is avved via HSFile
+                    }
+#ifdef TESTDISK
+                    else if ((PluginParam == "testdisk") || (PluginParam == "test"))
+                    {
+                        bTestDisk = true;
+                    }
+#endif //TESTDISK
                 }
-#endif // TESTDISK
+
+                NewBundle = true;
+            }
             else if (ScriptEntryType == EntryTypeScript)
             {
                 if (!InsertScript(ScriptEntryArray[0]))

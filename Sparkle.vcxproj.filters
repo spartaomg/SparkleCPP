@@ -54,6 +54,9 @@
     <ClCompile Include="pixelcnttab.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="sc.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="common.h">

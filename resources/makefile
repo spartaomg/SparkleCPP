@@ -42,13 +42,6 @@ resources\sf.prg: resources\sf.asm resources\sd.sym
 	$(KICKASS) resources\sf.asm -o resources\sf.prg
 
 
-#st.cpp: resources\st.prg
-#	$(B2A) resources\st.prg 2 0 st.cpp
-
-#resources\st.prg: resources\st.asm resources\sd.sym
-#	$(KICKASS) resources\st.asm -o resources\st.prg
-
-
 sc.cpp: resources\sc.prg
 	$(B2A) resources\sc.prg 2 0 sc.cpp
 
@@ -68,3 +61,10 @@ ssio.cpp: resources\ssio.prg
 
 resources\ssio.prg: resources\ss.asm  resources\sd.sym resources\sl.sym
 	$(KICKASS) resources\ss.asm -o resources\ssio.prg  :io=true
+
+
+#st.cpp: resources\st.prg
+#	$(B2A) resources\st.prg 2 0 st.cpp
+
+#resources\st.prg: resources\st.asm resources\sd.sym
+#	$(KICKASS) resources\st.asm -o resources\st.prg
