@@ -86,15 +86,17 @@ SC_ChgJmp:	ldy #<SC_BlockDone-<SC_ChgJmp	//2 19	<-----------------------|
 //----------------------------
 
 SC_BlockDone:
-			lda #busy						//2	20
+			lda #<SC_RcvLoop-<SC_ChgJmp		//2 20 Restore Receive loop
+			sta SC_JmpRcv+1					//4 24
+
+			lda #$f8						//2	26
+
+			inc To+2						//6 32
+			dec Bits						//5 37
+			bne SC_RcvLoop					//3 40 (+26 cycles)
+
 			sta $dd00						//4	24
 
-			lda #<SC_RcvLoop-<SC_ChgJmp		//2 26 Restore Receive loop
-			sta SC_JmpRcv+1					//4 30
-
-			inc To+2						//6 36
-			dec Bits						//5 41
-			bne SC_ReceiveNextBlock			//3 44 (+26 cycles)
 SC_ReceiveDone:
 			rts
 
@@ -145,8 +147,8 @@ SC_SendDone:
 #import "SD.sym"					//Import labels from SD.asm
 
 SC_DriveStart:
-			ldx #$ff
-			txs
+			//ldx #$ff
+			//txs
 			jsr SC_NewByte			//Number of Sparkle drive blocks to be sent
 			beq SC_SkipSend
 
@@ -161,14 +163,14 @@ SC_SkipSend:
 
 			sei
 
-			lda #$7a
-			sta $1802
+			//lda #$7a
+			//sta $1802
 			lda #busy
 			sta $1800
 
 			jsr SC_NewByte
 			beq SC_DriveDone		//Sparkle drive code is not being sent back
-			bmi SC_DriveReset
+			//bmi SC_DriveReset
 
 //----------------------------------
 //		Retrieve Drive Blocks from C64
@@ -176,13 +178,12 @@ SC_SkipSend:
 
 SC_RcvDriveBlocks:
 			sta NumDriveBlocks
-			ldy #$00
 RcvDLoop:	jsr SC_NewByte
 			ldx #$09				//Drive code blocks must be EOR-transformed
 			axs #$00
 			eor EorTab,x
-RcvDTo:		sta $0000,y
-			iny
+RcvDTo:		sta.a $0000
+			inc RcvDTo+1
 			bne RcvDLoop
 			lda RcvDTo+2
 			bne *+4
@@ -231,6 +232,7 @@ SC_NewByte:
 			ldx #$95				//Wait for C64 to signal transfer complete (%10010101)
 			cpx $1800
 			bne *-3
+			tax
 			rts
 
 //----------------------------------------------------------------------------------------------------------------------------------------------
@@ -276,12 +278,21 @@ DLoop:		lda $0000,y				//4	11	33
 			bcs DLoop				//2	7	6
 
 			lda DLoop+2				//4		10
-			beq *+4					//2		12
-			adc #$02				//2		14
+			bne *+4					//2		12
+			lda #$02				//2		14
 			adc #$01				//2		16
 			sta DLoop+2				//4		20
 			dec NumDriveBlocks		//6		26
 			bne DLoop				//3		29
+
+			lda #busy			//16,17 		A=#$10
+			bit $1800			//18,19,20,21 	Last bitpair received by C64?
+			bmi *-3				//22,23
+			sta $1800			//24,25,26,27	Transfer finished, send Busy Signal to C64
+			
+			bit $1800			//Make sure C64 pulls ATN before continuing
+			bpl *-3				//Without this the next ATN check may fall through
+
 			rts
 
 //----------------------------------
@@ -290,10 +301,9 @@ DLoop:		lda $0000,y				//4	11	33
 
 SC_RcvCodeBlocks:
 			sta NumCodeBlocks
-			ldy #$00
 RcvCLoop:	jsr SC_NewByte
-RcvCTo:		sta $0000,y
-			iny
+RcvCTo:		sta.a $0000
+			inc RcvCTo+1
 			bne RcvCLoop
 			lda RcvCTo+2
 			bne *+4
