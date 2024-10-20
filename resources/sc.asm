@@ -159,6 +159,13 @@ SC_SkipSend:
 
 			jsr $0200				//Start custom drive code
 
+			sei
+
+			lda #$7a
+			sta $1802
+			lda #busy
+			sta $1800
+
 			jsr SC_NewByte
 			beq SC_DriveDone		//Sparkle drive code is not being sent back
 			bmi SC_DriveReset
@@ -226,6 +233,10 @@ SC_NewByte:
 			bne *-3
 			rts
 
+//----------------------------------------------------------------------------------------------------------------------------------------------
+//		Everything below this line can be overwritten after custom code was uploaded to drive
+//----------------------------------------------------------------------------------------------------------------------------------------------
+
 //----------------------------------
 //		Receive Code Blocks from C64
 //----------------------------------
@@ -248,7 +259,7 @@ RcvCTo:		sta $0000,y
 			rts
 
 //----------------------------------
-//		Send Blocks to C64
+//		Send Drive Blocks to C64
 //----------------------------------
 
 SC_SendDBlocks:
@@ -256,42 +267,42 @@ SC_SendDBlocks:
 			ldy #$00
 			ldx #$ef
 			lda #ready
-			sta $1800
+			sta $1800				//Signal to C64 - drive is reasy to send
 
-DLoop:		lda $0000,y		//4	11	33
-			bit $1800		//4	15	37
-			bmi *-3			//2	17	39 (C64 loop takes 44 cycles)
-			sax $1800		//4
+DLoop:		lda $0000,y				//4	11	33
+			bit $1800				//4	15	37
+			bmi *-3					//2	17	39 (C64 loop takes 44 cycles)
+			sax $1800				//4
 
-			iny				//2	6
-			asl				//2	8
-			ora #$10		//2	10
-			bit $1800		//4	14
-			bpl *-3			//2	16
-			sta $1800		//4
+			iny						//2	6
+			asl						//2	8
+			ora #$10				//2	10
+			bit $1800				//4	14
+			bpl *-3					//2	16
+			sta $1800				//4
 
-			ror				//2	6
-			asr #$f0		//2	8
-			bit $1800		//4	12
-			bmi *-3			//2	14
-			sta $1800		//4
+			ror						//2	6
+			asr #$f0				//2	8
+			bit $1800				//4	12
+			bmi *-3					//2	14
+			sta $1800				//4
 
-			lsr				//2	6
-			asr #$30		//2	8
-			cpy #$01		//2	10
-			bit $1800		//4	14
-			bpl *-3			//2	16
-			sta $1800		//4
+			lsr						//2	6
+			asr #$30				//2	8
+			cpy #$01				//2	10
+			bit $1800				//4	14
+			bpl *-3					//2	16
+			sta $1800				//4
 
-			bcs DLoop		//2	7	6
+			bcs DLoop				//2	7	6
 
-			lda DLoop+2		//4		10
-			beq *+4			//2		12
-			adc #$02		//2		14
-			adc #$01		//2		16
-			sta DLoop+2		//4		20
-			dec NumDriveBlocks	//6		26
-			bne DLoop		//3		29
+			lda DLoop+2				//4		10
+			beq *+4					//2		12
+			adc #$02				//2		14
+			adc #$01				//2		16
+			sta DLoop+2				//4		20
+			dec NumDriveBlocks		//6		26
+			bne DLoop				//3		29
 			rts
 }
 
