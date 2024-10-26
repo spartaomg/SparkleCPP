@@ -36,9 +36,9 @@ NumBlocks:
 
 SC_ReceiveBlocks:
 			stx To+2				//Hi Byte of destination address of blocks to be received
-			tay
-			jsr Sparkle_SendCmd		//Send number of blocks we want to receive (0-6)
-			tya
+			pha
+			jsr SC_Send_NTSC		//Send number of blocks we want to receive (0-6) and adjust loop for NTSC as needed
+			pla
 			beq SC_ReceiveDone		//0 blocks to be received - exit
 
 			sta Bits				//Save number of blocks to be received
@@ -51,14 +51,14 @@ SC_ReceiveNextBlock:
 			bvs *-3					//$dd00=#$cx - drive is busy, $0x - drive is ready	00,01	(BMI would also work)
 			sty $dd00				//Release ATN										02-05
 			dey						//													06-07
-			jsr Set01				//Waste a few cycles... (drive takes 16 cycles)		08-24 (minimum needed here is 06-15, 10 cycles, including DEX!!!)
+			jsr Set01				//Waste a few cycles... (drive takes 16 cycles)		08-24 (minimum needed here is 06-15, 10 cycles)
 
 //----------------------------------
 //		RECEIVE LOOP
 //----------------------------------
 
 SC_RcvLoop:
-			lda $dd00				//4		W1-W2 = 18 cycles							25-28
+SC_R1:		lda $dd00				//4		W1-W2 = 18 cycles							25-28
 			stx $dd00				//4 8	Y=#$08 -> ATN=1
 			lsr						//2 10
 			lsr						//2 12
@@ -66,7 +66,7 @@ SC_RcvLoop:
 			nop						//2 16
 			ldx #$c0				//2 (18)
 
-			ora $dd00				//4		W2-W3 = 16 cycles
+SC_R2:		ora $dd00				//4		W2-W3 = 16 cycles
 			stx $dd00				//4 8	Y=#$C0 -> ATN=0
 			lsr						//2 10
 			lsr						//2 12
@@ -74,14 +74,14 @@ SC_SpComp:	cpy #$ff				//2 14	Will be changed to #$ff in Spartan Step Delay
 			beq SC_ChgJmp			//2/3	16/17 whith branch -------------|
 SC_RcvCont:	ldx #$08				//2 (18/28) ATN=1						|
 									//										|
-			ora $dd00				//4		W3-W4 = 17 cycles				|
+SC_R3:		ora $dd00				//4		W3-W4 = 17 cycles				|
 			stx $dd00				//4 8	Y=#$08 -> ATN=1					|
 			lsr						//2 10									|
 			lsr						//2 12									| C=1 here
 			sta SC_LastBits+1		//4 16									|
 			lda #$c0				//2 (18)								|
 									//										|
-			and $dd00				//4		W4-W1 = 16 cycles				|
+SC_R4:		and $dd00				//4		W4-W1 = 16 cycles				|
 			sta $dd00				//4 8	A=#$X0 -> ATN=0					|
 SC_LastBits:ora #$00				//2 10									|
 			inx						//2 12									|
@@ -139,6 +139,28 @@ From:		lda $1000,y
 			dec NumBlocks
 			bne From
 SC_SendDone:
+			rts
+
+SC_Send_NTSC:
+			jsr Sparkle_SendCmd
+			ldy #$00
+			ldx #$02
+!:			tya
+			ora Read1,x
+			sta SC_R1,x
+			tya
+			ora Read2,x
+			sta SC_R2,x
+			tya
+			ora Read3,x
+			sta SC_R3,x
+			tya
+			ora Read4,x
+			sta SC_R4,x
+			dex
+			bne *+4
+			ldy #$04
+			bpl !-
 			rts
 
 .eval myFile.writeln(".const Sparkle_RcvDrvCode		=$" + toHexString(SC_ReceiveBlocks) + "	//Receive Sparkle drive code (A = number of blocks, X = destination address high byte)")
