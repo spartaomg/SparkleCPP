@@ -215,22 +215,23 @@ Cmd:
 
 .byte	'M','-','E',$05,$02			//-0204 Command buffer: $0200-$0228
 
-			ldx #$08				//-0206
-			lda #$12				//-0208 Track 18
-			ldy #$0f				//-020a Sectors 15,14,13,12,11
-			sta $06,x				//-020c
-			sty $07,x				//-020e
-			dey						//-020f
-			dex						//-0210
-			dex						//-0211
-			bpl *-7					//-0213
-			lda #$04				//-0215 Load 5 blocks to buffers 04,03..00
-			sta $f9					//-0217 Buffer Pointer
-			jsr $d586				//-021a Read Block into Buffer in Buffer Pointer 
-			dec $f9					//-021c Decrease Buffer Pointer
-			bpl *-5					//-021e
-			jmp $0700				//-0221 Execute Drive Code, X=#$00 after loading all 5 blocks (last buffer No=0) 
-									// 7 bytes free here
+			jsr $d00e				//-0207	read BAM, this will reinit ZP pointers if the drive got reset before RUN
+			ldx #$08				//-0209
+			lda #$12				//-020b Track 18
+			ldy #$0f				//-020d Sectors 15,14,13,12,11
+			sta $06,x				//-020f
+			sty $07,x				//-0211
+			dey						//-0212
+			dex						//-0213
+			dex						//-0214
+			bpl *-7					//-0216
+			lda #$04				//-0218 Load 5 blocks to buffers 04,03..00
+			sta $f9					//-021a Buffer Pointer
+			jsr $d586				//-021d Read Block into Buffer in Buffer Pointer 
+			dec $f9					//-021f Decrease Buffer Pointer
+			bpl *-5					//-0221
+			jmp $0700				//-0224 Execute Drive Code, X=#$00 after loading all 5 blocks (last buffer No=0) 
+									// 4 bytes free here
 CmdEnd:
 
 //----------------------------
