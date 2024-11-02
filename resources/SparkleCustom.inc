@@ -1,7 +1,8 @@
 //--------------------------------------------
-//	Sparkle custom drive code addresses	
-//	KickAss format		
+//	Sparkle custom drive code addresses
+//	KickAss format
 //--------------------------------------------
+
 #importonce
 
 .const Sparkle_RcvDrvCode		=$302	//Receive Sparkle drive code (A = number of blocks, X = destination address high byte)

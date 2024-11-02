@@ -10,7 +10,7 @@
 
 .const busy			=$f8		//DO NOT CHANGE IT TO #$FF!!!
 .const ready		=$08		//AO=1, CO=0, DO=0 on C64 -> $1800=#90
-.const sendbyte		=$18		//AO-1, CO=1, DO=0 on C64 -> $1800=$94
+.label sendbyte		=$18		//AO-1, CO=1, DO=0 on C64 -> $1800=$94
 .const drivebusy	=$12		//AA=1, CO=0, DO=1 on Drive
 
 .const Buffer		=$0300
@@ -334,7 +334,7 @@ Read2:		ora $dd00				//4		W2-W3 = 16 cycles
 			lsr						//2 10
 			lsr						//2 12
 SpComp:		cpx #Sp					//2 14	Will be changed to #$ff in Spartan Step Delay
-			beq ChgJmp				//2/3	16/17 whith branch -------------|
+			beq ChgJmp				//2/3	16/17 with branch --------------|
 RcvCont:	ldy #$08				//2 (18/28) ATN=1						|
 									//										|
 Read3:		ora $dd00				//4		W3-W4 = 17 cycles				|

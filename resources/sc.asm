@@ -1,20 +1,29 @@
 //TAB=4
-//----------------------------
+
+//----------------------------------
 //	SPARKLE
 //	Custom Drive Code Plugin
-//	C64 CODE
-//----------------------------
+//----------------------------------
 //	Version history
 //
 //	v1.0 	- initial version
 //
-//----------------------------
+//----------------------------------
+
+//----------------------------------
+//	SPARKLE
+//	Custom Drive Code Plugin
+//	C64 CODE
+//----------------------------------
+
+.const buslock	= $f8
 
 .var myFile = createFile("SparkleCustom.inc")
 .eval myFile.writeln("//--------------------------------------------")
-.eval myFile.writeln("//	Sparkle custom drive code addresses	")
-.eval myFile.writeln("//	KickAss format		")
+.eval myFile.writeln("//	Sparkle custom drive code addresses")
+.eval myFile.writeln("//	KickAss format")
 .eval myFile.writeln("//--------------------------------------------")
+.eval myFile.writeln("")
 .eval myFile.writeln("#importonce")
 .eval myFile.writeln("")
 
@@ -37,7 +46,7 @@ NumBlocks:
 SC_ReceiveBlocks:
 			stx To+2				//Hi Byte of destination address of blocks to be received
 			pha
-			jsr SC_Send_NTSC		//Send number of blocks we want to receive (0-6) and adjust loop for NTSC as needed
+			jsr SC_Send_NTSC		//Send number of blocks we want to receive (0-6) AND adjust loop for NTSC as needed
 			pla
 			beq SC_ReceiveDone		//0 blocks to be received - exit
 
@@ -51,44 +60,44 @@ SC_ReceiveNextBlock:
 			bvs *-3					//$dd00=#$cx - drive is busy, $0x - drive is ready	00,01	(BMI would also work)
 			sty $dd00				//Release ATN										02-05
 			dey						//													06-07
-			jsr Set01				//Waste a few cycles... (drive takes 16 cycles)		08-24 (minimum needed here is 06-15, 10 cycles)
+			jsr SC_Set01			//Waste a few cycles... (drive takes 16 cycles)		08-24 (minimum needed here is 06-15, 10 cycles)
 
 //----------------------------------
 //		RECEIVE LOOP
 //----------------------------------
 
 SC_RcvLoop:
-SC_R1:		lda $dd00				//4		W1-W2 = 18 cycles							25-28
-			stx $dd00				//4 8	Y=#$08 -> ATN=1
+SC_R1:		lda $dd00				//4
+			stx $dd00				//4 8	X=#$08 -> ATN=1
 			lsr						//2 10
 			lsr						//2 12
 			iny						//2 14
 			nop						//2 16
 			ldx #$c0				//2 (18)
 
-SC_R2:		ora $dd00				//4		W2-W3 = 16 cycles
-			stx $dd00				//4 8	Y=#$C0 -> ATN=0
+SC_R2:		ora $dd00				//4
+			stx $dd00				//4 8	X=#$C0 -> ATN=0
 			lsr						//2 10
 			lsr						//2 12
-SC_SpComp:	cpy #$ff				//2 14	Will be changed to #$ff in Spartan Step Delay
-			beq SC_ChgJmp			//2/3	16/17 whith branch -------------|
+SC_SpComp:	cpy #$ff				//2 14
+			beq SC_ChgJmp			//2/3 16/17 with branch ----------------|
 SC_RcvCont:	ldx #$08				//2 (18/28) ATN=1						|
 									//										|
-SC_R3:		ora $dd00				//4		W3-W4 = 17 cycles				|
-			stx $dd00				//4 8	Y=#$08 -> ATN=1					|
+SC_R3:		ora $dd00				//4										|
+			stx $dd00				//4 8	X=#$08 -> ATN=1					|
 			lsr						//2 10									|
-			lsr						//2 12									| C=1 here
+			lsr						//2 12									|
 			sta SC_LastBits+1		//4 16									|
 			lda #$c0				//2 (18)								|
 									//										|
-SC_R4:		and $dd00				//4		W4-W1 = 16 cycles				|
+SC_R4:		and $dd00				//4										|
 			sta $dd00				//4 8	A=#$X0 -> ATN=0					|
 SC_LastBits:ora #$00				//2 10									|
 			inx						//2 12									|
 			axs #$00				//2 14									|
 			eor EorTab,x			//4 18									|
 To:			sta $1000,y				//5 23									|
-			ldx #$08				//2	25
+			ldx #$08				//2	25									|
 SC_JmpRcv:	bvc SC_RcvLoop			//3 (28/27)								|
 									//										|
 //----------------------------												|
@@ -103,7 +112,7 @@ SC_BlockDone:
 			lda #<SC_RcvLoop-<SC_ChgJmp		//2 29 Restore Receive Loop
 			sta SC_JmpRcv+1					//4 33
 
-			lda #$f8						//2 35
+			lda #buslock					//2 35
 
 			inc To+2						//6 41
 			dec Bits						//5 46
@@ -115,7 +124,12 @@ SC_ReceiveDone:
 			rts
 
 EorTab:
-.byte $7f,$76,$00,$00,$00,$00,$00,$00,$76,$7f
+.byte $7f,$76
+SC_Set01:	lda #$35
+			sta $01
+			rts
+			nop
+.byte $76,$7f
 
 //----------------------------------
 //		Send Code Blocks
@@ -126,13 +140,13 @@ EorTab:
 SC_SendBlocks:
 			stx From+2
 			tay
-			jsr Sparkle_SendCmd		//Number of blocks to be sent (max. 7: ZP + $0200-$07ff)
+			jsr SC_Sparkle_SendCmd		//Number of blocks to be sent (max. 7: ZP + $0200-$07ff)
 			tya
 			beq SC_SendDone
 			sta NumBlocks
 			ldy #$00
 From:		lda $1000,y
-			jsr Sparkle_SendCmd
+			jsr SC_Sparkle_SendCmd
 			iny
 			bne From
 			inc From+2
@@ -142,7 +156,7 @@ SC_SendDone:
 			rts
 
 SC_Send_NTSC:
-			jsr Sparkle_SendCmd
+			jsr SC_Sparkle_SendCmd
 			ldy #$00
 			ldx #$02
 !:			tya
@@ -161,6 +175,27 @@ SC_Send_NTSC:
 			bne *+4
 			ldy #$04
 			bpl !-
+			rts
+
+SC_Sparkle_SendCmd:
+			sta Bits
+			jsr SC_Set01
+			ldx #sendbyte
+			stx $dd00
+			bit $dd00
+			bmi *-3
+			
+SC_BitSLoop:
+			adc #$e7
+			sax $dd00
+			and #$10
+			eor #$10
+			ror Bits
+			bne SC_BitSLoop
+
+			lda #buslock
+			sta $dd00
+
 			rts
 
 .eval myFile.writeln(".const Sparkle_RcvDrvCode		=$" + toHexString(SC_ReceiveBlocks) + "	//Receive Sparkle drive code (A = number of blocks, X = destination address high byte)")
@@ -249,24 +284,24 @@ SC_StartCode:
 
 			sei
 
-			//lda #$ee			//Read mode, Set Overflow enabled
-			//sta $1c0c			//could use JSR $fe00 here...
+			//lda #$ee				//Read mode, Set Overflow enabled
+			//sta $1c0c				//could use JSR $fe00 here...
 
 			lda #$7a
 			sta $1802
 			lda #busy
 			sta $1800
 
-			//lda #$01			//Shift register disabled, Port A ($1c01) latching enabled, Port B ($1c00) latching disabled
+			//lda #$01				//Shift register disabled, Port A ($1c01) latching enabled, Port B ($1c00) latching disabled
 			//sta $1c0b
 
-			//lda #$00			//Clear VIA #2 Timer 1 low byte
+			//lda #$00				//Clear VIA #2 Timer 1 low byte
 			//sta $1c04
 
-			lda #$7f			//Disable all interrupts
+			lda #$7f				//Disable all interrupts
 			sta $180e
 			sta $1c0e
-			lda $180d			//Acknowledge all pending interrupts
+			lda $180d				//Acknowledge all pending interrupts
 			lda $1c0d
 
 			jsr SC_NewByte
