@@ -215,7 +215,7 @@ Cmd:
 
 .byte	'M','-','E',$05,$02			//-0204 Command buffer: $0200-$0228
 
-			jsr $d00e				//-0207	read BAM, this will reinit ZP pointers if the drive got reset before RUN
+			jsr $d00e				//-0207	read BAM, this will restore disk ID ZP variables in case the drive got reset/turned off&on before RUN
 			ldx #$08				//-0209
 			lda #$12				//-020b Track 18
 			ldy #$0f				//-020d Sectors 15,14,13,12,11

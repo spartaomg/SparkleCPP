@@ -215,7 +215,7 @@ SC_BitSLoop:
 
 //----------------------------------
 //	SPARKLE
-//	Custom drive Code Plugin
+//	Custom Drive Code Plugin
 //	DRIVE CODE
 //----------------------------------
 
@@ -230,33 +230,62 @@ SC_DriveStart:
 			jmp NumBlocks: SC_SendRcv
 
 //----------------------------------
+//		Restore Sparkle's drive code
+//----------------------------------
+
+SC_Restore:
+			sei
+
+			lda #$ee				//Read mode, Set Overflow enabled
+			sta $1c0c
+
+			lda #$7a
+			sta $1802
+			lda #busy
+			sta $1800
+
+			lda #$7f				//Disable all interrupts
+			sta $180e
+			sta $1c0e
+			lda $180d				//Acknowledge all pending interrupts
+			lda $1c0d
+
+			jsr SC_NewByte
+			tax
+			beq SC_DriveDone		//Sparkle drive code is not being sent back
+			bmi SC_DriveReset
+			jsr SC_RcvBlocks
+SC_DriveDone:
+			jmp CheckATN			//Back to Sparkle
+SC_DriveReset:
+			jmp ($fffc)
+
+//----------------------------------
 //		Retrieve Drive Blocks from C64
 //----------------------------------
 
 SC_RcvBlocks:
 			sta NumBlocks
+			bpl SC_DcrCtr			//Always
 RcvLoop:	jsr SC_NewByte
-RcvTo:		sta.a $0000
+RcvTo:		sta.a $0200
 			inc RcvTo+1
 			bne RcvLoop
-			ldx RcvTo+2
-			bne *+4
-AddX:		ldx #$01				//Skip $0100-$02ff (stack/buffer [this page] and secondary buffer)
-			inx
-			stx RcvTo+2
-			dec NumBlocks
-			bne RcvLoop
-			lda #$00
+			inc RcvTo+2
+SC_DcrCtr:	dec NumBlocks
+			bne !+
+			lda #$00				//Last block (if NumBlocks > 0) always goes to ZP
 			sta RcvTo+2
-			inc AddX+1
+!:			bpl RcvLoop
+			lda #$03				//Update the Receive Loop to start at $0300 for retreiving Sparkle's drive code
+			sta RcvTo+2
 			rts
 
 //----------------------------------
 //		Receive a byte
 //----------------------------------
 
-SC_NewByte:
-			ldx #$94				//Make sure C64 is ready to send (%10010100)
+SC_NewByte:	ldx #$94				//Make sure C64 is ready to send (%10010100)
 			cpx $1800
 			bne *-3
 
@@ -276,66 +305,32 @@ SC_NewByte:
 			ldx #$95				//Wait for C64 to signal transfer complete (%10010101)
 			cpx $1800
 			bne *-3
-			tax						//To set Z
 			rts
-
-SC_StartCode:
-			jsr $0200				//Start custom drive code
-
-			sei
-
-			//lda #$ee				//Read mode, Set Overflow enabled
-			//sta $1c0c				//could use JSR $fe00 here...
-
-			lda #$7a
-			sta $1802
-			lda #busy
-			sta $1800
-
-			//lda #$01				//Shift register disabled, Port A ($1c01) latching enabled, Port B ($1c00) latching disabled
-			//sta $1c0b
-
-			//lda #$00				//Clear VIA #2 Timer 1 low byte
-			//sta $1c04
-
-			lda #$7f				//Disable all interrupts
-			sta $180e
-			sta $1c0e
-			lda $180d				//Acknowledge all pending interrupts
-			lda $1c0d
-
-			jsr SC_NewByte
-			beq SC_DriveDone		//Sparkle drive code is not being sent back
-			bmi SC_DriveReset
-			jsr SC_RcvBlocks
-SC_DriveDone:
-			jmp CheckATN			//Back to Sparkle
-SC_DriveReset:
-			jmp ($fffc)
-
-//NumBlocks:
-//.byte $00
 
 //----------------------------------------------------------------------------------------------------------------------------------------------
 //		Everything below this line can be overwritten after custom code was uploaded to drive
 //----------------------------------------------------------------------------------------------------------------------------------------------
 
 SC_SendRcv:	jsr SC_NewByte			//Number of Sparkle drive blocks to be sent
+			tax
 			beq SC_SkipSend
 
 //----------------------------------
 //		Send Drive Blocks to C64
 //----------------------------------
 
-			sta NumBlocks
-			ldy #$00
+			dex
+			stx NumBlocks			//convert counter from 1-base to 0-base
+			bne	!+
+			stx DLoop+2
+!:			ldy #$00
 			ldx #$ef
 			lda #ready
-			sta $1800				//Signal to C64 - drive is reasy to send
+			sta $1800				//Signal to C64 - drive is ready to send
 
-DLoop:		lda $0000,y				//4	11	33
+DLoop:		lda $0300,y				//4	11	33
 			bit $1800				//4	15	37
-			bmi *-3					//2	17	39 (C64 loop takes 44 cycles)
+			bmi *-3					//2	17	39
 			sax $1800				//4
 
 			iny						//2	6
@@ -360,13 +355,12 @@ DLoop:		lda $0000,y				//4	11	33
 
 			bcs DLoop				//2	7	6
 
-			lda DLoop+2				//4		10
-			bne *+4					//2		12
-			lda #$02				//2		14
-			adc #$01				//2		16
-			sta DLoop+2				//4		20
-			dec NumBlocks			//6		26
-			bne DLoop				//3		29
+			inc DLoop+2				//6		12
+			dec NumBlocks			//6		18
+			bne !+					//3/2	21/20
+			lda #$00				//0/2	21/22
+			sta DLoop+2				//0/4	21/26
+!:			bpl DLoop				//3		24/29
 
 			lda #busy				//16,17 		A=#$10
 			bit $1800				//18,19,20,21 	Last bitpair received by C64?
@@ -377,9 +371,23 @@ DLoop:		lda $0000,y				//4	11	33
 			bpl *-3					//Without this the next ATN check may fall through
 SC_SkipSend:
 			jsr SC_NewByte
-			beq SC_DriveDone		//If nothing to receive -> we are done, back to Sparkle
+			tax
+			beq SC_DriveDone2		//If nothing to receive -> we are done, back to Sparkle
 			
 			jsr SC_RcvBlocks		//Receive drive code blocks from C64 (ZP + $0200-$07ff)
-			jmp SC_StartCode
+
+//----------------------------------
+//		Execute custom drive code
+//----------------------------------
+
+	        lda #>(SC_Restore-1)
+		    pha
+			lda #<(SC_Restore-1)
+	        pha
+
+			jmp $0200				//Start custom drive code, if stack remains untouched then RTS will return to SC_Restore
+SC_DriveDone2:
+			jmp CheckATN			//Back to Sparkle
+
 }
 }
