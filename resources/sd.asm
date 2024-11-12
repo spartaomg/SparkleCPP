@@ -1119,7 +1119,21 @@ EndOfDriveCode:
 //		Initialization	//$0700
 //--------------------------------------
 
-CodeStart:	sei
+CodeStart:	ldx #$06
+			lda #$12			//Track 18
+			ldy #$0e			//Sectors 14,13,12,11
+!:			sta $06,x
+			sty $07,x
+			dey
+			dex
+			dex
+			bpl !-
+			dec $f9				//Buffer pointer, it was #$04 before dec
+!:			jsr $d586			//Load 4 blocks to buffers 03,02,01,00
+			dec $f9
+			bpl !-
+
+			sei
 
 //--------------------------------------
 //		Copy ZP code and tabs
@@ -1136,8 +1150,9 @@ ZPCopyLoop:	lda ZPTab,x			//Copy Tables C, E, F and GCR Loop from $0600 to ZP
 			lda #$ee			//Read mode, Set Overflow enabled
 			sta $1c0c			//could use JSR $fe00 here...
 
-								//Turn motor on and LED off
-			lda #$d6			//1    1    0    1    0*   1*   1    0	We always start on Track 18, this is the default value
+			lda $1c00			//Turn motor and LED on, set bitrate.
+			and #$93
+			ora #$4c			//1    1*   0*   1    1*   1*   1    0
 			sta $1c00			//SYNC BITR BITR WRTP LED  MOTR STEP STEP
 
 			lda #$7a

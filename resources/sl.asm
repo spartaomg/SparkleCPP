@@ -214,8 +214,25 @@ Cmd:
 //Load all 5 drive code blocks into buffers 0-4 at $300-$7ff on drive in one command
 
 .byte	'M','-','E',$05,$02			//-0204 Command buffer: $0200-$0228
+		
+			jsr $d00e				//-0207	read BAM, this will restore disk ID ZP variables after drive reset/powercycle/DMA load before RUN
+			ldx #$10				//-0209 move head down and back up 2 tracks to align stepper bits after reset/powercycle
+			stx $0e					//-020b	track 16
+			dex						//-020d
+			stx $0f					//-020e sector 15
+			lda #$04				//-0210
+			sta $f9					//-0212
+!:			lda #$b0				//-0214 instead of jsr $d03d, for jiffydos compatibility
+			jsr $d58c				//-0217	seek 2 tracks down to initialize stepper bits
+			lda $18					//-0219 header block: track
+			cmp $0e					//-021b	are we on the requested track?
+			bne !-					//-021d
+			lda #$12				//-021f
+			sta $0e					//-0221 strack 18
+			jsr $d586				//-0224
+			jmp $0700				//-0227
 
-			jsr $d00e				//-0207	read BAM, this will restore disk ID ZP variables in case the drive got reset/turned off&on before RUN
+/*			jsr $d00e				//-0207	read BAM, this will restore disk ID ZP variables in case the drive got reset/turned off&on before RUN
 			ldx #$08				//-0209
 			lda #$12				//-020b Track 18
 			ldy #$0f				//-020d Sectors 15,14,13,12,11
@@ -231,7 +248,7 @@ Cmd:
 			dec $f9					//-021f Decrease Buffer Pointer
 			bpl *-5					//-0221
 			jmp $0700				//-0224 Execute Drive Code, X=#$00 after loading all 5 blocks (last buffer No=0) 
-									// 4 bytes free here
+*/									// 4 bytes free here
 CmdEnd:
 
 //----------------------------

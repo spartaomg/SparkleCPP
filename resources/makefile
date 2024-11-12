@@ -45,7 +45,7 @@ resources\sf.prg: resources\sf.asm resources\sd.sym
 sc.cpp: resources\sc.prg
 	$(B2A) resources\sc.prg 2 0 sc.cpp
 
-resources\ss.prg: resources\sc.asm resources\sd.sym resources\sl.sym
+resources\sc.prg: resources\sc.asm resources\sd.sym resources\sl.sym
 	$(KICKASS) resources\sc.asm -o resources\sc.prg
 
 
