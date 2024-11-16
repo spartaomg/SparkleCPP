@@ -9,12 +9,14 @@ ifeq ($(OS),Windows_NT)
 	DIR_OBJ = obj/windows
 	EXEC = $(DIR_BIN)/Sparkle.exe
 	LINKFLAGS = -static -static-libgcc -static-libstdc++ -s -std=c++17 -o
+	#LINKFLAGS = -std=c++17 -o
 else
 	UNAME = $(shell uname)
 	ifeq ($(UNAME),Linux)
 		DIR_BIN = bin/linux
 		DIR_OBJ = obj/linux
 		LINKFLAGS = -static -static-libgcc -static-libstdc++ -s -std=c++17 -o
+		#LINKFLAGS = -std=c++17 -o
 	endif
 	ifeq ($(UNAME),Darwin)
 		DIR_BIN = bin/macos

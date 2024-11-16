@@ -214,42 +214,25 @@ Cmd:
 //Load all 5 drive code blocks into buffers 0-4 at $300-$7ff on drive in one command
 
 .byte	'M','-','E',$05,$02			//-0204 Command buffer: $0200-$0228
-		
-			jsr $d00e				//-0207	read BAM, this will restore disk ID ZP variables after drive reset/powercycle/DMA load before RUN
-			ldx #$10				//-0209 move head down and back up 2 tracks to align stepper bits after reset/powercycle
-			stx $0e					//-020b	track 16
-			dex						//-020d
-			stx $0f					//-020e sector 15
-			lda #$04				//-0210
-			sta $f9					//-0212
-!:			lda #$b0				//-0214 instead of jsr $d03d, for jiffydos compatibility
-			jsr $d58c				//-0217	seek 2 tracks down to initialize stepper bits
-			lda $18					//-0219 header block: track
-			cmp $0e					//-021b	are we on the requested track?
-			bne !-					//-021d
-			lda #$12				//-021f
-			sta $0e					//-0221 strack 18
-			jsr $d586				//-0224
-			jmp $0700				//-0227
 
-/*			jsr $d00e				//-0207	read BAM, this will restore disk ID ZP variables in case the drive got reset/turned off&on before RUN
-			ldx #$08				//-0209
-			lda #$12				//-020b Track 18
-			ldy #$0f				//-020d Sectors 15,14,13,12,11
-			sta $06,x				//-020f
-			sty $07,x				//-0211
-			dey						//-0212
-			dex						//-0213
-			dex						//-0214
-			bpl *-7					//-0216
-			lda #$04				//-0218 Load 5 blocks to buffers 04,03..00
-			sta $f9					//-021a Buffer Pointer
-			jsr $d586				//-021d Read Block into Buffer in Buffer Pointer 
-			dec $f9					//-021f Decrease Buffer Pointer
-			bpl *-5					//-0221
-			jmp $0700				//-0224 Execute Drive Code, X=#$00 after loading all 5 blocks (last buffer No=0) 
-*/									// 4 bytes free here
+			// we are on track 18 (normal load) | track 1 (Ultimate DMA load) | track 18 +/- 1 (after reset/powercycle between LOAD and RUN)
+			
+			jsr $d00e				//-0207 read BAM, this will initialize ZP variables (disk ID, current track) without moving R/W head...
+			ldx #$10				//-0209 ...after DMA load or drive reset/powercycle between LOAD and RUN
+			stx $0e					//-020b 
+			dex						//-020c
+			stx $0f					//-020e track 16 sector 15
+			lda #$04				//-0210
+			sta $f9					//-0212 buffer #4
+			lda #$b0				//-0214
+			jsr $d58c				//-0217 seek, to align stepper bits
+			ldx #$12				//-0219
+			stx $0e					//-021b back to track 18
+			jsr $d586				//-021e load track 18 sector 15 to buffer #4
+			jmp $0700				//-0221
 CmdEnd:
+
+//-----------------------------------------------------------------------------------
 
 //----------------------------
 //	C64 RESIDENT CODE
@@ -264,7 +247,7 @@ LoaderCode:
 
 //----------------------------
 //		FALLBACK IRQ
-//		Address: $02e5
+//		Address: $0160
 //----------------------------
 
 Sparkle_IRQ:
@@ -315,6 +298,8 @@ BusLock:	lda #busy				//2 (A=#$f8) worst case, last bit is read by the drive on 
 			sta $dd00				//4 Bus lock
 
 			rts						//6
+
+//----------------------------
 
 Sparkle_LoadA:
 			jsr Sparkle_SendCmd
