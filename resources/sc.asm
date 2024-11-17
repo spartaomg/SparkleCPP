@@ -140,9 +140,9 @@ SC_Set01:	lda #$35
 SC_SendBlocks:
 			stx From+2
 			tay
-			jsr SC_Sparkle_SendCmd		//Number of blocks to be sent (max. 7: ZP + $0200-$07ff)
+			jsr SC_Sparkle_SendCmd		//Number of blocks to be sent (max. 7: $0200-$07ff + ZP)
 			tya
-			beq SC_SendDone
+			beq SC_SendDone				//0 blocks to be transferred, abort
 			sta NumBlocks
 			ldy #$00
 From:		lda $1000,y
@@ -154,6 +154,8 @@ From:		lda $1000,y
 			bne From
 SC_SendDone:
 			rts
+
+//----------------------------------
 
 SC_Send_NTSC:
 			jsr SC_Sparkle_SendCmd
@@ -177,6 +179,8 @@ SC_Send_NTSC:
 			bpl !-
 			rts
 
+//----------------------------------
+
 SC_Sparkle_SendCmd:
 			sta Bits
 			jsr SC_Set01
@@ -197,6 +201,8 @@ SC_BitSLoop:
 			sta $dd00
 
 			rts
+
+//----------------------------------
 
 .eval myFile.writeln(".const Sparkle_RcvDrvCode		=$" + toHexString(SC_ReceiveBlocks) + "	//Receive Sparkle drive code (A = number of blocks, X = destination address high byte)")
 .eval myFile.writeln(".const Sparkle_SendDrvCode		=$" + toHexString(SC_SendBlocks) + "	//Send drive code (A = number of blocks, X = source address high byte)")
