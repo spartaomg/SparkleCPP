@@ -204,8 +204,8 @@ SC_BitSLoop:
 
 //----------------------------------
 
-.eval myFile.writeln(".const Sparkle_RcvDrvCode		=$" + toHexString(SC_ReceiveBlocks) + "	//Receive Sparkle drive code (A = number of blocks, X = destination address high byte)")
-.eval myFile.writeln(".const Sparkle_SendDrvCode		=$" + toHexString(SC_SendBlocks) + "	//Send drive code (A = number of blocks, X = source address high byte)")
+.eval myFile.writeln(".const Sparkle_RcvDrvCode		=$" + toHexString(SC_ReceiveBlocks) + "	//Receive Sparkle drive code (A = number of pages, X = destination address high byte)")
+.eval myFile.writeln(".const Sparkle_SendDrvCode		=$" + toHexString(SC_SendBlocks) + "	//Send drive code (A = number of pages, X = source address high byte)")
 
 .print "Sparkle_RcvDrvCode:	" + toHexString(SC_ReceiveBlocks)
 .print "Sparkle_SendDrvCode:	" + toHexString(SC_SendBlocks)
@@ -232,8 +232,15 @@ SC_BitSLoop:
 {
 #import "SD.sym"					//Import labels from SD.asm
 
+.const NumBlocks = $0102
+
 SC_DriveStart:
-			jmp NumBlocks: SC_SendRcv
+
+//----------------------------------
+//		Skip restore code at start
+//----------------------------------
+
+			jmp SC_SendRcv
 
 //----------------------------------
 //		Restore Sparkle's drive code
@@ -242,8 +249,10 @@ SC_DriveStart:
 SC_Restore:
 			sei
 
-			lda #$ee				//Read mode, Set Overflow enabled
-			sta $1c0c
+			ldx #$ee				//Read mode, Set Overflow enabled
+			stx $1c0c
+
+			txs						//Make sure stack pointer is outside restore code
 
 			lda #$7a
 			sta $1802
@@ -259,10 +268,7 @@ SC_Restore:
 			jsr SC_NewByte
 			tax
 			beq SC_DriveDone		//Sparkle drive code is not being sent back
-			bmi SC_DriveReset
-			jsr SC_RcvBlocks
-SC_DriveDone:
-			jmp CheckATN			//Back to Sparkle
+			bpl SC_RestoreSpakle
 SC_DriveReset:
 			jmp ($fffc)
 
@@ -274,7 +280,7 @@ SC_RcvBlocks:
 			sta NumBlocks
 			bpl SC_DcrCtr			//Always
 RcvLoop:	jsr SC_NewByte
-RcvTo:		sta.a $0200
+RcvTo:		sta $0200
 			inc RcvTo+1
 			bne RcvLoop
 			inc RcvTo+2
@@ -313,6 +319,15 @@ SC_NewByte:	ldx #$94				//Make sure C64 is ready to send (%10010100)
 			bne *-3
 			rts
 
+//----------------------------------
+//		Restore Sparkle
+//----------------------------------
+
+SC_RestoreSpakle:
+			jsr SC_RcvBlocks
+SC_DriveDone:
+			jmp CheckATN			//Back to Sparkle
+
 //----------------------------------------------------------------------------------------------------------------------------------------------
 //		Everything below this line can be overwritten after custom code was uploaded to drive
 //----------------------------------------------------------------------------------------------------------------------------------------------
@@ -326,7 +341,7 @@ SC_SendRcv:	jsr SC_NewByte			//Number of Sparkle drive blocks to be sent
 //----------------------------------
 
 			dex
-			stx NumBlocks			//convert counter from 1-base to 0-base
+			stx NumBlocks			//Convert counter from 1-base to 0-base
 			bne	!+
 			stx DLoop+2
 !:			ldy #$00
@@ -378,7 +393,7 @@ DLoop:		lda $0300,y				//4	11	33
 SC_SkipSend:
 			jsr SC_NewByte
 			tax
-			beq SC_DriveDone2		//If nothing to receive -> we are done, back to Sparkle
+			beq SC_DriveDone		//If nothing to receive -> we are done, back to Sparkle
 			
 			jsr SC_RcvBlocks		//Receive drive code blocks from C64 (ZP + $0200-$07ff)
 
@@ -386,14 +401,12 @@ SC_SkipSend:
 //		Execute custom drive code
 //----------------------------------
 
-	        lda #>(SC_Restore-1)
+	        pla						//Stack pointer adjustment
+			lda #>(SC_Restore-1)
 		    pha
 			lda #<(SC_Restore-1)
-	        pha
+	        pha						//SP = $ff after this
 
 			jmp $0200				//Start custom drive code, if stack remains untouched then RTS will return to SC_Restore
-SC_DriveDone2:
-			jmp CheckATN			//Back to Sparkle
-
 }
 }
