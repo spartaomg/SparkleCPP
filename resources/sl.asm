@@ -218,18 +218,20 @@ Cmd:
 			// we are on track 18 (normal load) | track 1 (Ultimate DMA load) | track 18 +/- 1 (after reset/powercycle between LOAD and RUN)
 			
 			jsr $d00e				//-0207 read BAM, this will initialize ZP variables (disk ID, current track) without moving R/W head...
-			ldx #$10				//-0209 ...after DMA load or drive reset/powercycle between LOAD and RUN
-			stx $0e					//-020b 
-			dex						//-020c
-			stx $0f					//-020e track 16 sector 15
-			lda #$04				//-0210
-			sta $f9					//-0212 buffer #4
-			lda #$b0				//-0214
-			jsr $d58c				//-0217 seek, to align stepper bits
-			ldx #$12				//-0219
-			stx $0e					//-021b back to track 18
-			jsr $d586				//-021e load track 18 sector 15 to buffer #4
-			jmp $0700				//-0221
+			lax $18					//-0209
+			eor #$02				//-020b -> track 16 (normal load), track 3 (Ultimate DMA load), track 16-19 (after reset)
+			and #$1f				//-020d	avoid tracks 32+ in any case...
+			sta	$0e					//-020f	move head 2 tracks (or more if we were on track 32+)
+			lda #$0f				//-0211
+			sta $0f					//-0213 track +/- 2 sector 15
+			lda #$04				//-0215
+			sta $f9					//-0217 buffer #4
+			lda #$b0				//-0219
+			jsr $d58c				//-021c seek, to align stepper bits
+			ldx #$12				//-021e
+			stx $0e					//-0220 back to track 18
+			jsr $d586				//-0223 load track 18 sector 15 to buffer #4
+			jmp $0700				//-0226
 CmdEnd:
 
 //-----------------------------------------------------------------------------------

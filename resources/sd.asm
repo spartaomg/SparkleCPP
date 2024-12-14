@@ -1191,6 +1191,9 @@ CCLoop:		pla					//=lda $0100,y
 			sta ToCD+2
 			tya					//A=#$00 - Bundle #$00 to be loaded
 			jmp CheckDir		//Load 1st Dir Sector and then first Bundle, Y=A=#$00
+
+.text "SPARKLE 3.1 BY OMG"
+
 CD:
 }
 
