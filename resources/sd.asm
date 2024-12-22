@@ -223,7 +223,7 @@
 .label DO			=$02
 .label CO			=$08
 .label AA			=$10
-.label busy			=AA			//DO=0,CO=0,AA=1	$1800=#$10	dd00=010010xx (#$4b)
+.label busy			=AA			//DO=0,CO=0,AA=1	$1800=#$10	dd00=010010xx (#$43)
 .label ready		=CO			//DO=0,CO=1,AA=0	$1800=#$08	dd00=100000xx (#$83)
 
 .label Sp			=$52		//Spartan Stepping constant (=82*72=5904=$1710=$17 bycles delay)
@@ -1128,8 +1128,10 @@ CodeStart:	ldx #$06
 			dex
 			dex
 			bpl !-
-			dec $f9				//Buffer pointer, it was #$04 before dec
+			dec $f9				//Buffer pointer, it was #$04 before DEC
 !:			jsr $d586			//Load 4 blocks to buffers 03,02,01,00
+			and #$fe
+			bne !-				//Error? -> try again
 			dec $f9
 			bpl !-
 
@@ -1139,7 +1141,7 @@ CodeStart:	ldx #$06
 //		Copy ZP code and tabs
 //--------------------------------------
 
-			ldx #$00			//Technically, this is not needed - X=$00 after loading all 5 blocks
+			ldx #$00
 ZPCopyLoop:	lda ZPTab,x			//Copy Tables C, E, F and GCR Loop from $0600 to ZP
 			sta $00,x
 			inx
@@ -1158,7 +1160,7 @@ ZPCopyLoop:	lda ZPTab,x			//Copy Tables C, E, F and GCR Loop from $0600 to ZP
 			lda #$7a
 			sta $1802			//0  1  1  1  1  0  1  0  Set these 1800 bits to OUT (they read back as 0)
 			lda #busy
-			sta $1800			//0  0  0  1  0  0  1  0  CO=0, DO=1, AA=1 This reads as #$43 on $dd00
+			sta $1800			//0  0  0  1  0  0  0  0  CO=0, DO=1, AA=1 This reads as #$43 on $dd00
 								//AI|DN|DN|AA|CO|CI|DO|DI This also signals that the drive code has been installed
 
 .if (VerifSctHdrs)

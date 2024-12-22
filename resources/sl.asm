@@ -174,15 +174,15 @@ NTSCLoop:	sta Read1,x
 SkipNTSC:
 //----------------------------------
 
-			lda #<Sparkle_IRQ_RTI	//Install NMI vector
-			sta $fffa
-			lda #>Sparkle_IRQ_RTI
-			sta $fffb
+			//lda #<Sparkle_IRQ_RTI	//Install NMI vector
+			//sta $fffa
+			//lda #>Sparkle_IRQ_RTI
+			//sta $fffb
 
 			lda #busy				//=#$f8
 			bit $dd00				//Wait for "drive busy" signal (DI=0 CI=1 dd00=#$4b)
 			bmi *-3
-			sta $dd00				//lock bus
+			sta $dd00				//Lock bus
 
 			//First loader call, returns with I=1
 
@@ -214,24 +214,23 @@ Cmd:
 //Load all 5 drive code blocks into buffers 0-4 at $300-$7ff on drive in one command
 
 .byte	'M','-','E',$05,$02			//-0204 Command buffer: $0200-$0228
-
-			// we are on track 18 (normal load) | track 1 (Ultimate DMA load) | track 18 +/- 1 (after reset/powercycle between LOAD and RUN)
 			
-			jsr $d00e				//-0207 read BAM, this will initialize ZP variables (disk ID, current track) without moving R/W head...
-			lda $18					//-0209 ...after DMA load or drive reset/powercycle between LOAD and RUN
-			eor #$02				//-020b -> track 16 (normal load), track 3 (Ultimate DMA load), track 16-19 (after reset)
-			and #$1f				//-020d	avoid tracks 32+ in any case...
-			sta	$0e					//-020f	move head 2 tracks (or more if we were on track 32+)
-			lda #$0f				//-0211
-			sta $0f					//-0213 track +/- 2 sector 15
-			lda #$04				//-0215
-			sta $f9					//-0217 buffer #4
-			lda #$b0				//-0219
-			jsr $d58c				//-021c seek, to align stepper bits
-			lda #$12				//-021e
-			sta $0e					//-0220 back to track 18
-			jsr $d586				//-0223 load track 18 sector 15 to buffer #4
-			jmp $0700				//-0226
+!:			jsr $c647				//-0207 always start on track 18 by loading BAM - this will also initialize ZP variables (disk ID, current track)...
+			bne !-					//-0209 if error then try again
+			lda #$04				//-020b
+			sta $f9					//-020d buffer #4
+			ldx #$0f				//-020f
+			stx $81					//-0211
+			inx						//-0212
+			jsr $d038				//-0215 find track 16 sector 15, to make sure stepper bits are aligned
+			and #$fe				//-0217
+			bne !-					//-0219 if error then start over
+			lda #$12				//-021b
+			sta $0e					//-021d success, back to track 18
+!:			jsr $d586				//-0220 load track 18 sector 15 (init code) to buffer #4
+			and #$fe				//-0222
+			bne !-					//-0224 if error then try block again
+			jmp $0700				//-0227
 CmdEnd:
 
 //-----------------------------------------------------------------------------------
