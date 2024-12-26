@@ -243,6 +243,7 @@
     <None Include="makefile" />
     <None Include="Resources\Ascii2DirArt.bin" />
     <None Include="Resources\Petscii2DirArt.bin" />
+    <None Include="resources\sc.asm" />
     <None Include="Resources\sd.asm" />
     <None Include="resources\sf.asm" />
     <None Include="Resources\sl.asm" />

@@ -25,6 +25,8 @@
 //
 //	v1.6	- adjusting drive code to new 16-bit packer flags
 //
+//	v1.7	- optimized GCR encoding
+//
 //----------------------------
 //	BLOCK STRUCTURE
 //
@@ -272,7 +274,7 @@ Start:
 
 NextBlock:
 		ldy #$02					//Reset BufLoc Hi Byte
-		sty BufLoc+2
+		sty BufLoc+2				//Doing this here saves a byte
 		dey							//Find and mark next wanted sector on track, Y=#$01 (=block count)
 		ldx nS						//We only use track 35/40 for this purpose ATM, so no need for track change 
 		jsr Build					//Mark next wanted sector on wanted list
@@ -283,7 +285,7 @@ NextBlock:
 //--------------------------------------
 
 GetByteLoop:
-		jsr NewByte					//Receive 1 block from C64, 1 byte at a time
+		jsr NewByte					//Receive 1 block from C64
 
 ByteBfr:
 		sta $0700					//And save it to buffer, overwriting internal directory
@@ -386,7 +388,7 @@ RcvCheck:
 //		Saving done, restore loader
 //--------------------------------------
 
-		stx DirSector				//Reset DirSector to ensure next index-based load reloads the directory
+		stx DirSector				//Reset DirSector to ensure next (index-based) load reloads the directory
 		lda #<FetchJmp
 		sta ReFetch+1				//Restore ReFetch vector
 		jmp CheckATN
@@ -397,7 +399,9 @@ RcvCheck:
 
 NewByte:
 		ldx #$94					//Make sure C64 is ready to send (%10010100)
-		jsr CheckPort
+		cpx $1800					//jsr CheckPort
+		bne *-3
+
 		lda #$80					//$dd00=#$9b, $1800=#$94
 		ldx #busy					//=#$10 (AA=1, CO=0, DO=0)
 		jsr RcvByte					//OK to use stack here
@@ -438,20 +442,21 @@ GCREncode:
 		lsr
 		lsr
 		lsr
-		jsr GCRize					//Convert high nibble to 5-bit GCR code first
+		jsr GetGCR					//Convert high nibble to 5-bit GCR code first
 		pla							//Then low nibble next
 		and #$0f
-GCRize:
+GetGCR:
 		tay
-		lda $f77f,y					//GCR codes in the drive's ROM
-		asl
-		asl
-		asl							//move 5 GCR bits to the left side of byte
+		lda GCRTab,y				//Saves 6 cycles per nibble
+		//lda $f77f,y				//GCR codes in the drive's ROM
+		//asl
+		//asl
+		//asl						//move 5 GCR bits to the left side of byte
 		ldy #$05					//bitcounter for GCR codes
 NextBit:
 		asl
 BufLoc:
-		rol $02bb					//NEEDS TO BE RESET AT THE BEGINNING!!!
+		rol $02bb					//ADDRESS LOW BYTE NEEDS TO BE RESET AT THE BEGINNING!!!
 		dex
 		bpl SkipNext
 		ldx #$07
@@ -462,5 +467,10 @@ SkipNext:
 		dey
 		bne NextBit
 		rts							//A=00 and Y=00 here
+
+//--------------------------------------
+
+GCRTab:
+.byte $0a*8,$0b*8,$12*8,$13*8,$0e*8,$0f*8,$16*8,$17*8,$09*8,$19*8,$1a*8,$1b*8,$0d*8,$1d*8,$1e*8,$15*8
 }
 }

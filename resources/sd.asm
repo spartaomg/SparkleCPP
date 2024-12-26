@@ -149,8 +149,8 @@
 //
 //	v20	- adding sector header check to checksum verification
 //
-//	v21	- track check in header code
-//		  Sparkle will correct the track if the R/W head stops on the wrong track
+//	v21	- track check in header verification code
+//		  if the R/W head lands on the wrong track, then Sparkle will correct it
 //
 //----------------------------------------------------------------------------------------
 //	Memory Layout
@@ -415,7 +415,7 @@ CorrTrack:	sec					//a7
 			sty StepDir			//bc bd	Store stepper direction UP/INWARD (Y=#$01) or DOWN/OUTWARD (Y=#$03)
 SkipStepDn:	asl					//be	Y=#$01 is not stored - it is the default value which is restored after every step
 			tay					//bf	Y=Number of half-track changes
-			jsr StepTmr			//c0-c2	Move head to track and update bitrate (also stores new Track number to cT and calculates SCtr)
+			jsr StepTmr			//c0-c2	Move head to track and update bitrate (also stores new Track number to cT and calculates SCtr but doesn't store it)
 
 //--------------------------------------
 //		Multi-track stepping
@@ -496,7 +496,7 @@ BneFetch:	bne Fetch			//0e 0f	Checksum mismatch -> fetch next sector header
 	.byte	$7a					//21   	TabG (NOP)
 	.byte	$5a					//22   	TabG (NOP)
 	.byte	$da					//23   	TabG (NOP)
-			bne CorrTrack		//24 25
+			bne CorrTrack		//24 25 Wrong track -> go to wanted track
 
 			lda (ZP0102),y		//26 27	$0103 - Sector
 			jsr ShufToRaw		//28-2a
@@ -505,11 +505,11 @@ BneFetch:	bne Fetch			//0e 0f	Checksum mismatch -> fetch next sector header
 			tay					//2d
 
 			ldx VerifCtr		//2e 2f
-			inx					//30
-	.byte	$6a					//31	TabG (ROR)
+			nop #$6a			//30 31 SKIPPING TabG VALUE (ROR)
 	.byte 	$4a					//32	TabG (LSR)
-	.byte	$ca					//33	TabG (DEX)
-			bne FetchData		//34 35	Always fetch sector data if we are verifying the checksum
+	.byte	$ca					//33	TabG (DEX) (X: #$07 -> #$06, #$03 -> #$02, #$01 -> #$00, #$00 -> #$ff)
+			bpl FetchData		//34 35	Always fetch sector data if we are verifying the checksum
+
 			ldx WList,y			//36 37	Otherwise, only fetch sector data if this is a wanted sector
 BplFetch:	bpl Fetch			//38 39 Sector is not on wanted list -> fetch next sector header
 			bmi FetchData		//3a 3b	Sector is on wanted list, save sector number and fetch data
@@ -526,8 +526,10 @@ ProdIDLoop:	lda (ZPIncSav),y	//42 43	Also compare Product ID, only continue if s
 			bne BneFetch		//46 47	Product ID mismatch, fetch again until same
 			dey					//48
 			bne ProdIDLoop		//49 4a
+
 			lda (ZPIncSav),y	//4b 4c	Value (#$00 vs. #$02) indicates whether Saver Code is included on this disk side
 			sta IncSaver		//4d 4e
+
 			ldy #$05			//4f 50
 	.byte	$ba					//51	TabG (TSX) (X=#$00)
 	.byte	$8a					//52	TabG (TXA) (A=#$00)
@@ -551,7 +553,7 @@ CopyBAM:	lda (ZP0101),y		//56 57	= LDA $0101,y
 Track18:	cpx #$10			//64 65	Drive Code Block 3 (Sector 16) or Dir Block (Sectors 17-18)?
 			bcs ToCD			//66 67
 			lda NextID			//68 69	Side is done, check if there is a next side
-			bpl FlipDtct		//6a 6b	//bmi ToReset		//49 4a	Disk ID = #$00 - #$7f, if NextID > #$7f -> no more disks -> reset drive 
+			bpl FlipDtct		//6a 6b
 
 			jmp ($fffc)			//6c-6e
 
@@ -605,7 +607,7 @@ TBF2:		bne ToBneFetch		//Checksum mismatch, fetch header again
 RegBlockRet:
 			ldx cS				//Current Sector in Buffer
 			lda cT
-			cmp #$12			//If this is Track 18 then we are fetching Block 3 or a Dir Block or checking Flip Info
+			cmp #$12			//If this is Track 18 then we are fetching Block 3 of the drive code or a Dir Block or checking Flip Info
 			beq Track18			//We are on Track 18
 
 //--------------------------------------
@@ -863,11 +865,8 @@ DelayIn:	lda $1c05
 			
 ChkLines:	lda $1800
 			bpl Reset			//ATN released - C64 got reset, reset the drive too
-			//lsr					//A=#$00/#$02 after this, if C=1 then no change
-			alr #$05			//A=#$00/#$02 after this, if C=1 then no change
+			alr #$05			//if C=1 then no change, A=#$00/#$02 after this
 			bcs DelayIn
-			//lda $1800
-			//and #$04
 								//C=0, file requested
 Restart:	stx $1c00			//Restart Motor and turn LED on if they were turned off
 			beq SeqLoad			//A=#$00 - sequential load
@@ -1173,10 +1172,10 @@ ZPCopyLoop:	lda ZPTab,x			//Copy Tables C, E, F and GCR Loop from $0600 to ZP
 			lda #$00			//Clear VIA #2 Timer 1 low byte
 			sta $1c04
 
-			lda #$7f			//Disable all interrupts
+			lda #$7f			//Disable interrupts
 			sta $180e
 			sta $1c0e
-			lda $180d			//Acknowledge all pending interrupts
+			lda $180d			//Acknowledge pending interrupts
 			lda $1c0d
 
 			jmp Fetch			//Fetching block 3 (track 18, sector 16) WList+$10=#$ff, WantedCtr=1

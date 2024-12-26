@@ -259,10 +259,10 @@ SC_Restore:
 			lda #busy
 			sta $1800
 
-			lda #$7f				//Disable all interrupts
+			lda #$7f				//Disable interrupts
 			sta $180e
 			sta $1c0e
-			lda $180d				//Acknowledge all pending interrupts
+			lda $180d				//Acknowledge pending interrupts
 			lda $1c0d
 
 			jsr SC_NewByte
