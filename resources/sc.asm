@@ -57,7 +57,7 @@ SC_ReceiveNextBlock:
 			ldx #ready				//2 X=#$08, Y=#$00
 			stx $dd00				//4 Clear CO and DO to signal Ready-To-Receive
 			bit $dd00				//Wait for Drive
-			bvs *-3					//$dd00=#$cx - drive is busy, $0x - drive is ready	00,01	(BMI would also work)
+			bvs *-3					//$dd00=#$cx - drive is busy, $0x - drive is ready	00,01 (BMI would also work)
 			sty $dd00				//Release ATN										02-05
 			dey						//													06-07
 			jsr SC_Set01			//Waste a few cycles... (drive takes 16 cycles)		08-24 (minimum needed here is 06-15, 10 cycles)
