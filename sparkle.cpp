@@ -1,8 +1,8 @@
 #include "common.h"
 
-//#define TESTDISK
-
 //#define DEBUG
+
+//#define TESTDISK
 
 //#define NEWIO
 
@@ -1650,7 +1650,7 @@ bool SplitScriptEntry()
         return true;    //This is an Align entry, rest of the script entry is ignored (it has no parameters)
     }
 
-    //Find beginning of first script entry parameter - here both space and tAB are allowed
+    //Find beginning of first script entry parameter - here both space and TAB are allowed
     while (Pos < ScriptEntry.length())
     {
         ThisChar = ScriptEntry[Pos];
@@ -1751,8 +1751,6 @@ bool SplitScriptEntry()
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-//----------------------------------------------------------------------------------------------------------------------------------------------------------
-
 bool FindNextScriptEntry()
 {
     while ((LineEnd = Script.find("\n", LineStart)) == LineStart)
@@ -1849,6 +1847,11 @@ bool InsertScript(string& SubScriptPath)
             if ((ScriptEntryType == EntryTypeFile) || (ScriptEntryType == EntryTypeMem) || (ScriptEntryType == EntryTypeHSFile))
             {
                 ScriptEntryArray[0] = FindAbsolutePath(ScriptEntryArray[0], sPath);
+
+                if (UncompressedFile)
+                {
+                    ScriptEntryArray[0] = "{" + ScriptEntryArray[0] + "}";
+                }
 
                 Lines[i] = ScriptEntryType + "\t" + ScriptEntryArray[0];
 
@@ -6467,7 +6470,7 @@ void SetScriptPath(string sPath, string aPath)
 
 void PrintInfo()
 {
-    cout << "USAGE: sparkle script.sls\n\n";
+    cout << "USAGE: sparkle script.sls [-p a/e]\n\n";
     cout << "SCRIPT TEMPLATE:\n\n";
     //cout << "[Sparkle Loader Script]\n\n";
     cout << "Path:\t\tfilepath/diskname.d64\t\t\t\t\t<< path and file name of the D64 image <- THIS IS A COMMENT\n";
@@ -6492,7 +6495,7 @@ void PrintInfo()
     cout << "DirIndex:\tab\t\t\t\t\t\t\t<< 01-7f (hex), if used, then only bundles with dir index will be added to the internal directory!!!\n";
     cout << "File:\t\tfilepath/file1.kla\tabcd\t\t\t\t<< (address) (default offset) (default length)\n";
     cout << "File:\t\tfilepath/file2.bin\tabcd\tabcdabcd\t\t<< (address) (offset) (default length)\n";
-    cout << "File:\t\tfilepath/file3.prg*\tabcd\tabcdabcd\tabcd\t<< (address) (offset) (length)\n\n";
+    cout << "File:\t\t\"filepath/file3.prg*\" abcd abcdabcd abcd << (address) (offset) (length) separated by space as file is in quotes\n\n";
     cout << "<< Bundle 2\n";
     cout << "Script:\t\tfilepath/scriptfile.sls\t\t\t\t\t<< this will import another script here...\n\n";
     cout << "<< Entries can be fully omitted if they are not needed or their default value is used.\n";
@@ -6567,7 +6570,7 @@ int main(int argc, char* argv[])
 
 #ifdef DEBUG
 
-        string ScriptFileName = "c:/Users/Tamas/source/repos/X2024/Parts/MCKefrens/MCKefrens.sls";   //"c:/Sparkle3/Example/Sparkle3.sls";
+        string ScriptFileName = "c:/Sparkle3/Example/Sparkle3.sls";
         Script = ReadFileToString(ScriptFileName, true);
         SetScriptPath(ScriptFileName, AppPath);
 
@@ -6608,7 +6611,7 @@ int main(int argc, char* argv[])
 
             SetScriptPath(ScriptFileName, AppPath);
         }
-        else if ((args[i] == "-p") || (args[i] == "-P"))        //output file base name
+        else if ((args[i] == "-p") || (args[i] == "-P"))
         {
             if (i + 1 < argc)
             {
@@ -6616,7 +6619,7 @@ int main(int argc, char* argv[])
 
                 if (OptionPause.length() != 1)
                 {
-                    cerr << "***CRITICAL***\tUnrecognized -p [pause on exit] parameter: " << OptionPause << "\n";
+                    cerr << "***CRITICAL***\tUnrecognized -p (pause on exit) parameter value: " << OptionPause << "\n";
                     cerr << "-p accepts a (always) or e (on error) for value.\n";
                     OptionPause = "e";
                     ErrorPause();
@@ -6627,7 +6630,7 @@ int main(int argc, char* argv[])
                 
                 if ((OptionPause != "a") && (OptionPause != "e"))
                 {
-                    cerr << "***CRITICAL***\tUnrecognized -p [pause on exit] parameter: " << OptionPause << "\n";
+                    cerr << "***CRITICAL***\tUnrecognized -p (pause on exit) parameter value: " << OptionPause << "\n";
                     cerr << "-p accepts a (always) or e (on error) for value.\n";
                     OptionPause = "e";
                     ErrorPause();
@@ -6636,7 +6639,7 @@ int main(int argc, char* argv[])
             }
             else
             {
-                cerr << "***CRITICAL***\tMissing -p [pause on exit] parameter.\n";
+                cerr << "***CRITICAL***\tMissing -p (pause on exit) parameter value.\n";
                 cerr << "-p accepts a (always) or e (on error) for value.\n";
                 OptionPause = "e";
                 ErrorPause();
