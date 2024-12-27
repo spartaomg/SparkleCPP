@@ -654,7 +654,7 @@ EndLoader:
 //.eval myFile.writeln(".const Sparkle_RestoreIRQ	=$" + toHexString(Sparkle_RestoreIRQ) + "	//Restores fallback IRQ without changing subroutine vector (A=raster line)")
 .eval myFile.writeln(".const Sparkle_IRQ		=$" + toHexString(Sparkle_IRQ) + "	//Fallback IRQ vector")
 .eval myFile.writeln(".const Sparkle_IRQ_JSR		=$" + toHexString(Sparkle_IRQ_JSR) + "	//Fallback IRQ subroutine/music player JSR instruction")
-.eval myFile.writeln(".const Sparkle_IRQ_RTI		=$" + toHexString(Sparkle_IRQ_RTI) + "	//Fallback IRQ RTI instruction, used as NMI vector")
+.eval myFile.writeln(".const Sparkle_IRQ_RTI		=$" + toHexString(Sparkle_IRQ_RTI) + "	//Fallback IRQ RTI instruction")
 .eval myFile.writeln(".const Sparkle_Save		=$302	//Hi-score file saver (A=#$01-#$0f, high byte of file size, A=#$00 to abort), only if hi-score file is included on disk")
 
 .print "Sparkle_SendCmd:	" + toHexString(Sparkle_SendCmd)
