@@ -434,7 +434,7 @@ FT:
 Fetch:
 FetchHeader:
 			ldy #<HeaderJmp		//ce cf	Checksum verification after GCR loop will jump to Header Code
-			nop #$d2			//d0 d1 TabD (CMP izy)
+			nop #$d2			//d0 d1 Skipping TabD value $d2 (CMP izy)
 FetchSHeader:
 			lda #$52			//d2 d3	First 8 bits of Header ID (01010010)
 			ldx #$04			//d4 d5	4 bytes to stack
@@ -445,36 +445,35 @@ FetchSHeader:
 			
 FetchData:	ldy #<DataJmp		//dc dd	Checksum verification after GCR loop will jump to Data Code
 			lda #$55			//de df	First 8 bits of Data ID (01010101)
-			ldx #$00			//e0 e1 256 bytes to stack
-			txs					//e2	Data: $0100,$01ff..$0101
-			ldx #$c0			//e3 e4 Last 2 bits of Data ID (11|000000)
-
-Presync:	sty.z ModJmp+1		//e5 e6	Update Jump Address
-			bne !+				//e7 e8
-	.byte	$dc					//e9	TabD (NOP ABS,X)
-!:			ldy #$00			//ea eb
-			stx AXS+1			//ec-ee
-			beq !+				//ef f0
+//--------------------------------------
+//		NOT NEEDED, WE ALWAYS COME HERE AFTER HEADER CHECK SO SP = $00 HERE
+//
+//			//ldx #$00			//e0 e1 256 bytes to stack
+//			//txs				//e2	Data: $0100,$01ff..$0101
+//--------------------------------------
+			ldx #$c0			//e0 e1 Last 2 bits of Data ID (11|000000)
+Presync:	sty.z ModJmp+1		//e2 e3	Update Jump Address
+			ldy #$00			//e4 e5
+			sty.z CSum+1		//e6 e7 Reset checksum
+			nop #$dc			//e8 e9 Skipping TabD value $dc (NOP ABS,X)
+			stx AXS+1			//ea-ec
+			ldx #$c0			//ed ee
+			bne !+				//ef f0
 	.byte	$d6					//f1	TabD (DEC ZP,X)
-!:			sty.z CSum+1		//f2 f3 Reset checksum
-			sta (ZP0102),y		//f4 f5	Any value would do in A as long as $0102 and $0103 are the same
-			sta (ZP0103),y		//f6 f7
-			ldx #$c0			//f8 f9
+!:			sta (ZP0102),y		//f2 f3	Any value would do in A as long as $0102 and $0103 are the same
+			sta (ZP0103),y		//f4 f5
 
-Sync:		bit $1c00			//fa-fc	Wait for sync mark
-			bmi *-3				//fd fe
-			nop $1c01			//ff-01	Sync byte - MUST be read (VICE bug #582), not necessarily #$ff
-			clv					//02	likely the last byte on the latch
+Sync:		bit $1c00			//f6-f8	Wait for sync mark
+			bmi *-3				//f9 fa
+			nop $1c01			//fb-fd	Sync byte - MUST be read (VICE bug #582), not necessarily #$ff
+			clv					//fe	likely the last byte on the latch
 
 								//Addr |Cycles
-			bvc *				//03 04|00-01
-			cmp $1c01			//05-07|05	*Read1 = AAAAABBB  ->	01010|010(01) for Header
-			clv					//08   |07							01010|101(11) for Data
-			beq ReadTwo			//09 0a|10
-
-//--------------------------------------
-
-ReFetch:	jmp (FetchJmp)		//0b-0d|..	Wrong block type, refetch everything, vector is modified from SS!!!
+			bvc *				//ff 00|00-01
+			cmp $1c01			//01-03|05	*Read1 = AAAAABBB  ->	01010|010(01) for Header
+			clv					//04   |07							01010|101(11) for Data
+			beq ReadTwo			//05 06|10
+ReFetch:	jmp (FetchJmp)		//07-09	Wrong block type, refetch everything, vector is modified from SS!!!
 
 //--------------------------------------
 //		Got Header
@@ -482,59 +481,69 @@ ReFetch:	jmp (FetchJmp)		//0b-0d|..	Wrong block type, refetch everything, vector
 //042c
 HD:
 Header:
-BneFetch:	bne Fetch			//0e 0f	Checksum mismatch -> fetch next sector header
-			tay					//10	Y=#$00
-	.byte	$fa					//11	TabG (NOP)
-			nop #$ea			//12 13	TabG (NOP) 
-			iny					//14	Y=#$01
-			lda (ZP0101),y		//15 16	$0102 - Track
-			jsr ShufToRaw		//17-19
-			ldx cT				//1a 1b
-			sta cT				//1c 1d
-			txa					//1e
-			cmp cT				//1f 20
-	.byte	$7a					//21   	TabG (NOP)
+BneFetch:	bne Fetch			//0a 0b	Checksum mismatch -> fetch next sector header
+			ldy VerifCtr		//0c 0d
+			bne FetchData		//0e 0f	Always fetch sector data if we are verifying the schecksum
+			nop #$fa			//10 11	Y=#$00 //.byte	$fa					//11	TabG (NOP)
+			iny					//12	Y=#$01 - needed for BNE CorrTrack!!!
+	.byte	$ea					//13	TabG (NOP) 
+
+			lda (ZP0101),y		//14 15	$0102 - Track
+			jsr ShufToRaw		//16-18
+			ldx cT				//19 1a
+			sta cT				//1b 1c
+			txa					//1d
+			cmp cT				//1e 1f
+
+			nop #$7a			//20 21	Skipping TabG (NOP)	//	.byte	$7a					//21   	TabG (NOP)
 	.byte	$5a					//22   	TabG (NOP)
 	.byte	$da					//23   	TabG (NOP)
+
 			bne CorrTrack		//24 25 Wrong track -> go to wanted track
 
 			lda (ZP0102),y		//26 27	$0103 - Sector
 			jsr ShufToRaw		//28-2a
-			sta cS				//2b 2c
+			tay					//2b
 
-			tay					//2d
+			ldx WList,y			//2c 2d	Otherwise, only fetch sector data if this is a wanted sector
+BplFetch:	bpl Fetch			//2e 2f Sector is not on wanted list -> fetch next sector header
+			inx					//30	Compensating for DEX (Tab) below
 
-			ldx VerifCtr		//2e 2f
-			nop #$6a			//30 31 SKIPPING TabG VALUE (ROR)
-	.byte 	$4a					//32	TabG (LSR)
-	.byte	$ca					//33	TabG (DEX) (X: #$07 -> #$06, #$03 -> #$02, #$01 -> #$00, #$00 -> #$ff)
-			bpl FetchData		//34 35	Always fetch sector data if we are verifying the checksum
+	.byte	$6a					//31 	TabG (ROR) - no effect
+	.byte 	$4a					//32	TabG (LSR) - no effect
+	.byte	$ca					//33	TabG (DEX)
 
-			ldx WList,y			//36 37	Otherwise, only fetch sector data if this is a wanted sector
-BplFetch:	bpl Fetch			//38 39 Sector is not on wanted list -> fetch next sector header
-			bmi FetchData		//3a 3b	Sector is on wanted list, save sector number and fetch data
+			sty cS				//34 35	Only save current Sector if data will be fetched
+			bmi FetchData		//36 37	Sector is on wanted list, save sector number and fetch data
+
+//--------------------------------------	Will be changed to JMP CopyDir after Block 3 copied
+
+ToCD:		jmp CopyCode		//38-3a		Sector 15 (Block 3) - copy it from the Buffer to its place
 
 //--------------------------------------
 //		Flip Detection			//Y=#$00 and X=#$00 here
 //--------------------------------------
 
-FlipDtct:	cmp (ZP0101),y		//3c 3d	DiskID, compare it to NextID
-ToBneFetch:	bne BneFetch		//3e 3f ID mismatch, fetch again until flip detected
-			ldy #$03			//40 41
-ProdIDLoop:	lda (ZPIncSav),y	//42 43	Also compare Product ID, only continue if same ($0107 = BAMProdID-1)
-			cmp (ZPProdID),y	//44 45
-			bne BneFetch		//46 47	Product ID mismatch, fetch again until same
-			dey					//48
-			bne ProdIDLoop		//49 4a
+FlipDtct:	cmp (ZP0101),y		//3b 3c	DiskID, compare it to NextID
+ToBneFetch:	bne BneFetch		//3d 3e ID mismatch, fetch again until flip detected
+			ldy #$03			//3f 0f
+ProdIDLoop:	lda (ZPIncSav),y	//41 42	Also compare Product ID, only continue if same ($0107 = BAMProdID-1)
+			cmp (ZPProdID),y	//43 44
+			bne BneFetch		//45 46	Product ID mismatch, fetch again until same
+			dey					//47
+			bne ProdIDLoop		//48 49
 
-			lda (ZPIncSav),y	//4b 4c	Value (#$00 vs. #$02) indicates whether Saver Code is included on this disk side
-			sta IncSaver		//4d 4e
+			lda (ZPIncSav),y	//4a 4b	Value (#$00 vs. #$02) indicates whether Saver Code is included on this disk side
+			sta IncSaver		//4c 4d
 
-			ldy #$05			//4f 50
-	.byte	$ba					//51	TabG (TSX) (X=#$00)
+			ldy #$05			//4e 4f
+
+			nop #$ba			//50 51	Skipping TabG (TSX) (X=#$00)
 	.byte	$8a					//52	TabG (TXA) (A=#$00)
 	.byte	$aa					//53	TabG (TAX)
+
 			sty DirSector		//54 55	Invalid value to trigger reload of the directory of the new disk side
+
 CopyBAM:	lda (ZP0101),y		//56 57	= LDA $0101,y
 			sta (ZPILTab),y		//58 59	($0100=DiskID), $101=IL3R, $102=IL2R, $103=IL1R, $0104=NextID, $105=IL0R
 			dey					//5a		
@@ -574,15 +583,11 @@ AXS:		axs #$00			//76 77|11							11|CCCCC|D for Data
 			lda ZP7f			//81 82|26	Z=0, needed for BNE in GCR loop
 			jmp GCREntry		//83-85|29	Same cycle count as in GCR loop before BNE
 
-//--------------------------------------	Will be changed to JMP CopyDir after Block 3 copied
-
-ToCD:		jmp CopyCode		//86-88		Sector 15 (Block 3) - copy it from the Buffer to its place
-
 //--------------------------------------
 //		Got Data
 //--------------------------------------
 DT:
-Data:		ldx cT				//89 8a
+Data:		ldx cT				//86 87
 			cpx #$12
 			bcs SkipCSLoop  
 			ldx #$7e			//CSLoop takes 851 cycles (33 bytes passing under R/W head in zone 3)
