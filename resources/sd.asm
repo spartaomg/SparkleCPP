@@ -507,7 +507,7 @@ BneFetch:	bne Fetch			//0a 0b	Checksum mismatch -> fetch next sector header
 
 			ldx WList,y			//2c 2d	Otherwise, only fetch sector data if this is a wanted sector
 BplFetch:	bpl Fetch			//2e 2f Sector is not on wanted list -> fetch next sector header
-			inx					//30	Compensating for DEX (Tab) below
+			inx					//30	Compensating for DEX (TabG) below
 
 	.byte	$6a					//31 	TabG (ROR) - no effect
 	.byte 	$4a					//32	TabG (LSR) - no effect

@@ -5679,12 +5679,6 @@ void CalcTabs()
             }
         }
     }
-
-    //WriteBinaryFile("C:\\Tmp\\TabT.bin", TabT, sizeof(TabT));
-    //WriteBinaryFile("C:\\Tmp\\TabS.bin", TabS, sizeof(TabS));
-    //WriteBinaryFile("C:\\Tmp\\TabSCnt.bin", TabSCnt, sizeof(TabSCnt));
-    //WriteBinaryFile("C:\\Tmp\\TabStartS.bin", TabStartS, sizeof(TabStartS));
-
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
