@@ -7,7 +7,7 @@
 //#define NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR BUILD INFO 241228
+//  COMPILE TIME VARIABLES FOR BUILD INFO 250101
 //--------------------------------------------------------
 
 constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -1229,11 +1229,16 @@ bool AddHSFile()
                 FAN = (size_t)(HSFile[0] + HSFile[1] * 256);
                 FA = ConvertIntToHextString(FAN, 4);
                 int iFLN = ConvertHexStringToInt(FL) - ConvertHexStringToInt(FO) + 1;
+                if (iFLN <= 0)
+                {
+                    cerr << "***CRITICAL***\tInvalid memory segment start and/or end parameter(s) in the Hi-Score File entry: " << ScriptEntry << "\n";
+                    return false;
+                }
                 FL = ConvertIntToHextString(iFLN, 4);
                 int iFON = ConvertHexStringToInt(FO) + 2 - (int)FAN;
                 if ((iFON < 0) || ((size_t)iFON > HSFile.size() - 1))
                 {
-                    cerr << "***CRITICAL***\tInvalid memory segment start parameter in the following File entry: " << ScriptEntry << "\n";
+                    cerr << "***CRITICAL***\tInvalid memory segment start parameter in the Hi-ScoreFile entry: " << ScriptEntry << "\n";
                     return false;
                 }
                 FA = ScriptEntryArray[2];
@@ -2561,11 +2566,16 @@ bool AddVirtualFile()
                 FAN = (size_t)(P[0] + P[1] * 256);
                 FA = ConvertIntToHextString(FAN, 4);
                 int iFLN = ConvertHexStringToInt(FL) - ConvertHexStringToInt(FO) + 1;
+                if (iFLN <= 0)
+                {
+                    cerr << "***CRITICAL***\tInvalid memory segment start and/or end parameter(s) in the following Mem entry: " << ScriptEntry << "\n";
+                    return false;
+                }
                 FL = ConvertIntToHextString(iFLN, 4);
                 int iFON = ConvertHexStringToInt(FO) + 2 - (int)FAN;
                 if ((iFON < 0) || ((size_t)iFON > P.size() - 1))
                 {
-                    cerr << "***CRITICAL***\tInvalid memory segment start parameter in the following File entry: " << ScriptEntry << "\n";
+                    cerr << "***CRITICAL***\tInvalid memory segment start parameter in the following Mem entry: " << ScriptEntry << "\n";
                     return false;
                 }
                 FA = ScriptEntryArray[2];
@@ -2802,6 +2812,11 @@ bool AddFileToBundle()
                 FAN = (size_t)(P[0] + P[1] * 256);
                 FA = ConvertIntToHextString(FAN, 4);
                 int iFLN = ConvertHexStringToInt(FL) - ConvertHexStringToInt(FO) + 1;
+                if (iFLN <= 0)
+                {
+                    cerr << "***CRITICAL***\tInvalid memory segment start and/or end parameter(s) in the following File entry: " << ScriptEntry << "\n";
+                    return false;
+                }
                 FL = ConvertIntToHextString(iFLN, 4);
                 int iFON = ConvertHexStringToInt(FO) + 2 - (int)FAN;
                 if ((iFON < 0) || ((size_t)iFON > P.size() - 1))
