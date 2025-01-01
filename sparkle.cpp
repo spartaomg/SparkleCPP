@@ -1238,7 +1238,7 @@ bool AddHSFile()
                 int iFON = ConvertHexStringToInt(FO) + 2 - (int)FAN;
                 if ((iFON < 0) || ((size_t)iFON > HSFile.size() - 1))
                 {
-                    cerr << "***CRITICAL***\tInvalid memory segment start parameter in the Hi-ScoreFile entry: " << ScriptEntry << "\n";
+                    cerr << "***CRITICAL***\tInvalid memory segment start parameter in the Hi-Score File entry: " << ScriptEntry << "\n";
                     return false;
                 }
                 FA = ScriptEntryArray[2];
