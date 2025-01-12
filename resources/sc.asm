@@ -6,7 +6,9 @@
 //----------------------------------
 //	Version history
 //
-//	v1.0 	- initial version
+//	v1.0	- initial version
+//
+//	v1.1	- fixing SC_RcvBlocks bug to always load 1st custom drive code block to $0200
 //
 //----------------------------------
 
@@ -98,7 +100,7 @@ SC_LastBits:ora #$00				//2 10									|
 			eor EorTab,x			//4 18									|
 To:			sta $1000,y				//5 23									|
 			ldx #$08				//2	25									|
-SC_JmpRcv:	bvc SC_RcvLoop			//3 (28/27)								|
+SC_JmpRcv:	bvc SC_RcvLoop			//3 (28)								|
 									//										|
 //----------------------------												|
 									//										|
@@ -109,14 +111,14 @@ SC_ChgJmp:	ldx #<SC_BlockDone-<SC_ChgJmp	//2 19	<-----------------------|
 //----------------------------
 
 SC_BlockDone:
-			lda #<SC_RcvLoop-<SC_ChgJmp		//2 29 Restore Receive Loop
-			sta SC_JmpRcv+1					//4 33
+			lda #<SC_RcvLoop-<SC_ChgJmp		//2 30 Restore Receive Loop
+			sta SC_JmpRcv+1					//4 34
 
-			lda #buslock					//2 35
+			lda #buslock					//2 36
 
-			inc To+2						//6 41
-			dec Bits						//5 46
-			bne SC_RcvLoop					//3 49 (+21 cycles)
+			inc To+2						//6 42
+			dec Bits						//5 47
+			bne SC_RcvLoop					//3 50 (+22 cycles)
 
 			sta $dd00						//4	24
 
@@ -277,8 +279,6 @@ SC_DriveReset:
 //----------------------------------
 
 SC_RcvBlocks:
-			sta NumBlocks
-			bpl SC_DcrCtr			//Always
 RcvLoop:	jsr SC_NewByte
 RcvTo:		sta $0200
 			inc RcvTo+1
@@ -324,7 +324,8 @@ SC_NewByte:	ldx #$94				//Make sure C64 is ready to send (%10010100)
 //----------------------------------
 
 SC_RestoreSpakle:
-			jsr SC_RcvBlocks
+			stx NumBlocks
+			jsr SC_DcrCtr			//BUG FIX: if only 1 block -> ZP, more than 1 block -> $0300... + ZP
 SC_DriveDone:
 			jmp CheckATN			//Back to Sparkle
 
@@ -332,7 +333,8 @@ SC_DriveDone:
 //		Everything below this line can be overwritten after custom code was uploaded to drive
 //----------------------------------------------------------------------------------------------------------------------------------------------
 
-SC_SendRcv:	jsr SC_NewByte			//Number of Sparkle drive blocks to be sent
+SC_SendRcv:	pla						//Stack pointer adjustment
+			jsr SC_NewByte			//Number of Sparkle drive blocks to be sent
 			tax
 			beq SC_SkipSend
 
@@ -379,9 +381,8 @@ DLoop:		lda $0300,y				//4	11	33
 			inc DLoop+2				//6		12
 			dec NumBlocks			//6		18
 			bne !+					//3/2	21/20
-			lda #$00				//0/2	21/22
-			sta DLoop+2				//0/4	21/26
-!:			bpl DLoop				//3		24/29
+			sty DLoop+2				//0/4	21/24
+!:			bpl DLoop				//3		24/27
 
 			lda #busy				//16,17 		A=#$10
 			bit $1800				//18,19,20,21 	Last bitpair received by C64?
@@ -393,15 +394,16 @@ DLoop:		lda $0300,y				//4	11	33
 SC_SkipSend:
 			jsr SC_NewByte
 			tax
-			beq SC_DriveDone		//If nothing to receive -> we are done, back to Sparkle
+			beq SC_DriveDone		//If nothing to receive -> we are done, back to Sparkle	
 			
-			jsr SC_RcvBlocks		//Receive drive code blocks from C64 (ZP + $0200-$07ff)
+			dex						//BUG FIX: First block of custom drive code always goes to $0200
+			stx NumBlocks			//If more than 1 block -> last one to ZP
+			jsr SC_RcvBlocks		//Receive custom drive code blocks from C64 (ZP + $0200-$07ff)
 
 //----------------------------------
 //		Execute custom drive code
 //----------------------------------
 
-	        pla						//Stack pointer adjustment
 			lda #>(SC_Restore-1)
 		    pha
 			lda #<(SC_Restore-1)
