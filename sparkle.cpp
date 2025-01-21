@@ -7,7 +7,7 @@
 //#define NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR BUILD INFO 250111
+//  COMPILE TIME VARIABLES FOR BUILD INFO 250120
 //--------------------------------------------------------
 
 constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -6359,6 +6359,16 @@ bool Build()
                     {
 
                         int tmp = ConvertHexStringToInt(ScriptEntryArray[0]);
+
+                        //BUGFIX: if DirIndex preceded the first File or Mem entry in a bundle then it was added to the previous bundle
+                        //Checking NewBundle and finishing bundle if true to fix this
+
+                        if (NewBundle)
+                        {
+                            NewBundle = false;
+                            if (!BundleDone())
+                                return false;
+                        }
 
                         if ((tmp == 0) || (tmp > 127))
                         {
