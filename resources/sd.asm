@@ -844,7 +844,7 @@ TrRndRet:	cmp #$ff
 			beq Reset			//C64 requests drive reset
 
 TestRet:	ldy #$00			//Needed later (for FetchBAM if this is a flip request, and FetchDir too)
-			sty ScndBuff		//And ScndBuff as well
+			//sty ScndBuff		//THIS SHOULD NOT BE NEEDED
 
 			asl
 			bcs NewDiskID		//A=#$80-#$fe, Y=#$00 - flip disk
@@ -852,13 +852,13 @@ TestRet:	ldy #$00			//Needed later (for FetchBAM if this is a flip request, and 
 			inc Random
 CheckDir:	ldx #$11			//A=#$00-#$7f, X=#$11 (dir sector 17) - DO NOT CHANGE TO INX, IT IS ALSO A JUMP TARGET!!!
 			asl
-			sta DirLoop+1		//Relative address within Dir segment
+			sta DirLoop+1		//Relative address within Dir block
 			bcc CompareDir
 			inx					//A=#$40-#$7f, X=#$12 (dir sector 18)
 CompareDir:	cpx DirSector		//Dir Sector, initial value=#$c5
-			beq DirFetchReturn	//Is the needed Dir Sector fetched?
+			beq DirFetchReturn	//Is the needed Dir block fetched?
 
-			stx DirSector		//No, store new Dir Segment index and fetch directory sector
+			stx DirSector		//No, store new Dir block index and fetch directory sector
 			stx LastS			//Also store it in LastS to be fetched
 			jmp FetchDir		//ALWAYS, fetch directory, Y=#$00 here (needed)
 
@@ -871,7 +871,7 @@ DirLoop:	lda $0700,x
 			ldx #$c0
 			sax Plugin			//A=#$40 if file is Saver or Custom Drive Code plugin, #$80 for transfer test, #$00 otherwise
 			and #$3f
-			sta LastT			//Track 1-42 (%00000001-%00101010)
+			sta LastT			//Track 1-40 (%00000001-%00101000)
 
 			jsr ClearList		//Clear Wanted List, Y=00 here
 
@@ -902,7 +902,7 @@ SkipUsed:	iny					//Mark the first sector of the new bundle as WANTED
 NewDiskID:	lsr					//Next Disk's ID for flip detection
 			sta NextID
 
-ToFetchBAM:	jmp FetchBAM		//Go to Track 18 to fetch Sector 0 (BAM) for Next Side Info, A=#$12, Y=#$00
+ToFetchBAM:	jmp FetchBAM		//Go to Track 18 to fetch Sector 0 (BAM) for Next Side Info, Y=#$00
 
 //--------------------------------------
 //
@@ -1372,7 +1372,7 @@ tH:			eor TabH,x			//10001011,000HHHHH		108		116		126		134		bf-c1
 
 tA:			lda TabA,y			//00010010,-0AAAAA00	20								d9-da
 tB:			eor TabB,x			//-00000BBB,0BB00000	24								db-de
-			pha					//$0101,$01fd			27								df
+			pha					//$0101/$01fd			27								df
 								//$0101 = ID2
 			tsx					//SP = $00/$fc ...		29								e0
 GCREntry:	bne GCRLoop0_2		//We start on Track 18	32/31							e1 e2
