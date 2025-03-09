@@ -5224,6 +5224,44 @@ bool InjectSaverPlugin(int PluginIdx, int HSFileIdx)
     //Mark sector off in BAM
     DeleteBit(CT, CS);
 
+    //Add plugin to directory
+
+    //-------------------------------------------------------
+    //SAVE CURRENT BIT POINTER AND BUFFER COUNT FOR DIRECTORY
+    //-------------------------------------------------------
+
+    if (DirIndicesUsed)
+    {
+        if (BundleNo < 256)
+        {
+            if (PluginIdx > 0)
+            {
+                AltDirBitPtr[PluginIdx] = 0xfe;
+                AltDirBundleNo[PluginIdx] = SctPtr;
+                AltDirPlugin[PluginIdx] = 0x40;
+            }
+        }
+        else
+        {
+            cout << "***INFO***\tThe number of file bundles is greater than 256 on this disk!\n"
+                << "A DirEntry value can only be assigned to bundles 1-255.\n";
+            return false;
+        }
+    }
+    else
+    {
+        if (BundleNo < 128)
+        {
+            DirBlocks[(BundleNo * 4) + 3] = BitPtr;
+            DirPtr[BundleNo] = SctPtr;
+            AltDirPlugin[BundleNo] = 0x40;
+        }
+        else
+        {
+            MaxBundleNoExceeded = true;
+        }
+    }
+
     //Next Sector
     SctPtr++;
 
@@ -5241,9 +5279,9 @@ bool InjectSaverPlugin(int PluginIdx, int HSFileIdx)
     }
 
     //Mark sector off in BAM
-    DeleteBit(CT, CS);
-
-    //Add plugin to directory
+    DeleteBit(CT, CS);  
+    
+    /*
     int DirSct = 17;
     if (PluginIdx > 63)
     {
@@ -5261,7 +5299,7 @@ bool InjectSaverPlugin(int PluginIdx, int HSFileIdx)
     Disk[Track[18] + (DirSct * 256) + PluginIdx + 2] = EORtransform(TabStartS[CT]);     //DirBlocks(1) = EORtransform(Sector) = First sector of Track(35) (not first sector of file!!!)
     Disk[Track[18] + (DirSct * 256) + PluginIdx + 1] = EORtransform(TabSCnt[SctPtr]);   //DirBlocks(2) = EORtransform(Remaining sectors on track)
     Disk[Track[18] + (DirSct * 256) + PluginIdx + 0] = 0xfe;                            //DirBlocks(3) = BitPtr
-
+    */
     //-----------------
     //  Add SaveFile
     //-----------------
@@ -5289,6 +5327,7 @@ bool InjectSaverPlugin(int PluginIdx, int HSFileIdx)
     cout << "Adding Hi-score File...\t\t\t    ->   " << (HSFBC < 10 ? " " : "") << HSFBC << " block" << ((HSFBC == 1) ? " \t\t\t" : "s\t\t\t");
     cout << ((FirstT < 10) ? "0" : "") << FirstT << ":" << ((FirstS < 10) ? "0" : "") << FirstS << " - " << ((LastT < 10) ? "0" : "") << LastT << ":" << ((LastS < 10) ? "0" : "") << LastS << strDirIndex << "\n";
 
+    /*
     //Add HSFile to directory
     DirSct = 17;
     if (HSFileIdx > 63)
@@ -5308,8 +5347,46 @@ bool InjectSaverPlugin(int PluginIdx, int HSFileIdx)
     Disk[Track[18] + (DirSct * 256) + HSFileIdx + 2] = EORtransform(TabStartS[CT]);     //DirBlocks(1) = EORtransform(Sector) = First sector of Track(35) (not first sector of file!!!)
     Disk[Track[18] + (DirSct * 256) + HSFileIdx + 1] = EORtransform(TabSCnt[SctPtr]);   //DirBlocks(2) = EORtransform(Remaining sectors on track)
     Disk[Track[18] + (DirSct * 256) + HSFileIdx + 0] = 0xfe;                            //DirBlocks(3) = BitPtr
-
+    */
     DeleteBit(CT, CS);
+
+    //Add plugin to directory
+
+    //-------------------------------------------------------
+    //SAVE CURRENT BIT POINTER AND BUFFER COUNT FOR DIRECTORY
+    //-------------------------------------------------------
+
+    if (DirIndicesUsed)
+    {
+        if (BundleNo < 256)
+        {
+            if (HSFileIdx > 0)
+            {
+                AltDirBitPtr[HSFileIdx] = 0xfe;
+                AltDirBundleNo[HSFileIdx] = SctPtr;
+                AltDirPlugin[HSFileIdx] = 0x00;
+            }
+        }
+        else
+        {
+            cout << "***INFO***\tThe number of file bundles is greater than 256 on this disk!\n"
+                << "A DirEntry value can only be assigned to bundles 1-255.\n";
+            return false;
+        }
+    }
+    else
+    {
+        if (BundleNo < 128)
+        {
+            DirBlocks[(BundleNo * 4) + 3] = BitPtr;
+            DirPtr[BundleNo] = SctPtr;
+            AltDirPlugin[BundleNo] = 0x00;
+        }
+        else
+        {
+            MaxBundleNoExceeded = true;
+        }
+    }
 
     unsigned char SBuffer[256]{};
     int HSStartAdd = HSAddress + HSLength - 1;

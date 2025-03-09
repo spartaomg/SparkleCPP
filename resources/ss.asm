@@ -285,16 +285,15 @@ TrackChange:
 		ldy #$02					//Two half-track steps, two return checks
 		sty ReturnFlag
 		jsr NextTrkSvr				//Automatically skips track 18
-		sta $1c00					//Last half-track step with correct bitrate
+		jsr ToggleLD2				//Turns LED off and updates $1c00 with correct bitrate
 		sty SCtr					//Save SCtr
 NextBlock:
 		ldy SCtr
 		beq TrackChange
 		ldy #$02					//Reset BufLoc Hi Byte
 		sty BufLoc+2				//Doing this here saves a byte
-		dey							//Find and mark next wanted sector on track, Y=#$01 (=block count)
-		ldx nS						//We only use track 35/40 for this purpose ATM, so no need for track change 
-		jsr Build					//Mark next wanted sector on wanted list
+		ldx nS
+		jsr BuildSvr				//Mark next wanted sector on wanted list, Y=#$02 (block count+1), skipping initial INY in Build loop
 		sty ChkSum					//Clear Checksum, Y=#$00 here
 
 //--------------------------------------
@@ -417,7 +416,7 @@ RcvCheck:
 
 NewByte:
 		ldx #$94					//Make sure C64 is ready to send (%10010100)
-		cpx $1800					//TODO: need to save 1 more byte for this...
+		cpx $1800
 		bne *-3
 
 		lda #$80					//$dd00=#$9b, $1800=#$94

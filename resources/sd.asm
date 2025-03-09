@@ -276,8 +276,7 @@
 .label StepDir		=$28		//Stepping  Direction
 .label ScndBuff		=$29		//#$01 if last block of a Bundle is fetched, otherwise $00
 .label WList		=$3e		//Wanted Sector list ($3e-$52) ([0]=unfetched, [-]=wanted, [+]=fetched)
-//.label NewBundle	=$54		//New Bundle Flag, #$00->#$01, stop motor if #$01
-.label ErrCtr		=$54
+.label ErrCtr		=$54		//Checksum error counter
 .label DirSector	=$56		//Initial value=#$c5 (<>#$10 or #$11)
 .label NBC			=$5c		//New Block Count temporary storage
 .label TrackChg		=$5e		//Indicates whether Track change is needed AFTER CATN (last block of bundle=last sector of track)
@@ -315,8 +314,8 @@
 .label BAM_ProdID	=$0108
 
 //Other constants:
-.label SF			=$013a		//SS drive code Fetch vector
-.label SH			=$013f		//SS drive code Got Header vector
+.label SF			=$0139		//SS drive code Fetch vector
+.label SH			=$013e		//SS drive code Got Header vector
 
 .label OPC_ALR		=$4b
 .label OPC_BNE		=$d0
@@ -377,8 +376,8 @@ HeaderJmp:
 .byte								<HD,>HD
 .byte										$d0,$f7
 //034b
-ToggleLED:	lda #$08			//4b 4c
-			eor $1c00			//4d-4f
+ToggleLED:	lda $1c00			//4b-4d
+ToggleLD2:	eor #$08			//4e 4f
 			nop #$d1			//50 51	SKIPPING TabD value
 			sta $1c00			//52-54
 			rts					//55
@@ -509,7 +508,7 @@ Presync:	sty.z ModJmp+1		//de df
 			
 			bvc *				//f7 f8|00-01
 			cmp $1c01			//f9-fb|06	Read1 = AAAAABBB  ->	01010|010(01) for Header, 01010|101(11) for Data
-			bne ReFetch			//fc fd|08	(beq	ReadTwo		//fc fd|09)
+			bne ReFetch			//fc fd|08
 
 ReadTwo:	ror					//fe   |10	C=1 before ROR	-> %10101001|0 for Header,	%10101010|1 for Data
 			ror					//ff   |12					-> %01010100 for Header,	%11010101 for Data
@@ -537,7 +536,7 @@ AXS:		axs #$00			//09 0a|07							11|CCCCC|D for Data
 
 NxtSct:		inx					//1b
 Build:		iny					//1c	Temporary increase as we will have an unwanted decrease after BNE
-			lda #$ff			//1d 1e	Needed if nS = last sector of track and it is already fetched
+BuildSvr:	lda #$ff			//1d 1e	Needed if nS = last sector of track and it is already fetched
 			bne MaxNumSct1		//1f 20	Branch ALWAYS
 
 	.byte	$7a					//21	Skipping TabG value (NOP)
@@ -616,11 +615,11 @@ ReFetch:	jmp (FetchJmp)		//6e-70	Wrong block type, refetch everything, vector is
 //--------------------------------------
 //		Got Header
 //--------------------------------------
-
+//0473
 HD:
 Header:		bne FetchError		//Checksum mismatch -> fetch next sector header
-			lda TabD,y
-			eor TabC,x
+			lda TabD-2,y		//Y=DDDDD010
+			eor TabC,x			//X=00CCCCC0
 			tay					//ID1 - this is suboptimal...
 			lda $0102			//$0101 - Track
 			jsr ShufToRaw
@@ -658,12 +657,12 @@ ToFetchData:
 			jmp FetchData		//Sector is on wanted list, save sector number and fetch data
 
 //--------------------------------------
-//		Disk ID Check		//Y=#$00 here
+//		Disk ID Check			//Y=#$00 here
 //--------------------------------------
 
-Track18:	cpx #$10			//73 74	BAM (Sector 0) or Drive Code Block 3 (Sector 16) or Dir Block (Sectors 17-18)?
-			bcc FlipDtct		//75 76 X=$00 (BAM)
-ToCD:		jmp CopyCode		//77-79	Sector 16 (Block 3) - copy it from the Buffer to its place, will be changed to JMP CopyDir after Block 3 copied
+Track18:	txa					//BAM (Sector 0) or Drive Code Block 3 (Sector 16) or Dir Block (Sectors 17-18)?
+			beq FlipDtct		//X=$00 (BAM)
+ToCD:		jmp CopyCode		//Sector 16 (Block 3) - copy it from the Buffer to its place, will be changed to JMP CopyDir after Block 3 copied
 
 //--------------------------------------
 //		Fetch error
@@ -695,41 +694,40 @@ BneReFetch:	bne ReFetch			//Refetch everything via ReFetch vector
 //--------------------------------------
 //		Got Data
 //--------------------------------------
-
+//04e0
 DT:
-Data:		ldx cT				//8a-8c
+Data:		ldx cT
 			cpx #$12
 			bcs SkipCSLoop  
 /*
-			ldx #$fc			//This loop saves 8 bytes but takes 1198 cycles (46 bytes passing under R/W head in zone 3)
-CSLoop:		eor $0102,x
-			eor $0103,x
+			ldy #$fc			//This loop saves 8 bytes but takes 1198 cycles (46 bytes passing under R/W head in zone 3)
+CSLoop:		eor $0102,y
+			eor $0103,y
 			dex
 			dex
 			dex
 			dex
 			bne CSLoop
 */
-
-			ldx #$7e			//This loop takes 856 cycles (33 bytes passing under R/W head in zone 3) but needs 8 more bytes
+			ldy #$7e			//This loop takes 856 cycles (33 bytes passing under R/W head in zone 3) but needs 8 more bytes
 			bne CSLoopEntry
-CSLoop:		eor $0102,x
-			eor $0103,x
-			dex
-			dex
+CSLoop:		eor $0102,y
+			eor $0103,y
+			dey
+			dey
 CSLoopEntry:
-			//eor $0140,x		//ldx #$3e for this, takes 680 cycles (26 bytes passing under the R/W head), needs 12 more bytes
-			//eor $0141,x
-			eor $0180,x
-			eor $0181,x
-			//eor $01c0,x
-			//eor $01c1,x
-			dex
-			dex
+			//eor $0140,y		//ldx #$3e for this, takes 680 cycles (26 bytes passing under the R/W head), needs 12 more bytes
+			//eor $0141,y
+			eor $0180,y
+			eor $0181,y
+			//eor $01c0,y
+			//eor $01c1,y
+			dey
+			dey
 			bne CSLoop
 
 SkipCSLoop:	tay
-			bne FetchError			//Checksum mismatch, fetch header again
+			bne FetchError		//Checksum mismatch, fetch header again
 			
 			lda #$18
 			sta ErrCtr			//Reset Error Counter (only if both header and data are fetched correctly)
@@ -738,8 +736,8 @@ SkipCSLoop:	tay
 			bcs BplFetch		//If counter<>0, go to verification loop (use BPL Fetch as trampoline, VerifCtr is always positive)
 
 RegBlockRet:
+			txa
 			ldx cS				//Current Sector in Buffer
-			lda cT
 			cmp #$12			//If this is Track 18 then we are fetching Block 3 of the drive code or a Dir Block or checking Flip Info
 			beq Track18			//We are on Track 18
 
@@ -1254,7 +1252,7 @@ CCLoop:		pla					//=lda $0100,y
 ToCheckDir:	tya					//A=#$00 - Bundle #$00 to be loaded
 			jmp CheckDir		//Load 1st Dir Sector and then first Bundle, Y=A=#$00
 
-.text "SPARKLE 3.1 BY OMG"
+.text "SPARKLE 3.2 BY OMG"
 
 CD:
 }
