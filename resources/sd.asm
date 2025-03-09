@@ -152,6 +152,25 @@
 //	v21	- track check in header verification code
 //		  if the R/W head lands on the wrong track, then Sparkle will correct it
 //
+//	v22 - reversing transfer loop direction in C64 resident code
+//		  this allows transfer loop patches in both the drive and C64 codes
+//		- simplified GCR loop patch code saving 14 bytes (patch tables on page 3)
+//		- code modifications to allow track change during file saving
+//		- reworked plugin detection
+//		  number of plugin blocks is stored in the two most significant bits of the Track byte in the directory
+//		  allows multiple plugins per disk side
+//		  plugins must be loaded using index-based loader calls
+//		- simplified track seek code
+//		  eliminating early track change during sequential loading (stepping before ATN check)
+//		- reworked fetch code
+//		- adding multiple sanity checks to header block
+//		  ID1, ID2, Track, and Sector checks
+//		  ID1 and ID2 are updated when reading from track 18 (during init and disk flips)
+//		- trailing 0 first nibble check
+//		- checksum error counter
+//		  if number of consequtive read errors is greater than a full disk spin then
+//		  Sparkle will cycle through bitrates then take half track steps until fetching is successful
+//
 //----------------------------------------------------------------------------------------
 //	Memory Layout
 //
@@ -196,14 +215,26 @@
 //	18:00:$fe	$0102	IL3R		(will be copied to $20)
 //	18:00:$fd	$0103	IL2R		(will be copied to $21)
 //	18:00:$fc	$0104	IL1R		(will be copied to $22)
-//	18:00:$fb	$0105	BAM_NextID	(will be copied to $23 after flip, #$00 if no more flips)
+//	18:00:$fb	$0105	BAM_NextID	(will be copied to $23 after flip, $ff if no more flips)
 //	18:00:$fa	$0106	IL0R		(will be copied to $24)
 //
-//	18:00:$f9	$0107	BAM_IncSaver	(will be copied to IncSaver)
+//	18:00:$f9	$0107	BAM_IncSaver	(no longer used)
 //
 //	18:00:$f8	$0108	BAM_ProdID (0)
 //	18:00:$f7	$0109	BAM_ProdID (1)
 //	18:00:$f6	$010a	BAM_ProdID (2)
+//
+//	TODO (wound save 4 bytes in code but needs 4 bytes for ProdID and DiskID and we only have 3 ATM...)
+//	18:00:$ff	$0101	IL3R		(will be copied to $20)
+//	18:00:$fe	$0102	IL2R		(will be copied to $21)
+//	18:00:$fd	$0103	IL1R		(will be copied to $22)
+//	18:00:$fc	$0104	BAM_NextID	(will be copied to $23 after flip, $ff if no more flips)
+//	18:00:$fb	$0105	IL0R		(will be copied to $24)
+//
+//	18:00:$fa	$0106	BAM_ProdID (0)
+//	18:00:$f9	$0107	BAM_ProdID (1)
+//	18:00:$f8	$0108	BAM_ProdID (2)
+//	18:00:$f7	$0109	BAM_DiskID	(for flip detection, compare to NextID @ $23 on ZP)
 //
 //----------------------------------------------------------------------------------------
 //	Directory Structure
@@ -211,7 +242,7 @@
 //	4 bytes per dir entry
 //	128 dir entries in 2 dir blocks
 //
-//	00	Track
+//	00	Track (two most significant bits indicate plugin blocks)
 //	01	First sector on track after track change (to mark fetched sectors, NOT first sector of bundle)
 //	02	Sector Counter (to mark fetched sectors and first sector of bundle)
 //	03	Byte Pointer (used by the depacker to find start of stream, to be copied to the last byte of first block)
@@ -245,7 +276,8 @@
 .label StepDir		=$28		//Stepping  Direction
 .label ScndBuff		=$29		//#$01 if last block of a Bundle is fetched, otherwise $00
 .label WList		=$3e		//Wanted Sector list ($3e-$52) ([0]=unfetched, [-]=wanted, [+]=fetched)
-.label NewBundle	=$54		//New Bundle Flag, #$00->#$01, stop motor if #$01
+//.label NewBundle	=$54		//New Bundle Flag, #$00->#$01, stop motor if #$01
+.label ErrCtr		=$54
 .label DirSector	=$56		//Initial value=#$c5 (<>#$10 or #$11)
 .label NBC			=$5c		//New Block Count temporary storage
 .label TrackChg		=$5e		//Indicates whether Track change is needed AFTER CATN (last block of bundle=last sector of track)
@@ -253,14 +285,16 @@
 .label ILTab		=$60		//Inverted Custom Interleave Table ($60-$64)
 .label NextID		=$63		//Next Side's ID - will be updated from 18:00:$fd of next side
 
-.label StepTmrRet	=$66		//Indicates whether StepTimer code is called in subroutine
-.label BitRateRet	=$6c		//Indicates whether Store code is called in subroutine
-.label EoD			=$6e		//End of Disk flag, only used with sequential loading
-.label IncSaver		=$74		//=#$02 if Saver Code is included, otherwise #$00
-.label SaverCode	=$76		//Indicates whether Saver Code Drive code is in the buffer
+.label ReturnFlag	=$66		//Indicates whether StepTimer code is called in subroutine
 
-.label ZPIncSav		=$10		//$10/$11 = $0107
-.label ZPILTab		=$70
+.label Plugin		=$76		//Indicates whether fetch block is a plugin
+
+.label ZPBAMPID		=$10		//$10/$11 = $0107
+.label ZPHdrID1		=$68
+.label ZPHdrID2		=$69
+.label ZP1800		=$6b
+.label ZP1c01		=$6f
+.label ZPILTab		=$71
 .label ZPProdID		=$78		//$78/$79 = $031a (ProdID-1)
 
 .label ZP7f			=$30		//BitShufTab
@@ -268,21 +302,25 @@
 .label ZP12			=$3b		//TabF value
 .label ZP07			=$57		//TabF value
 .label ZP00			=$6b		//TabF value
+.label ZP01			=$59
+.label ZP02			=$7b
 .label ZP01ff		=$58		//$58/$59 = $01ff
 .label ZP0101		=$59		//$59/$5a = $0101
+.label ZP0100		=$6e		//$6b/$6c = $0100
 .label ZP0200		=$7a		//$7a/$7b = $0200
 
 //BAM constants:
 .label BAM_DiskID	=$0101
 .label BAM_NextID	=$0105
-.label BAM_IncSave	=$0107
 .label BAM_ProdID	=$0108
 
 //Other constants:
-.label SF			=$012a		//SS drive code Fetch vector
-.label SH			=$012f		//SS drive code Got Header vector
+.label SF			=$013a		//SS drive code Fetch vector
+.label SH			=$013f		//SS drive code Got Header vector
 
+.label OPC_ALR		=$4b
 .label OPC_BNE		=$d0
+.label OPC_NOP_ABS	=$0c
 
 //GCR Decoding Tables:
 .label TabZP		=$00
@@ -306,12 +344,12 @@
 .pseudopc $0300 {
 Tab300:
 //0300
-ClearList:	clc					//00
+ClearList:	sec					//00
 JmpClrList:	ldx #$14			//01 02
 ClrWList:	sty WList,x			//03 04	Y=00, clear Wanted Block List
 			dex					//05
 			bpl ClrWList		//06 07
-			bcs ClrJmp			//08 09
+			bcc ClrJmp			//08 09
 			rts					//0a
 ClrJmp:		jmp NextTrack		//0b-0d
 
@@ -328,10 +366,11 @@ CDLoop:		pla					//0e		=LDA $0100,y
 FetchJmp:
 .byte									<FT,>FT
 .byte											$37
-ProductID:
-.byte												$ab,$cd,$ef,$07,XX1
-.byte	$a5,$a1,$a7,XX2,$ad,$a9,$67,$04,$05,$0d,$77,$00,$01,$09,$47,XX3
-.byte	$07,$0f,XX4,$0a,$03,$0b,$a7,$0c,$06,$0e,$b7,$08,$02,XX1,$27,XX2
+//031b
+Patch1:
+.byte												<OPC_BNE,<OPC_BNE,OPC_ALR,$07,OPC_ALR
+.byte	$a5,$a1,$a7,XX2,$ad,$a9,$67,$04,$05,$0d,$77,$00,$01,$09,$47,XX3	//PC tool stores Version info at $032f
+.byte	$07,$0f,XX4,$0a,$03,$0b,$a7,$0c,$06,$0e,$b7,$08,$02,XX1,$27,XX2	//PC tool stores release YY/MM/DD at $0331/$033d/$033f
 .byte	$af,$ab,$ae,$aa,$ac,$a8,$e7
 //0347
 HeaderJmp:
@@ -347,12 +386,18 @@ ToggleLED:	lda #$08			//4b 4c
 //0357
 DataJmp:
 .byte								<DT,>DT
-.byte										$d9,$97,XX3,XX4,XX1,$17,XX2	//PC tool stores version info here
+.byte										$d9,$97
+//035b
+Patch2:
+.byte												<Mod2a-(LoopMod2+2),<Mod2b-(LoopMod2+2),$fc,$17,$fc
 .byte	XX3,$a3,$a6,$a2,$a4,$a0,$c7
 //0367
 SHeaderJmp:
 .byte								<SH,>SH
-.byte										$d4,$d7,XX4,XX1,XX2,$57
+.byte										$d4,$d7
+//036b
+ProductID:
+.byte												XX4,XX1,XX2,$57
 //036f
 SFetchJmp:
 .byte																<SF
@@ -386,8 +431,8 @@ RBLoop:		cpy $1800			//7f-81	4
 
 //0392
 FetchBAM:	sty LastS			//92 93	Y=#$00
-FetchDir:	jsr ClearList		//94-96 C=0 after this
-			bcc *+3				//97 98 SKIPPING TabD value
+FetchDir:	jsr ClearList		//94-96 C=1 after this
+			bcs *+3				//97 98 SKIPPING TabD value
 	.byte	$db					//99	TabD
 			ldx LastS			//9a 9b
 			dec WList,x			//9c 9d	Mark sector as wanted
@@ -401,35 +446,36 @@ FetchDir:	jsr ClearList		//94-96 C=0 after this
 GotoTrack:	iny					//a2
 ContCode:	sty WantedCtr		//a3 a4	Y=#$01 here
 			sty BlockCtr		//a5 a6
-CorrTrack:	sec					//a7
-			nop #$de			//a8 a9 TabD
+CorrTrack:	sec					//a7	CorrTrack needs Y=#$01
+			nop #$de			//a8 a9 Skipping TabD
 			sbc cT				//aa ab	Calculate Stepper Direction and number of Steps
 			beq ResetVerif		//ac ad	We are staying on the same Track, skip track change
-			sty StepTmrRet		//ae af	->#$01 - signal need for RTS 
-			nop #$d7			//b0 b1 TabD
-			bcs SkipStepDn		//b2 b3
-			eor #$ff			//b4 b5
-			adc #$01			//b6 b7
+			bcs SkipStepDn		//ae af
+			nop #$d7			//b0 b1 Skipping TabD
+			eor #$ff			//b2 b3
+			adc #$01			//b4 b5
+			ldy #$03			//b6 b7	Y=#$03 -> Stepper moves Down/Outward
 			nop #$df			//b8 b9 TabD
-			ldy #$03			//ba bb	Y=#$03 -> Stepper moves Down/Outward
-			sty StepDir			//bc bd	Store stepper direction UP/INWARD (Y=#$01) or DOWN/OUTWARD (Y=#$03)
-SkipStepDn:	asl					//be	Y=#$01 is not stored - it is the default value which is restored after every step
-			tay					//bf	Y=Number of half-track changes
-			jsr StepTmr			//c0-c2	Move head to track and update bitrate (also stores new Track number to cT and calculates SCtr but doesn't store it)
+			sty StepDir			//ba bb	Only store stepper direction DOWN/OUTWARD here (Y=#$03)
+SkipStepDn:	ldy #$02			//bc bd
+			sty ReturnFlag		//be bf	->#$02 - signals need for RTS 
+			asl					//c0
+			tay					//c1	Y=Number of half-track changes
+			jsr StepTmr			//c2-c4	Move head to track and update bitrate (also stores new Track number to cT and calculates SCtr but doesn't store it)
 
 //--------------------------------------
-//		Multi-track stepping
+//		Multi-track stepping	//A=bitrate, Y=SCtr here
 //--------------------------------------
 
-			lda Spartan+1		//c3-c5
-			sta $1c00			//c6-c8	Store bitrate
-	.byte	$d8					//c9	TabD = CLD
+			sta $1c00			//c5-c7	Needed to update bitrate!!!
+			nop	#$d8			//c8 c9	Skipping TabD = CLD
 ResetVerif:	lda #CSV			//ca cb
 			sta VerifCtr		//cc cd	Verify track after head movement
 
 //--------------------------------------
 //		Fetch Code
 //--------------------------------------
+//039e
 FT:
 Fetch:
 FetchHeader:
@@ -439,173 +485,255 @@ FetchSHeader:
 			lda #$52			//d2 d3	First 8 bits of Header ID (01010010)
 			ldx #$04			//d4 d5	4 bytes to stack
 			txs					//d6	Header: $0104,$0103..$0101
-			ldx #$40			//d7 d8 Last 2 bits of Header ID (01|000000)
+			bne Presync			//d7 d8 Skip Data Block fetch
 	.byte	$da					//d9	NOP (TabD)
-			bne Presync			//da db Skip Data Block fetch
-			
-FetchData:	ldy #<DataJmp		//dc dd	Checksum verification after GCR loop will jump to Data Code
-			lda #$55			//de df	First 8 bits of Data ID (01010101)
-//--------------------------------------
-//		NOT NEEDED, WE ALWAYS COME HERE AFTER HEADER CHECK SO SP = $00 HERE
-//
-//			//ldx #$00			//e0 e1 256 bytes to stack
-//			//txs				//e2	Data: $0100,$01ff..$0101
-//--------------------------------------
-			ldx #$c0			//e0 e1 Last 2 bits of Data ID (11|000000)
-Presync:	sty.z ModJmp+1		//e2 e3	Update Jump Address
-			ldy #$00			//e4 e5
-			sty.z CSum+1		//e6 e7 Reset checksum
+				
+FetchData:	ldy #<DataJmp		//da db	Checksum verification after GCR loop will jump to Data Code
+			lda #$55			//dc dd	First 8 bits of Data ID (01010101)
+								//SP = $00 here (LDX #$00; TXS not needed)
+
+Presync:	sty.z ModJmp+1		//de df
+			ldy #$00			//e0 e1
+			sty.z CSum+1		//e2 e3
+			sta (ZP0102),y		//e4 e5
+			sta (ZP0103),y		//e6 e7
 			nop #$dc			//e8 e9 Skipping TabD value $dc (NOP ABS,X)
-			stx AXS+1			//ea-ec
-			ldx #$c0			//ed ee
-			bne !+				//ef f0
-	.byte	$d6					//f1	TabD (DEC ZP,X)
-!:			sta (ZP0102),y		//f2 f3	Any value would do in A as long as $0102 and $0103 are the same
-			sta (ZP0103),y		//f4 f5
+			
+			bit $1c00			//ea-ec
+			bmi *-3				//ed ee
 
-Sync:		bit $1c00			//f6-f8	Wait for sync mark
-			bmi *-3				//f9 fa
-			nop $1c01			//fb-fd	Sync byte - MUST be read (VICE bug #582), not necessarily #$ff
-			clv					//fe	likely the last byte on the latch
+			clv					//ef
+			nop #$d6			//f0 f1	Skipping TabD value (DEC ZP,X)		
+			nop $1c01			//f2-f4
+			ldx #$c0			//f5 f6
+			
+			bvc *				//f7 f8|00-01
+			cmp $1c01			//f9-fb|06	Read1 = AAAAABBB  ->	01010|010(01) for Header, 01010|101(11) for Data
+			bne ReFetch			//fc fd|08	(beq	ReadTwo		//fc fd|09)
 
-								//Addr |Cycles
-			bvc *				//ff 00|00-01
-			cmp $1c01			//01-03|05	*Read1 = AAAAABBB  ->	01010|010(01) for Header
-			clv					//04   |07							01010|101(11) for Data
-			beq ReadTwo			//05 06|10
-ReFetch:	jmp (FetchJmp)		//07-09	Wrong block type, refetch everything, vector is modified from SS!!!
+ReadTwo:	ror					//fe   |10	C=1 before ROR	-> %10101001|0 for Header,	%10101010|1 for Data
+			ror					//ff   |12					-> %01010100 for Header,	%11010101 for Data
+			sax AXS+1			//00-02|16					-> %01000000 for Header,	%11000000 for Data
+			clv					//03   |18
 
+			bvc *				//04 05|00-01
+			lda $1c01			//06-08|05*	*Read2 = BBCCCCCCD ->	01|CCCCC|D for Header
+AXS:		axs #$00			//09 0a|07							11|CCCCC|D for Data
+			bne ReFetch			//0b 0c|09	X = BB000000 - X1000000, if X = 0 then proper block type is fetched
+			ldx #$3e			//0d 0e|11
+			sax.z tC+1			//0f 10|14
+
+	.byte	$fa					//11   |16	TabG (NOP)
+			lsr					//12   |18
+	.byte	$ea					//13   |20	TabG (NOP)
+
+			ldx ZP00			//14 15|23
+			lda ZP7f			//16 17|26	Z=0, needed for BNE in GCR loop
+			jmp GCREntry		//18-1a|29	Same cycle count as in GCR loop before BNE
+			
 //--------------------------------------
-//		Got Header
+//		Mark wanted sectors
 //--------------------------------------
-//042c
-HD:
-Header:
-BneFetch:	bne Fetch			//0a 0b	Checksum mismatch -> fetch next sector header
-			ldy VerifCtr		//0c 0d
-			bne FetchData		//0e 0f	Always fetch sector data if we are verifying the schecksum
-			nop #$fa			//10 11	Y=#$00 //.byte	$fa					//11	TabG (NOP)
-			iny					//12	Y=#$01 - needed for BNE CorrTrack!!!
-	.byte	$ea					//13	TabG (NOP) 
 
-			lda (ZP0101),y		//14 15	$0102 - Track
-			jsr ShufToRaw		//16-18
-			ldx cT				//19 1a
-			sta cT				//1b 1c
-			txa					//1d
-			cmp cT				//1e 1f
+NxtSct:		inx					//1b
+Build:		iny					//1c	Temporary increase as we will have an unwanted decrease after BNE
+			lda #$ff			//1d 1e	Needed if nS = last sector of track and it is already fetched
+			bne MaxNumSct1		//1f 20	Branch ALWAYS
 
-			nop #$7a			//20 21	Skipping TabG (NOP)	//	.byte	$7a					//21   	TabG (NOP)
-	.byte	$5a					//22   	TabG (NOP)
+	.byte	$7a					//21	Skipping TabG value (NOP)
+	.byte	$5a					//22   	Skipping TabG value (NOP)
 	.byte	$da					//23   	TabG (NOP)
 
-			bne CorrTrack		//24 25 Wrong track -> go to wanted track
+ChainLoop:	lda WList,x			//24 25	Check if sector is unfetched (=00)
+			bne NxtSct			//26 27	If sector is not unfetched (it is either fetched or wanted), go to next sector
 
-			lda (ZP0102),y		//26 27	$0103 - Sector
-			jsr ShufToRaw		//28-2a
-			tay					//2b
+			lda #$ff			//28 29
+MarkSct:	sta WList,x			//2a 2b	Mark Sector as wanted (or used in the case of random bundle, STA <=> STY)
+			stx LastS			//2c 2d	Save Last Sector
+IL:			axs #$00			//2e 2f	Calculate Next Sector using inverted interleave
 
-			ldx WList,y			//2c 2d	Otherwise, only fetch sector data if this is a wanted sector
-BplFetch:	bpl Fetch			//2e 2f Sector is not on wanted list -> fetch next sector header
-			inx					//30	Compensating for DEX (TabG) below
-
-	.byte	$6a					//31 	TabG (ROR) - no effect
-	.byte 	$4a					//32	TabG (LSR) - no effect
+	.byte	OPC_NOP_ABS			//30	Skip next two TabG values to avoid clobbering A
+	.byte	$6a					//31 	TabG (ROR)
+	.byte 	$4a					//32	TabG (LSR)
 	.byte	$ca					//33	TabG (DEX)
+			inx					//34 	compensate for DEX
+			
+MaxNumSct1:	cpx MaxNumSct2+1	//35-37	Reached Max?
+			bcc SkipSub			//38 39	Has not reached Max yet, so skip adjustments
+MaxNumSct2:	axs #$13			//3a 3b	Reached Max, so subtract Max
+			beq SkipSub			//3c 3d
+SubSct:		axs #$01			//3e 3f	Decrease if sector > 0
+SkipSub:	dey					//40	Any more blocks to be put in chain?
+			bne ChainLoop		//41 42
+			stx nS				//43 44
+			rts					//45	A=#$ff, X=next sector, Y=#$00, Z=0 here
 
-			sty cS				//34 35	Only save current Sector if data will be fetched
-			bmi FetchData		//36 37	Sector is on wanted list, save sector number and fetch data
+//--------------------------------------
 
-//--------------------------------------	Will be changed to JMP CopyDir after Block 3 copied
-
-ToCD:		jmp CopyCode		//38-3a		Sector 15 (Block 3) - copy it from the Buffer to its place
+ToCorrTrack:
+			jmp CorrTrack		//46-48
 
 //--------------------------------------
 //		Flip Detection			//Y=#$00 and X=#$00 here
 //--------------------------------------
 
-FlipDtct:	cmp (ZP0101),y		//3b 3c	DiskID, compare it to NextID
-ToBneFetch:	bne BneFetch		//3d 3e ID mismatch, fetch again until flip detected
-			ldy #$03			//3f 0f
-ProdIDLoop:	lda (ZPIncSav),y	//41 42	Also compare Product ID, only continue if same ($0107 = BAMProdID-1)
-			cmp (ZPProdID),y	//43 44
-			bne BneFetch		//45 46	Product ID mismatch, fetch again until same
-			dey					//47
-			bne ProdIDLoop		//48 49
+FlipDtct:	lda NextID			//49 4a	Side is done, check if there is a next side
+			cmp (ZP0101),y		//4b 4c	DiskID, compare it to NextID
+			bne ReFetch			//4d 4e ID mismatch, fetch again until flip detected
 
-			lda (ZPIncSav),y	//4a 4b	Value (#$00 vs. #$02) indicates whether Saver Code is included on this disk side
-			sta IncSaver		//4c 4d
+			ldy #$03			//4f 50
 
-			ldy #$05			//4e 4f
-
-			nop #$ba			//50 51	Skipping TabG (TSX) (X=#$00)
+	.byte	$ba					//51	TabG (TSX) (X=#$00, no change)
 	.byte	$8a					//52	TabG (TXA) (A=#$00)
 	.byte	$aa					//53	TabG (TAX)
 
-			sty DirSector		//54 55	Invalid value to trigger reload of the directory of the new disk side
+ProdIDLoop:	lda (ZPBAMPID),y	//54 55	Also compare Product ID, only continue if same ($0107 = BAMProdID-1)
+			cmp (ZPProdID),y	//56 57
+			bne ReFetch			//58 59	Product ID mismatch, fetch again until same
+			dey					//5a
+			bne ProdIDLoop		//5b 5c
 
-CopyBAM:	lda (ZP0101),y		//56 57	= LDA $0101,y
-			sta (ZPILTab),y		//58 59	($0100=DiskID), $101=IL3R, $102=IL2R, $103=IL1R, $0104=NextID, $105=IL0R
-			dey					//5a		
-			bne CopyBAM			//5b 5c
-			tya					//5d
-			jmp CheckDir		//5e-60	Y=A=#$00 - Reload first directory sector
-	
+			ldy #$05			//5d 5e
+			sty DirSector		//5f 60	Invalid value to trigger reload of the directory of the new disk side
+
 	.byte	$3a					//61	TabG (NOP)
 	.byte	$1a					//62	TabG (NOP)
 	.byte	$9a					//63	TabG (TXS) no effect X=SP=#$00
+
+CopyBAM:	lda (ZP0101),y		//64 65	= LDA $0101,y ($0101=DiskID), $102=IL3R, $103=IL2R, $104=IL1R, $0105=NextID, $106=IL0R
+			sta (ZPILTab),y		//66 67
+			dey					//68		
+			bne CopyBAM			//69 6a
+			jmp ToCheckDir		//6b-6d	Y=A=#$00 - Reload first directory sector
+
+//--------------------------------------
+
+ReFetch:	jmp (FetchJmp)		//6e-70	Wrong block type, refetch everything, vector is modified from SS!!!
+
+	.byte	$2a					//71   |  	Skipping TabG (ROL)
+	.byte	$0a					//72   |11	Skipping TabG (ASL)
+
+//--------------------------------------
+//		Got Header
+//--------------------------------------
+
+HD:
+Header:		bne FetchError		//Checksum mismatch -> fetch next sector header
+			lda TabD,y
+			eor TabC,x
+			tay					//ID1 - this is suboptimal...
+			lda $0102			//$0101 - Track
+			jsr ShufToRaw
+			beq FetchError		//Track mismatch
+			cmp #$29			//Max track: 40 ($28)
+			bcs FetchError		//Track mismatch			
+			
+			ldx $0101			//$0101 - ID2
+			cpx ZPHdrID2
+			bne CheckIDs		//ID2 mismatch
+			
+			cpy ZPHdrID1
+			bne CheckIDs		//ID1 mismatch
+
+			ldy #$01
+			ldx cT
+			sta cT
+			txa
+			cmp cT
+			bne ToCorrTrack		//Wrong track -> go to wanted track
+
+			lda (ZP0102),y		//$0103 - Sector
+			jsr ShufToRaw
+			cmp MaxNumSct2+1
+			bcs FetchError		//Sector mismatch
+						
+			ldy VerifCtr
+			bne ToFetchData		//Always fetch sector data if we are verifying the checksum
+
+			tay
+			ldx WList,y			//Otherwise, only fetch sector data if this is a wanted sector
+BplFetch:	bpl ReFetch			//Sector is not on wanted list -> fetch next sector header
+			sty cS				//Only save current Sector if data will be fetched
+ToFetchData:
+			jmp FetchData		//Sector is on wanted list, save sector number and fetch data
 
 //--------------------------------------
 //		Disk ID Check		//Y=#$00 here
 //--------------------------------------
 
-Track18:	cpx #$10			//64 65	Drive Code Block 3 (Sector 16) or Dir Block (Sectors 17-18)?
-			bcs ToCD			//66 67
-			lda NextID			//68 69	Side is done, check if there is a next side
-			bpl FlipDtct		//6a 6b
-
-			jmp ($fffc)			//6c-6e
+Track18:	cpx #$10			//73 74	BAM (Sector 0) or Drive Code Block 3 (Sector 16) or Dir Block (Sectors 17-18)?
+			bcc FlipDtct		//75 76 X=$00 (BAM)
+ToCD:		jmp CopyCode		//77-79	Sector 16 (Block 3) - copy it from the Buffer to its place, will be changed to JMP CopyDir after Block 3 copied
 
 //--------------------------------------
-//		Read #2 (BBCCCCCD)
+//		Fetch error
 //--------------------------------------
+			
+CheckIDs:	cmp cT
+			bne FetchError
+			cmp #$12
+			bne FetchError
 
-ReadTwo:	bvc *				//6f 70|00-01
-	.byte	$2a					//71   |03 TabG (ROL) no effect
-	.byte	$0a					//72   |05 TabG (ASL) no effect
-			lda $1c01			//73-75|09*	*Read2 = BBCCCCCCD ->	01|CCCCC|D for Header
-AXS:		axs #$00			//76 77|11							11|CCCCC|D for Data
-			bne ReFetch			//78 79|13	X = BB000000 - X1000000, if X = 0 then proper block type is fetched
-			ldx #$3e			//7a 7b|15
-			sax.z tC+1			//7c 7d|18
-			lsr					//7e   |20
-			ldx ZP00			//7f 80|23
-			lda ZP7f			//81 82|26	Z=0, needed for BNE in GCR loop
-			jmp GCREntry		//83-85|29	Same cycle count as in GCR loop before BNE
+			sty ZPHdrID1		//Update disk ID1 and ID2 if we are on Track 18 (i.e. after disk flip)
+			stx ZPHdrID2
+
+FetchError:	dec ErrCtr
+			bne	ReFetch
+
+			lda $1c00			//Based on Krill's track correction code
+			and #$63
+			clc
+			adc #$e0			//Cycle through bitrates %11 -> %10 -> %01 -> %00 -> %11
+			adc #$03			//Half track step down on bitrate wrap around
+			ora #$04			//Motor on (LED is only on during transfer)
+			sta $1c00
+
+			lda #$18			//More than the max number of sectors per track
+			sta ErrCtr	
+BneReFetch:	bne ReFetch			//Refetch everything via ReFetch vector
 
 //--------------------------------------
 //		Got Data
 //--------------------------------------
+
 DT:
-Data:		ldx cT				//86 87
+Data:		ldx cT				//8a-8c
 			cpx #$12
 			bcs SkipCSLoop  
-			ldx #$7e			//CSLoop takes 851 cycles (33 bytes passing under R/W head in zone 3)
+/*
+			ldx #$fc			//This loop saves 8 bytes but takes 1198 cycles (46 bytes passing under R/W head in zone 3)
+CSLoop:		eor $0102,x
+			eor $0103,x
+			dex
+			dex
+			dex
+			dex
+			bne CSLoop
+*/
+
+			ldx #$7e			//This loop takes 856 cycles (33 bytes passing under R/W head in zone 3) but needs 8 more bytes
 			bne CSLoopEntry
 CSLoop:		eor $0102,x
 			eor $0103,x
 			dex
 			dex
 CSLoopEntry:
+			//eor $0140,x		//ldx #$3e for this, takes 680 cycles (26 bytes passing under the R/W head), needs 12 more bytes
+			//eor $0141,x
 			eor $0180,x
 			eor $0181,x
+			//eor $01c0,x
+			//eor $01c1,x
 			dex
 			dex
 			bne CSLoop
 
 SkipCSLoop:	tay
-TBF2:		bne ToBneFetch		//Checksum mismatch, fetch header again
+			bne FetchError			//Checksum mismatch, fetch header again
 			
+			lda #$18
+			sta ErrCtr			//Reset Error Counter (only if both header and data are fetched correctly)
+
 			lsr VerifCtr		//Checksum Verification Counter
 			bcs BplFetch		//If counter<>0, go to verification loop (use BPL Fetch as trampoline, VerifCtr is always positive)
 
@@ -626,9 +754,13 @@ RegBlockRet:
 //		Check Saver Code
 //--------------------------------------
 
-			lsr SaverCode
+			asl Plugin
 			bcc ChkLastBlock
-			jmp $0100			//Saver Code fetched
+			jmp $0100			//Plugin code drive block fetched
+
+//--------------------------------------
+
+Reset:		jmp ($fffc)
 
 //--------------------------------------
 //		Store Transitional Block
@@ -640,7 +772,7 @@ StoreLoop:	pla
 			bne StoreLoop
 
 			inc ScndBuff
-			bne TBF2			//ALWAYS back to Fetch
+			bne BneReFetch			//ALWAYS back to Fetch
 
 //--------------------------------------
 //		Check Last Block		//Y=#$00 here
@@ -650,93 +782,174 @@ ChkLastBlock:
 			dec WantedCtr
 
 			cmp LastT
-			bne SkipLast
+			bne CheckATN
 			cpx LastS
-			bne SkipLast
+			bne CheckATN
 
-			lda (ZP01ff),y		//Save new block count for later use
+			lda (ZP0101),y		//Save new block count for later use
 			sta NBC
 			lda #$7f			//And delete it from the block
-NOP1:		sta (ZP01ff),y		//So that it does not confuse the depacker...
+NOP1:		sta (ZP0101),y		//So that it does not confuse the depacker...
 
 			lsr Random			//Check if this is also the first block of a randomly accessed bundle
 			bcc ChkScnd
 
-NOP2:		sta $0100			//This is the first block of a random bundle, delete first byte
+NOP2:		sta (ZP0100),y		//This is the first block of a random bundle, delete first byte
 			lda BPtr			//Last byte of bundle will be pointer to first byte of new Bundle
-NOP3:		sta (ZP0101),y
+NOP3:		sta (ZP01ff),y
 
 ChkScnd:	lda WantedCtr
 			bne StoreLoop
 
-//--------------------------------------//If this is the last sector on a track, track change can be started here...
-//										//...except if this is the first block of a bundle...
-//		Early Track change				//...because we don't know if the next call will be sequential or random
-//										//...OR if we have the last sector of the bundle in the second buffer
+//--------------------------------------
+//		Wait for C64
 //--------------------------------------
 
-SkipLast:	lda SCtr			//Skip track change if either of these is not zero: SCtr > 0
-			ora NewBundle		//NewBundle condition (this is the first full block of a new bundle and SCtr = 0)
-			ora ScndBuff		//We have the last block of a bundle in the second buffer and SCtr = 0)
-			bne ToCATN
+CheckATN:	lda $1c00			//Fetch Motor and LED status
+			ora #$08			//Make sure LED will be on when we restart
+			tax					//This needs to be done here, so that we do not affect Z flag at Restart
 
-			lda NBC				//Very last sector?
-			beq ToCATN			//Yes, skip stepping, finish transfer
+Frames:		ldy #$64			//100 frames (2 seconds) delay before turning motor off (#$fa for 5 sec)
+DelayOut:	lda #$4f			//Approx. 1 frame delay (20000 cycles = $4e20 -> $4e+$01=$4f)
+			sta $1c05			//Start timer, wait 2 seconds before turning motor off
+DelayIn:	lda $1c05
+			bne ChkLines
+			dey
+			bne DelayOut
+			lda #$73			//Timer finished, turn motor off
+			sta ErrCtr			//Reset Error Counter for motor spinup
+			sax $1c00
+			lda #<CSV			//Reset Checksum Verification Counter
+			sta VerifCtr		//When motor restarts, first we verify proper read
+			
+ChkLines:	lda $1800
+			bpl Reset			//ATN released - C64 got reset, reset the drive too
+			alr #$05			//if C=1 then no change, A=#$00/#$02 after this
+			bcs DelayIn
+								//C=0, file requested
+Restart:	stx $1c00			//Restart Motor and turn LED on if they were turned off
+			beq SeqLoad			//A=#$00 - sequential load
+								//A=#$02 - random load
 
 //--------------------------------------
-//		Prepare seeking
+//
+//		Random File Access
+//
+//--------------------------------------
+
+GetByte:	lda #$80			//$dd00=#$9b, $1800=#$94
+			ldx #busy			//X=#$10 (AA=1, CO=0, DO=0) - WILL BE USED LATER IF SAVER CODE IS NEEDED
+
+TrRnd:		jsr RcvByte			//OK to use stack here
+
+TrRndRet:	cmp #$ff
+			beq Reset			//C64 requests drive reset
+
+TestRet:	ldy #$00			//Needed later (for FetchBAM if this is a flip request, and FetchDir too)
+			sty ScndBuff		//And ScndBuff as well
+
+			asl
+			bcs NewDiskID		//A=#$80-#$fe, Y=#$00 - flip disk
+			beq CheckDir		//A=#$00, skip Random flag (first bundle on disk)
+			inc Random
+CheckDir:	ldx #$11			//A=#$00-#$7f, X=#$11 (dir sector 17) - DO NOT CHANGE TO INX, IT IS ALSO A JUMP TARGET!!!
+			asl
+			sta DirLoop+1		//Relative address within Dir segment
+			bcc CompareDir
+			inx					//A=#$40-#$7f, X=#$12 (dir sector 18)
+CompareDir:	cpx DirSector		//Dir Sector, initial value=#$c5
+			beq DirFetchReturn	//Is the needed Dir Sector fetched?
+
+			stx DirSector		//No, store new Dir Segment index and fetch directory sector
+			stx LastS			//Also store it in LastS to be fetched
+			jmp FetchDir		//ALWAYS, fetch directory, Y=#$00 here (needed)
+
+DirFetchReturn:
+			ldx #$03
+DirLoop:	lda $0700,x
+			sta LastT,x
+			dex
+			bpl DirLoop
+			ldx #$c0
+			sax Plugin			//A=#$40 if file is Saver or Custom Drive Code plugin, #$80 for transfer test, #$00 otherwise
+			and #$3f
+			sta LastT			//Track 1-42 (%00000001-%00101010)
+
+			jsr ClearList		//Clear Wanted List, Y=00 here
+
+			inc ReturnFlag
+
+			tax					//X=A=LastT
+			jsr BitRate			//Update Build loop, Y=MaxSct after this
+								//Also find interleave and sector count for requested track
+
+			ldx LastS			//This is actually the first sector on the track here
+			tya					//A=MaxSct
+			//sec				//Not needed, C=1 after LSR ReturnFlag
+			sbc SCtr			//Remaining sectors on track
+			tay					//Y=already fetched sectors on track
+			beq SkipUsed		//Y=0, we start with the first sector, skip marking used sectors
+			dec MarkSct			//Change STA ZP,x to STY ZP,x ($95 -> $94) (A=$ff - wanted, Y>#$00 - used)
+			jsr Build			//Mark all sectors as USED -before- first sector to be fetched
+			inc MarkSct			//Restore Build loop
+
+SkipUsed:	iny					//Mark the first sector of the new bundle as WANTED
+			jsr Build			//A=#$ff, X=Next Sector, Y=#$00 after this call
+
+			lax LastT
+			jmp GotoTrack		//X=desired Track, Y=#$00
+
+//--------------------------------------
+
+NewDiskID:	lsr					//Next Disk's ID for flip detection
+			sta NextID
+
+ToFetchBAM:	jmp FetchBAM		//Go to Track 18 to fetch Sector 0 (BAM) for Next Side Info, A=#$12, Y=#$00
+
+//--------------------------------------
+//
+//		Sequential Loading
+//
+//--------------------------------------
+
+SeqLoad:	tay					//A=#$00 here -> Y=#$00
+			lda BlockCtr		//End of Disk? BlockCtr never reaches zero here, only after trasfer, so if it is zero here then we have reached EoD
+			beq ToFetchBAM		//If Yes, fetch BAM, otherwise start transfer
+
+			lda SCtr			//Skip track change if either of these is not zero: (1) SCtr > 0
+			ora ScndBuff		//(2) SCtr = 0 but we have the last block of a bundle in the second buffer
+			bne ToStartTr
+
+			lda NBC				//Very last sector of the disk?
+			beq ToStartTr		//Yes, skip track change, finish transfer
+
+//--------------------------------------
+//		Prepare track change
 //--------------------------------------
 								//Otherwise, clear wanted list and start seeking
-PrepStep:	sec					//Signal to use JMP instead of RTS -> returns to NextTrack
-			jmp JmpClrList		//Y=#$00 here
+			jmp JmpClrList		//C=0, Y=#$00 here, returns to NextTrack
 
 //--------------------------------------
 
-ToCATN:		jmp CheckATN
-
-//--------------------------------------
-//		Mark wanted sectors
-//--------------------------------------
-
-NxtSct:		inx
-Build:		iny					//Temporary increase as we will have an unwanted decrease after BNE
-			lda #$ff			//Needed if nS = last sector of track and it is already fetched
-			bne MaxSct1			//Branch ALWAYS
-
-ChainLoop:	lda WList,x			//Check if sector is unfetched (=00)
-			bne NxtSct			//If sector is not unfetched (it is either fetched or wanted), go to next sector
-
-			lda #$ff
-MarkSct:	sta WList,x			//Mark Sector as wanted (or used in the case of random bundle, STA <=> STY)
-			stx LastS			//Save Last Sector
-IL:			axs #$00			//Calculate Next Sector using inverted interleave
-MaxSct1:	cpx MaxSct2+1		//Reached Max?
-			bcc SkipSub			//Has not reached Max yet, so skip adjustments
-MaxSct2:	axs #$00			//Reached Max, so subtract Max
-			beq SkipSub
-SubSct:		axs #$01			//Decrease if sector > 0
-SkipSub:	dey					//Any more blocks to be put in chain?
-			bne ChainLoop
-			stx nS
-			rts					//A=#$ff, X=next sector, Y=#$00, Z=0 here
+ToStartTr:	jmp StartTr
 
 //--------------------------------------
 
-NextTrack:	ldx cT				//All blocks fetched in this track, so let's change track
-			ldy #$81			//Prepare Y for half track step
+NextTrack:	ldy #$81			//Prepare Y for half track step
+NextTrkSvr:	ldx cT				//All blocks fetched in this track, so let's change track
 
 			inx					//Go to next track
 
-ChkDir:		cpx #$12			//next track = Track 18?, if yes, we need to skip it
-			bne Seek			//half track step, skip setting timer
+			cpx #$12			//next track = Track 18?, if yes, we need to skip it
+			bne StepTmr			//half track step, (could skip setting timer here but we need it for the saver plugin)
 
 			inx					//Skip track 18
 
 			inc nS				//Skipping Dir Track will rotate disk a little bit more than a sector...
 			inc nS				//...(12800 cycles to skip a track, 10526 cycles/sector on track 18)...
 								//...so start sector of track 19 is increased by 2
-
-			ldy #$83			//1.5-track seek, set timer at start
+			iny
+			iny					//1.5-track seek, set timer at start
 
 //--------------------------------------
 //		Stepper Code			//X=Wanted Track
@@ -790,7 +1003,7 @@ BR20:		ora #$20			//Bitrate=%11
 //		Update variables
 //--------------------------------------
 
-RateDone:	sty MaxSct2+1		//Three extra bytes here but faster loop later
+RateDone:	sty MaxNumSct2+1	//Three extra bytes here but faster loop later
 
 			ldx ILTab-$11,y		//Inverted Custom Interleave Tab
 			stx IL+1
@@ -802,9 +1015,9 @@ RateDone:	sty MaxSct2+1		//Three extra bytes here but faster loop later
 			dex
 			stx SubSct+1
 
-			lsr BitRateRet
+			lsr ReturnFlag
 			bcc StoreBR
-OPC_RTS:	rts
+Return:		rts					//A=bitrate from both ReturnFlag checks
 
 StoreBR:	sta Spartan+1		//Store bitrate for Spartan step
 
@@ -812,178 +1025,23 @@ StoreBR:	sta Spartan+1		//Store bitrate for Spartan step
 //		GCR loop patch
 //--------------------------------------
 
-			lda #<GCRLoop3-(GCREntry+2)
+			ldx #<GCRLoop3-(GCREntry+2)
 			cpy #$15						//Y=sector count (17, 18, 19, 21 for zones 0, 1, 2, 3, respectively)
 			beq *+4
-			lda #<GCRLoop0_2-(GCREntry+2)	//GCR Loop patch for zones 0-2
-			sta.z GCREntry+1
+			ldx #<GCRLoop0_2-(GCREntry+2)	//GCR Loop patch for zones 0-2
+			stx.z GCREntry+1
 
-			lda.z Mod2a+2					//Restore LoopMod2 for zones 2-3
-			ldx.z Mod2a+3
-
-			cpy #$13
-			bcs UpdatePatch
-			lda #<OPC_BNE
-			ldx #<Mod2a-(LoopMod2+2)		//GCR Loop Patch for zone 1
-			cpy #$11
-			bne UpdatePatch
-			ldx #<Mod2b-(LoopMod2+2)		//GCR Loop Patch for zone 0
-
-UpdatePatch:
-			sta.z LoopMod2
+			ldx Patch1-17,y
+			stx.z LoopMod2
+			ldx Patch2-17,y
 			stx.z LoopMod2+1
 
-			lsr StepTmrRet
-			bcs OPC_RTS
+			lsr ReturnFlag
+			bcs Return
 
 			sty SCtr						//Reset Sector Counter, but only if this is not a random block which gets SCtr from Dir
 
 //--------------------------------------
-
-			lsr TrackChg		//Are we changing tracks after CATN?
-			bcc CheckATN		//No, goto CATN
-			jmp StartTr			//Yes, go back to transfer (JSR/RTS cannot be used)
-
-//--------------------------------------
-
-Reset:		jmp ($fffc)
-
-//--------------------------------------
-//		Wait for C64
-//--------------------------------------
-
-CheckATN:	lda $1c00			//Fetch Motor and LED status
-			ora #$08			//Make sure LED will be on when we restart
-			tax					//This needs to be done here, so that we do not affect Z flag at Restart
-
-Frames:		ldy #$64			//100 frames (2 seconds) delay before turning motor off (#$fa for 5 sec)
-DelayOut:	lda #$4f			//Approx. 1 frame delay (20000 cycles = $4e20 -> $4e+$01=$4f)
-			sta $1c05			//Start timer, wait 2 seconds before turning motor off
-DelayIn:	lda $1c05
-			bne ChkLines
-			dey
-			bne DelayOut
-			lda #$73			//Timer finished, turn motor off
-			sax $1c00
-			lda #<CSV			//Reset Checksum Verification Counter
-			sta VerifCtr		//I.e. when motor restarts, first we verify proper read
-			
-ChkLines:	lda $1800
-			bpl Reset			//ATN released - C64 got reset, reset the drive too
-			alr #$05			//if C=1 then no change, A=#$00/#$02 after this
-			bcs DelayIn
-								//C=0, file requested
-Restart:	stx $1c00			//Restart Motor and turn LED on if they were turned off
-			beq SeqLoad			//A=#$00 - sequential load
-								//A=#$02 - random load
-
-//--------------------------------------
-//
-//		Random File Access
-//
-//--------------------------------------
-
-GetByte:	lda #$80			//$dd00=#$9b, $1800=#$94
-			ldx #busy			//X=#$10 (AA=1, CO=0, DO=0) - WILL BE USED LATER IF SAVER CODE IS NEEDED
-
-TrRnd:		jsr RcvByte			//OK to use stack here
-
-TrRndRet:	cmp #$ff
-			beq Reset			//C64 requests drive reset
-
-TestRet:	ldy #$00			//Needed later (for FetchBAM if this is a flip request, and FetchDir too)
-			sty EoD				//EoD needs to be cleared here
-			sty NewBundle		//So does NewBundle
-			sty ScndBuff		//And ScndBuff as well
-
-			asl
-			bcs NewDiskID		//A=#$80-#$fe, Y=#$00 - flip disk
-			beq CheckDir		//A=#$00, skip Random flag (first bundle on disk)
-			inc Random
-CheckDir:	ldx #$11			//A=#$00-#$7f, X=#$11 (dir sector 17) - DO NOT CHANGE TO INX, IT IS ALSO A JUMP TARGET!!!
-			asl
-			sta DirLoop+1		//Relative address within Dir segment
-			bcc CompareDir
-			inx					//A=#$40-#$7f, X=#$12 (dir sector 18)
-			cmp #$f8			//Index=#$7e - check if we are loading the Saver Code
-			bne CompareDir
-			lda IncSaver		//A=#$02 if Saver Code is included on Disk, #$01 for transfer test, #$00 otherwise
-			sta SaverCode
-
-CompareDir:	cpx DirSector		//Dir Sector, initial value=#$c5
-			beq DirFetchReturn	//Is the needed Dir Sector fetched?
-
-			stx DirSector		//No, store new Dir Segment index and fetch directory sector
-			stx LastS			//Also store it in LastS to be fetched
-			jmp FetchDir		//ALWAYS, fetch directory, Y=#$00 here (needed)
-
-DirFetchReturn:
-			ldx #$03
-DirLoop:	lda $0700,x
-			sta LastT,x
-			dex
-			bpl DirLoop
-
-			jsr ClearList		//Clear Wanted List, Y=00 here
-
-			inc BitRateRet
-
-			tax					//X=A=LastT
-			jsr BitRate			//Update Build loop, Y=MaxSct after this
-								//Also find interleave and sector count for requested track
-
-			ldx LastS			//This is actually the first sector on the track here
-			tya					//A=MaxSct
-			sec
-			sbc SCtr			//Remaining sectors on track
-			tay					//Y=already fetched sectors on track
-			beq SkipUsed		//Y=0, we start with the first sector, skip marking used sectors
-			dec MarkSct			//Change STA ZP,x to STY ZP,x ($95 -> $94) (A=$ff - wanted, Y>#$00 - used)
-			jsr Build			//Mark all sectors as USED -before- first sector to be fetched
-			inc MarkSct			//Restore Build loop
-
-SkipUsed:	iny					//Mark the first sector of the new bundle as WANTED
-			jsr Build			//A=#$ff, X=Next Sector, Y=#$00 after this call
-
-			lax LastT
-			jmp GotoTrack		//X=desired Track, Y=#$00
-
-//--------------------------------------
-
-NewDiskID:	lsr					//Next Disk's ID for flip detection
-			sta NextID
-
-ToFetchBAM:	jmp FetchBAM		//Go to Track 18 to fetch Sector 0 (BAM) for Next Side Info, A=#$12, Y=#$00
-
-//--------------------------------------
-//
-//		Sequential Loading
-//
-//--------------------------------------
-
-SeqLoad:	tay					//A=#$00 here -> Y=#$00
-			lsr EoD				//End of Disk?
-			bcs ToFetchBAM		//If Yes, load BAM, otherwise start transfer
-
-//--------------------------------------
-//
-//		Check if Late Track Change is needed here
-//
-//--------------------------------------
-
-			lsr NewBundle 
-			bcc StartTr
-
-			lda NBC
-			beq StartTr
-		
-			lda SCtr
-			bne StartTr
-		
-			//Last sector of track and not last sector of last bundle and not first sector of a new bundle 
-		
-			inc TrackChg
-			jmp PrepStep		//Needs Y=#$00, JSR cannot be used
 
 StartTr:	ldy #$00			//transfer loop counter
 			ldx #$ef			//bit mask for SAX
@@ -1017,7 +1075,7 @@ W3:			sta $1800			//10-13
 
 			lsr					//00 01
 			alr #$30			//02 03
-ByteCt:		cpy #$101-Sp		//04 05			Sending #$52 bytes before Spartan Stepping (#$59 for $1a bycles)
+ByteCt:		cpy #$101-Sp		//04 05			Sending #$52 bytes before Spartan Stepping (#$59 for $1a bycles) CPY #$AF/#$01
 			bit $1800			//06-09			#$52 x 72 = #$17 bycles*, #$31 bycles left for 2nd halftrack step and settling
 			bpl *-3				//10 11			*actual time is #$18-$1a+ bycles, and can be (much) longer
 W4:			sta $1800			//12-15			if C64 is not immediately ready to receive fetched block
@@ -1026,14 +1084,14 @@ W4:			sta $1800			//12-15			if C64 is not immediately ready to receive fetched b
 			bcs Loop			//00-02
 
 //--------------------------------------
-//	SPARTAN STEPPING (TM)				<< - Uninterrupted data transfer across adjacent tracks - >>
+//	SPARTAN STEPPING (TM)				<< -	Uninterrupted data transfer across adjacent tracks - >>
 //--------------------------------------		Transfer starts 1-2 bycles after first halftrack step initiated
 
-Spartan:	lda #$00			//02 03		Last halftrack step is taken during data transfer
-			sta $1c00			//04-07		Update bitrate and stepper with precalculated value
-			tya					//08 09		Y=#$ae or #$00 here
-			eor #$101-Sp		//10 11		#$31 bycles left for the head to take last halftrack step...
-			sta ByteCt+1		//12-15		... and settle before new data is fetched
+Spartan:	lda #$00			//02 03			Last halftrack step is taken during data transfer
+			sta $1c00			//04-07			Update bitrate and stepper with precalculated value
+			tya					//08 09			Y=#$AE or #$00 here
+			eor #$101-Sp		//10 11			#$31 bycles left for the head to take last halftrack step...
+			sta ByteCt+1		//12-15			... and settle before new data is fetched
 ChkPt:		bpl Loop			//16-18
 
 .print ""
@@ -1046,7 +1104,7 @@ ChkPt:		bpl Loop			//16-18
 
 //--------------------------------------
 
-			lda #busy			//16,17 		A=#$10
+TrSeqRet:	lda #busy			//16,17 		A=#$10
 			bit $1800			//18,19,20,21 	Last bitpair received by C64?
 			bmi *-3				//22,23
 			sta $1800			//24,25,26,27	Transfer finished, send Busy Signal to C64
@@ -1056,7 +1114,7 @@ ChkPt:		bpl Loop			//16-18
 								//resulting in early reset of the drive
 
 			iny					//Y=#$01
-TrSeqRet:	sty Loop+2			//Restore transfer loop
+			sty Loop+2			//Restore transfer loop
 			
 			jsr ToggleLED		//Transfer complete - turn LED off, leave motor on
 
@@ -1067,29 +1125,24 @@ TrSeqRet:	sty Loop+2			//Restore transfer loop
 			dec BlockCtr		//Decrease Block Counter
 			bne ChkWCtr
 
-UpdateBCtr:	inc NewBundle		//#$00 -> #$01, next block will be first of next Bundle
-			lda NBC				//New Block Count
+UpdateBCtr:	lda NBC				//New Block Count
 			sta BlockCtr
 			bne ChkWCtr			//A = Block Count
 
-			inc EoD				//New BCtr=#$00 - this is the end of the disk
 JmpCATN:	jmp CheckATN		//No more blocks to fetch in sequence, wait for next loader call
 								//If next loader call is sequential -> will go to BAM for flip check/reset
 								//If next loader call is random -> will load requested file
 
 //--------------------------------------
 
-ChkWCtr:
-			lda WantedCtr		//If we just updated BlockCtr then WantedCtr will be 0
-			bne JmpFetch2		//If there are more blocks on the list then fetch next
+ChkWCtr:	lda WantedCtr		//If we just updated BlockCtr then WantedCtr will be 0
+			bne JmpFetch2		//If there are more blocks on the list then fetch next one
 
 			lsr ScndBuff		//No more blocks on wanted list, check if the last block has been stored...
 			bcc CheckBCtr		//If we do not have the last block stored then check Bundle counter
 								//Last block of Bundle stored, so transfer it
 			inc Loop+2			//Modify transfer loop to transfer data from secondary buffer ($0100 -> $0200)
-			ldy SCtr
-			bne JmpCATN			//If more sectors left in track, then transfer this block without seeking to next track
-			jmp PrepStep		//Otherwise, seek to next track during transferring this block, A=#$00 here, needed after jump
+			bne JmpCATN
 
 //--------------------------------------
 //		Build wanted list		//A=#$00, X=#$ef here
@@ -1198,7 +1251,7 @@ CCLoop:		pla					//=lda $0100,y
 			sta ToCD+1
 			lda #>CopyDir
 			sta ToCD+2
-			tya					//A=#$00 - Bundle #$00 to be loaded
+ToCheckDir:	tya					//A=#$00 - Bundle #$00 to be loaded
 			jmp CheckDir		//Load 1st Dir Sector and then first Bundle, Y=A=#$00
 
 .text "SPARKLE 3.1 BY OMG"
@@ -1217,15 +1270,15 @@ CD:
 ZPTab:
 //		 x0  x1  x2  x3  x4  x5  x6  x7  x8  x9  xa  xb  xc  xd  xe  xf
 .byte	$12,$00,$04,$01,$f0,$60,$b0,$20,$01,$40,$80,$00,$e0,$c0,$a0,$80	//0x
-.byte	<BAM_IncSave,>BAM_IncSave
+.byte	<BAM_ProdID-1,>BAM_ProdID-1
 .byte			$2e,$1e,$ae,$1f,$be,$17,$00,CSV,$6e,$1a,$ee,$1b,$fe,$13	//1x
 .byte	$01,$00,$14,$00,$8e,$1d,$9e,$15,$01,$00,$5e,$10,$ce,$19,$de,$11	//2x
 .byte	$7f,$76,$3e,$16,$0e,$1c,$1e,$14,$76,$7f,$7e,$12,$4e,$18,$00,$00	//3x	Wanted List $3e-$52 (Sector 16 = #$ff)
 .byte	$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$ff,$00	//4x	(0) unfetched, (+) fetched, (-) wanted
-.byte	$00,$00,$00,$0e,$00,$0f,$c5,$07,$ff,$01,$01,$0a,$1e,$0b,$00,$03	//5x
-.byte	$fd,$fd,$fd,$00,$fc,$0d,$00,$05,XX3,XX4,XX1,$00,$00,$09,$00,$01	//6x	$60-$64 - ILTab, $63 - NextID
-.byte	<ILTab-1,>ILTab-1
-.byte			XX4,$06,$02,$0c,$00,$04,<ProductID-1,>ProductID-1
+.byte	$00,$00,$00,$0e,$80,$0f,$c5,$07,$ff,$01,$01,$0a,$1e,$0b,$00,$03	//5x	
+.byte	$fd,$fd,$fd,$00,$fc,$0d,$00,$05,$ff,$ff,XX1,$00,$18,$09,$00,$01	//6x	$60-$64 - ILTab, $63 - NextID
+.byte	$1c,<ILTab-1,>ILTab-1
+.byte				$06,$02,$0c,$00,$04,<ProductID-1,>ProductID-1
 .byte											$00,$02					//7x
 }
 //007c
@@ -1311,7 +1364,6 @@ tH:			eor TabH,x			//10001011,000HHHHH		108		116		126		134		bf-c1
 
 								//						Zone 3	Zone 2	Zone 1	Zone 0
 			bvc *				//						00-01							cc cd
-
 			tay					//Y=-0AAAAA00			03								ce
 								//					   [00-25	00-27	00-29	00-31]	
 			lda $1c01			//BBCCCCCD				07/-18	07/-20	07/-22	07/-24	cf-d1
@@ -1330,20 +1382,21 @@ GCREntry:	bne GCRLoop0_2		//We start on Track 18	32/31							e1 e2
 //------------------------------------------------------------------------------------------------------
 
 								//						Zone 3	Zone 2	Zone 1	Zone 0
-			eor CSum+1			//						34		34		34		34		e3 e4
-			tax					//Store checksum in X	36		36		36		36		e5
-			clv					//						38		38		38		38		e6
+			eor (ZP0102,x)		//						37		37		37		37		e3 e4
+			tax					//						39		39		39		39		e5
 								//					   [26-51	28-55	30-59	32-63]
-			lda $1c01			//Final read = DDDDEEEE	42/-9	42/-13	42/+12	42/+10	e7-e9
-			bvc *				//						00-01							ea eb
-			arr #$f0			//A=DDDDD000			03								ec ed
-			tay					//Y=DDDDD000			05								ee
-			txa					//Return checksum to A	07								ef
-			eor TabD,y			//Checksum (D)/ID1 (H)	11								f0-f2
-			ldx tC+1			//X=00CCCCC0			14								f3 f4
-			eor TabC,x			//(ZP)					18								f5 f6
-			eor $0102			//						22								f7-f9
-			eor $0103			//						26								fa-fc
+			lda $1c01			//Final read = DDDD0101	43/-8	43/-12	43/+13	43/+11	e6-e8
+			clv					//						45		45		45		45		e9
+			ror					//A=DDDDD010|C=1		47		47		47		47		ea
+			bvc *				//						00-01							eb ec
+			tay					//						03								ed
+			txa					//						05								ee
+			eor TabD-2,y		//Checksum (D)/ID1 (H)	10								ef-f1
+			ldx tC+1			//X=00CCCCC0			13								f2 f3
+			eor TabC,x			//(ZP)					17								f4 f5
+			eor $0103			//						21								f6-f8
+			eor CSum+1			//						24								f9 fa
+			sbc #$00			//Trailing 0 check		26								fb fc
 ModJmp:		jmp (HeaderJmp)		//Calc final checksum	31								fd-ff
 
 //------------------------------------------------------------------------------------------------------

@@ -108,5 +108,8 @@
     <None Include="resources\sc.asm">
       <Filter>Source Files</Filter>
     </None>
+    <None Include="resources\st.asm">
+      <Filter>Source Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

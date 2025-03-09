@@ -8,7 +8,7 @@
 #import "SD.sym"				//Import labels from SD.asm
 
 .const OPC_NOP_IMM	= $80
-.const OPC_NOP_ABS	= $0c
+//.const OPC_NOP_ABS	= $0c	//defined in SD.sym
 .const ZPSum		= $68		//Save checksum on ZP
 .const ZPTmp		= $69
 
@@ -94,7 +94,7 @@ Ctr:		ldx #$00
 			bne !+				//Bad checksum -> fetch next sector
 			lsr VerifCtr		//Good checksum -> decrement VerifCtr
 
-!:			cpx MaxSct2+1
+!:			cpx MaxNumSct2+1
 			beq TransferBlock	//SectorTable is full -> transfer meta block
 
 			jmp Fetch			//Otherwise just fetch next sector
@@ -149,7 +149,7 @@ DEX:		dex
 
 			lda BlockCtr
 			ldy Ctr+1			//Keep Ctr+1 in Y
-			cpy MaxSct2+1		//Regular block: C=0, Meta block: C=1
+			cpy MaxNumSct2+1	//Regular block: C=0, Meta block: C=1
 			adc #$ff			//Regular block: decrement block count, Meta block: do not decrement block count
 			jsr ShufToRaw
 			sta $0103			//Block count ($03fd)
@@ -165,7 +165,7 @@ DEX:		dex
 
 			inx
 			stx Ctr+1			//Clear Sector Counter
-			cpy MaxSct2+1
+			cpy MaxNumSct2+1
 			beq MetaBlock
 
 			ldy #$00			//RegBlockRet needs Y=#$00

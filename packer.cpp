@@ -104,12 +104,24 @@ bool UpdateByteStream()
         return false;
     }
 
-    memcpy(&ByteSt[(BufferCnt - 1) * 256], &Buffer[0], 256 * sizeof(Buffer[0]));
+    //memcpy(&ByteSt[(BufferCnt - 1) * 256], &Buffer[0], 256 * sizeof(Buffer[0]));
 
-    //for (int i = 0; i < 256; i++)
-    //{
-        //ByteSt[((BufferCnt - 1) * 256) + i] = Buffer[i];
-    //}
+    ////for (int i = 0; i < 256; i++)
+    ////{
+        ////ByteSt[((BufferCnt - 1) * 256) + i] = Buffer[i];
+    ////}
+
+    //Resort blocks (00,01,02,..,ff -> 00,ff,fe,..,01)
+
+    ByteSt[((BufferCnt - 1) * 256) + 0] = Buffer[0];
+
+    int B = 255;
+
+    for (int i = 1; i < 256; i++)
+    {
+        ByteSt[((BufferCnt - 1) * 256) + B] = Buffer[i];
+        B--;
+    }
 
     return true;
 }
@@ -1356,7 +1368,7 @@ void StartNextBundle(bool LastBundleOnDisk)
         Buffer[BytePtr - 2] = 0x00;         //Dummy $00 Literal that overwrites itself
         LitCnt = 0;                         //One (dummy) literal
         //AddLitBits()                      //NOT NEEDED, WE ARE IN THE MIDDLE OF THE BUFFER, 1ST BIT NEEDS TO BE OMITTED
-        AddBits(0, 1);             //ADD 2ND BIT SEPARATELY (0-BIT, TECHNCALLY, THIS IS NOT NEEDED SINCE THIS IS THE LAST BIT)
+        AddBits(0, 1);                      //ADD 2ND BIT SEPARATELY (0-BIT, TECHNCALLY, THIS IS NOT NEEDED SINCE THIS IS THE LAST BIT)
 
         BytePtr -= 3;
         if (BundleNo < 128)
@@ -1369,7 +1381,8 @@ void StartNextBundle(bool LastBundleOnDisk)
     //DO NOT CLOSE LAST BUFFER HERE, WE ARE GOING TO ADD NEXT Bundle TO LAST BUFFER
     if ((BufferCnt * 256) > BlockPtr + 255)                                    //Only save block count if block is already added to ByteSt
     {
-        ByteSt[BlockPtr + 1] = EORtransform(LastBlockCnt);   //New Block Count is ByteSt(BlockPtr+1) in buffer, not ByteSt(BlockPtr+255)
+        //ByteSt[BlockPtr + 1] = EORtransform(LastBlockCnt);   //New Block Count is ByteSt(BlockPtr+1) in buffer, not ByteSt(BlockPtr+255)
+        ByteSt[BlockPtr + 255] = EORtransform(LastBlockCnt);   //New Block Count is ByteSt(BlockPtr+255) in buffer, not ByteSt(BlockPtr+1)!!!
         LoaderBundles++;
     }
 

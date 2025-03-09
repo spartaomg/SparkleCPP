@@ -2,7 +2,7 @@
 .const DriveNo		=$fb
 .const DriveCt		=$fc
 
-.const Sp			=<$ff+$52	//#$51 - Spartan Stepping constant
+.const Sp			=$52		//Spartan Stepping constant
 .const InvSp		=Sp^$ff		//#$ae
 
 .label ZPDst		=$02		//$02/$03
@@ -28,6 +28,7 @@
 .const NTSC_CLRATN	=$c0
 .const NTSC_DD00_1	=$dd00-ready
 .const NTSC_DD00_2	=$dd00-NTSC_CLRATN
+.const NTSC			=Read1+2
 
 //C64
 //Write	 0  0  X  X  X  0  0  0
@@ -275,7 +276,6 @@ Sparkle_IRQ_JSR:
 Sparkle_IRQ_RTI:
 			rti
 
-			nop
 //----------------------------
 
 Sparkle_SendCmd:
@@ -315,8 +315,8 @@ Sparkle_LoadFetched:
 			bit $dd00				//Wait for Drive
 			bvs *-3					//$dd00=#$cx - drive is busy, $0x - drive is ready	00,01	(BMI would also work)
 			stx $dd00				//Release ATN										02-05
-			//dex					//DEX is included in Delay!!!
-			jsr Delay				//Waste a few cycles... (drive takes 16 cycles)		06-28 (minimum needed here is 06-15, 10 cycles, including DEX!!!)
+			inx						//To compensate for first DEX in loop
+			jsr Set01				//Waste a few cycles... (drive takes 16 cycles)		06-28 (minimum needed here is 06-15, 10 cycles, including DEX!!!)
 
 //-------------------------------------
 //
@@ -329,7 +329,7 @@ Read1:		lda $dd00				//4		W1-W2 = 18 cycles							25-28
 			sty $dd00				//4 8	Y=#$08 -> ATN=1
 			lsr						//2 10
 			lsr						//2 12
-			inx						//2 14
+			dex						//2 14
 			nop						//2 16
 			ldy #$c0				//2 (18)
 
@@ -337,7 +337,7 @@ Read2:		ora $dd00				//4		W2-W3 = 16 cycles
 			sty $dd00				//4 8	Y=#$C0 -> ATN=0
 			lsr						//2 10
 			lsr						//2 12
-SpComp:		cpx #Sp					//2 14	Will be changed to #$ff in Spartan Step Delay
+SpComp:		cpx #<$101-Sp			//2 14	X=#$AF/#$01
 			beq ChgJmp				//2/3	16/17 with branch --------------|
 RcvCont:	ldy #$08				//2 (18/28) ATN=1						|
 									//										|
@@ -397,9 +397,9 @@ Done:		rts
 SpSDelay:	lda #<RcvLoop-<ChgJmp	//2 20 Restore Receive loop
 			sta JmpRcv+1			//4 24
 			txa						//2 26
-			eor #InvSp				//2 28 Invert byte counter
-			sta SpComp+1			//4 32 SpComp+1=(#$2a <-> #$ff)
-			bmi RcvLoop				//3 (35) (Drive loop takes 33 cycles)
+			eor #<$100-Sp			//2 28 Invert byte counter (EOR #$AE)
+			sta SpComp+1			//4 32 SpComp+1=(#$AF <-> #$01)
+			bpl RcvLoop				//3 (35) (Drive loop takes 33 cycles)
 
 			lda #busy				//Bus lock
 			sta $dd00
@@ -655,6 +655,7 @@ EndLoader:
 .eval myFile.writeln(".const Sparkle_IRQ		=$" + toHexString(Sparkle_IRQ) + "	//Fallback IRQ vector")
 .eval myFile.writeln(".const Sparkle_IRQ_JSR		=$" + toHexString(Sparkle_IRQ_JSR) + "	//Fallback IRQ subroutine/music player JSR instruction")
 .eval myFile.writeln(".const Sparkle_IRQ_RTI		=$" + toHexString(Sparkle_IRQ_RTI) + "	//Fallback IRQ RTI instruction")
+.eval myFile.writeln(".const Sparkle_NTSC_Check	=$" + toHexString(NTSC) + "	//Value = $dd if PAL, $dc if NTSC")
 .eval myFile.writeln(".const Sparkle_Save		=$302	//Hi-score file saver (A=#$01-#$0f, high byte of file size, A=#$00 to abort), only if hi-score file is included on disk")
 
 .print "Sparkle_SendCmd:	" + toHexString(Sparkle_SendCmd)

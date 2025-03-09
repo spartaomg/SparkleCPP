@@ -7,7 +7,7 @@
 //#define NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR BUILD INFO 250120
+//  COMPILE TIME VARIABLES FOR BUILD INFO 250309
 //--------------------------------------------------------
 
 constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -28,7 +28,7 @@ constexpr unsigned int Day = (__DATE__[4] == ' ') ? (__DATE__[5] - '0') : (__DAT
 constexpr unsigned int VersionBuild = ((Year / 10) * 0x100000) + ((Year % 10) * 0x10000) + ((Month / 10) * 0x1000) + ((Month % 10) * 0x100) + ((Day / 10) * 0x10) + (Day % 10);
 
 constexpr int VersionMajor = 3;
-constexpr int VersionMinor = 1;
+constexpr int VersionMinor = 2;
 
 string OptionPause = "";
 
@@ -95,6 +95,15 @@ const string EntryTypeAlign = "align";
 const string EntryTypeDirIndex = "dirindex:";
 const string EntryTypeComment = "comment:";
 
+unsigned char BundleTypeNone = 0;
+unsigned char BundleTypeFile = 1;
+unsigned char BundleTypeScript = 2;
+unsigned char BundleTypeSaverPlugin = 3;
+unsigned char BundleTypeHSFile = 4;
+unsigned char BundleTypeCustomPlugin = 5;
+
+unsigned char BundleType = BundleTypeNone;
+
 int ProductID = 0;
 size_t LineStart, LineEnd;
 
@@ -126,18 +135,26 @@ int DirPtr[128]{};
 
 unsigned char AltDirBitPtr[128]{};
 int AltDirBundleNo[128]{};
+unsigned char AltDirPlugin[128]{};
+
 int TmpDirEntryIndex = 0;
 int DirEntryIndex = 0;
-bool DirEntriesUsed = false;
+bool DirIndicesUsed = false;
+unsigned char DirIndices[128]{};
 
 //Hi-Score File variables
 string HSFileName = "";
+string HSA = "";
+string HSO = "";
+string HSL = "";
 vector<unsigned char> HSFile;
 size_t HSAddress = 0;
 size_t HSOffset = 0;
 size_t HSLength = 0;
+
 bool bSaverPlugin = false;
 bool bCustomCodePlugin = false;
+bool bHSFile = false;
 
 #ifdef TESTDISK
     bool bTestDisk = false;
@@ -169,6 +186,8 @@ size_t DirTrack, DirSector, DirPos;
 string DirArtName = "";
 string DirEntry = "";
 bool DirEntryAdded = false;
+
+vector <PluginStruct> PluginFiles;
 
 int BlockPtr;
 int LastBlockCnt = 0;
@@ -449,7 +468,7 @@ string ReadFileToString(const string& FileName, bool CorrectFilePath)
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 /*
-void WriteTextToFile(const string& DiskName)
+void SaveScript(const string& DiskName)
 {
     ofstream out(DiskName);
     out << Script;
@@ -693,7 +712,7 @@ void InjectDirBlocks()
     //DirBlocks(2) = EORtransform(Remaining sectors on track), it is used by the drive code, remaining sectors on the track
     //DirBlocks(3) = BitPtr, NOT EOR transformed, it is used on the C64 side
 
-    if (DirEntriesUsed)
+    if (DirIndicesUsed)
     {
         //Create first DirEntry for Bundle #0
         DirBlocks[0] = EORtransform(TabT[0]);
@@ -710,11 +729,11 @@ void InjectDirBlocks()
         //Overwrite directory entries if an alternative DirEntry index was assigned
         for (int i = 1; i < 128; i++)
         {
-            if (AltDirBundleNo[i] != 0)
+            if (AltDirBitPtr[i] != 0)
             {
                 int BN = AltDirBundleNo[i];
                 int BP = AltDirBitPtr[i];
-                DirBlocks[i * 4] = EORtransform(TabT[BN]);
+                DirBlocks[i * 4] = EORtransform(TabT[BN] + AltDirPlugin[i]);
                 DirBlocks[(i * 4) + 1] = EORtransform(TabStartS[TabT[BN]]);
                 DirBlocks[(i * 4) + 2] = EORtransform(TabSCnt[BN]);
                 DirBlocks[(i * 4) + 3] = BP;
@@ -734,7 +753,7 @@ void InjectDirBlocks()
 
         for (int i = 0; i < 128; i++)
         {
-            DirBlocks[i * 4] = EORtransform(TabT[DirPtr[i]]);
+            DirBlocks[i * 4] = EORtransform(TabT[DirPtr[i]] + AltDirPlugin[i]);
             DirBlocks[(i * 4) + 1] = EORtransform(TabStartS[TabT[DirPtr[i]]]);
             DirBlocks[(i * 4) + 2] = EORtransform(TabSCnt[DirPtr[i]]);
         }
@@ -1282,7 +1301,7 @@ bool AddHSFile()
             FLN += 0x100;
         }
 
-        FLN &= 0xf00;
+        FLN &= 0xff00;
 
         FL = ConvertIntToHextString(FLN, 4);
 
@@ -1333,7 +1352,7 @@ bool AddHSFile()
                 FLN += 0x100;
             }
 
-            FLN &= 0xf00;
+            FLN &= 0xff00;
 
             FL = ConvertIntToHextString(FLN, 4);
 
@@ -1438,6 +1457,8 @@ bool ResetBundleVariables()
 
     TmpDirEntryIndex = 0;
 
+    BundleType = BundleTypeNone;
+
 #ifdef NEWIO
     BundleUnderIO = false;
 #endif
@@ -1531,11 +1552,15 @@ bool ResetDiskVariables()
     //Reset Bundle File variables here, to have an empty array for the first compression on a ReBuild
     Prgs.clear();    //this is the one that is needed for the first CompressPart call during a ReBuild
 
+    PluginFiles.clear();
+
     //Reset directory arrays
     fill_n(DirBlocks, 512, 0);
     fill_n(DirPtr, 128, 0);
     fill_n(AltDirBitPtr, 128, 0);
     fill_n(AltDirBundleNo, 128, 0);
+    fill_n(DirIndices, 128, 0);
+    fill_n(AltDirPlugin, 128, 0);
 
     //Reset disk system to support 35 tracks
     TracksPerDisk = StdTracksPerDisk;
@@ -1549,6 +1574,7 @@ bool ResetDiskVariables()
     HSAddress = 0;
     HSOffset = 0;
     HSLength = 0;
+    bHSFile = false;
 
 #ifdef TESTDISK
     //Not a fetch test disk
@@ -1585,7 +1611,7 @@ bool ResetDiskVariables()
 
     ParsedEntries = "";
 
-    DirEntriesUsed = false;
+    DirIndicesUsed = false;
 
     //Reset Disk image
     NewDisk();
@@ -1760,7 +1786,7 @@ bool FindNextScriptEntry()
 {
     while ((LineEnd = Script.find("\n", LineStart)) == LineStart)
     {
-        NewBundle = true;
+        NewBundle = true;   //EMPTY LINE - MARKS THE END OF A BUNDLE AND THE BEGINNING OF A NEW ONE
         LineStart++;
     }
     
@@ -1940,7 +1966,7 @@ bool CompressBundle()             //NEEDS PackFile() and CloseFile()
     
     int DirIdx = 0;
     
-    if (DirEntriesUsed)
+    if (DirIndicesUsed)
     {
         if (BundleNo < 256)
         {
@@ -2374,6 +2400,40 @@ bool SortBundle()
 
 bool BundleDone()
 {
+ 
+    if ((BundleType == BundleTypeCustomPlugin) || (BundleType == BundleTypeSaverPlugin))
+    {
+        int DI;
+        if (DirIndicesUsed)
+        {
+            DI = TmpDirEntryIndex;
+        }
+        else
+        {
+            DI = BundleNo;
+        }
+        PluginFiles.push_back(PluginStruct(DI, BundleType, "", "", "", ""));
+    }
+    else if (BundleType == BundleTypeHSFile)
+    {
+        int DI;
+        if (DirIndicesUsed)
+        {
+            DI = TmpDirEntryIndex;
+        }
+        else
+        {
+            DI = BundleNo;
+        }
+        PluginFiles.push_back(PluginStruct(DI, BundleType, HSFileName, HSA, HSO, HSL));
+    }
+
+    BundleType = BundleTypeNone;
+    HSFileName = "";
+    HSA = "";
+    HSO = "";
+    HSL = "";
+
     //First finish last bundle, if it exists
     if (tmpPrgs.size() > 0)
     {
@@ -2413,10 +2473,34 @@ bool AddVirtualFile()
 
     if (NewBundle)
     {
-        NewBundle = false;
         if (!BundleDone())
             return false;
     }
+
+    if (BundleType > BundleTypeFile)
+    {
+        string ErrorMsg = "***CRITICAL***\tCan't have both Mem and ";
+        if (BundleType == BundleTypeScript)
+        {
+            ErrorMsg += "Script entries in the same bundle.\n";
+        }
+        else if (BundleType == BundleTypeSaverPlugin)
+        {
+            ErrorMsg += "Plugin entries in the same bundle.\n";
+        }
+        else if (BundleType == BundleTypeHSFile)
+        {
+            ErrorMsg += "HSFile entries in the same bundle.\n";
+        }
+        else if (BundleType == BundleTypeCustomPlugin)
+        {
+            ErrorMsg += "Plugin entries in the same bundle.\n";
+        }
+        cerr << ErrorMsg;
+        return false;
+    }
+
+    BundleType = BundleTypeFile;
 
     string FN = FindAbsolutePath(ScriptEntryArray[0], ScriptPath);
     string FA = "";
@@ -2648,8 +2732,40 @@ bool AddVirtualFile()
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool AddFileToBundle()
+bool AddFile()
 {
+
+    if (NewBundle)
+    {
+        if (!BundleDone())
+            return false;
+    }
+
+    if (BundleType > BundleTypeFile)
+    {
+        string ErrorMsg = "***CRITICAL***\tCan't have both File and ";
+        if (BundleType == BundleTypeScript)
+        {
+            ErrorMsg += "Script entries in the same bundle.\n";
+        }
+        else if (BundleType == BundleTypeSaverPlugin)
+        {
+            ErrorMsg += "Plugin entries in the same bundle.\n";
+        }
+        else if (BundleType == BundleTypeHSFile)
+        {
+            ErrorMsg += "HSFile entries in the same bundle.\n";
+        }
+        else if (BundleType == BundleTypeCustomPlugin)
+        {
+            ErrorMsg += "Plugin entries in the same bundle.\n";
+        }
+        cerr << ErrorMsg;
+        return false;
+    }
+
+    BundleType = BundleTypeFile;
+
     string FN = FindAbsolutePath(ScriptEntryArray[0], ScriptPath);
     string FA = "";
     string FO = "";
@@ -2899,27 +3015,6 @@ bool AddFileToBundle()
     FileCnt++;
 
     tmpPrgs.push_back(FileStruct(P, FN, FA, FO, FL, FUIO, UncompressedFile));
-
-    return true;
-}
-
-//----------------------------------------------------------------------------------------------------------------------------------------------------------
-
-bool AddFile()
-{
-    if (NewBundle)
-    {
-        if (!BundleDone())
-        {
-            return false;
-        }
-    }
-
-    //Then add file to bundle
-    if (!AddFileToBundle())
-    {
-        return false;
-    }
 
     return true;
 }
@@ -4804,7 +4899,7 @@ bool InjectTestPlugin()
     DeleteBit(CT, CS);
 
     //Add plugin to directory
-    Disk[Track[18] + (18 * 256) + 8] = EORtransform(CT);              //DirBlocks(0) = EORtransform(Track) = 35
+    Disk[Track[18] + (18 * 256) + 8] = EORtransform(CT+0x80);         //DirBlocks(0) = EORtransform(Track) = 35/40 + plugin flag bit (1 block)
     Disk[Track[18] + (18 * 256) + 7] = EORtransform(TabStartS[CT]);   //DirBlocks(1) = EORtransform(Sector) = First sector of Track(35) (not first sector of file!!!)
     Disk[Track[18] + (18 * 256) + 6] = EORtransform(TabSCnt[SctPtr]); //DirBlocks(2) = EORtransform(Remaining sectors on track)
     Disk[Track[18] + (18 * 256) + 5] = 0xfe;                                //DirBlocks(3) = BitPtr
@@ -4817,7 +4912,7 @@ bool InjectTestPlugin()
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool InjectCustomCodePlugin()
+bool InjectCustomCodePlugin(int DirIdx)
 {
 
     BlocksUsedByPlugin = 2;
@@ -4838,7 +4933,7 @@ bool InjectCustomCodePlugin()
     CustomCodeSize = sc_size;
 
     //Calculate sector pointer on disk
-    int SctPtr = SectorsPerDisk - 2;
+    int SctPtr = BufferCnt;
 
     //Identify first T/S of the saver plugin
     CT = TabT[SctPtr];
@@ -4848,24 +4943,95 @@ bool InjectCustomCodePlugin()
     int LastT = TabT[SctPtr + 1];
     int LastS = TabS[SctPtr + 1];
 
-    cout << "Adding Custom Drive Code Plugin...\t    ->    2 blocks\t\t\t";
-    cout << ((FirstT < 10) ? "0" : "") << FirstT << ":" << ((FirstS < 10) ? "0" : "") << FirstS << " - " << ((LastT < 10) ? "0" : "") << LastT << ":" << ((LastS < 10) ? "0" : "") << LastS << "\n";
-
-    //Copy first block of custom code plugin to disk
-    for (int i = 0; i < 256; i++)
+    string strDirIndex = "";
+    if (DirIndicesUsed)
     {
-        Disk[Track[CT] + (CS * 256) + i] = CustomCode[i];
+        strDirIndex = "\tDir Index: $" + ConvertIntToHextString(DirIdx, 2);
+    }
+
+    cout << "Adding Custom Drive Code Plugin...\t    ->    2 blocks\t\t\t";
+    cout << ((FirstT < 10) ? "0" : "") << FirstT << ":" << ((FirstS < 10) ? "0" : "") << FirstS << " - " << ((LastT < 10) ? "0" : "") << LastT << ":" << ((LastS < 10) ? "0" : "") << LastS << strDirIndex <<"\n";
+
+    //Copy first block of custom code plugin to disk (reverse byte order)
+    int B = 255;
+    
+    Disk[Track[CT] + (CS * 256) + 0] = CustomCode[0];   
+    
+    for (int i = 1; i < 256; i++)
+    {
+        Disk[Track[CT] + (CS * 256) + i] = CustomCode[B--];
     }
 
     //Mark sector off in BAM
     DeleteBit(CT, CS);
 
     //Add plugin to directory
-    Disk[Track[18] + (18 * 256) + 8] = EORtransform(CT);               //DirBlocks(0) = EORtransform(Track) = 35
-    Disk[Track[18] + (18 * 256) + 7] = EORtransform(TabStartS[CT]);    //DirBlocks(1) = EORtransform(Sector) = First sector of Track(35) (not first sector of file!!!)
-    Disk[Track[18] + (18 * 256) + 6] = EORtransform(TabSCnt[SctPtr]);  //DirBlocks(2) = EORtransform(Remaining sectors on track)
-    Disk[Track[18] + (18 * 256) + 5] = 0xfe;                                //DirBlocks(3) = BitPtr
+    
+    //-------------------------------------------------------
+    //SAVE CURRENT BIT POINTER AND BUFFER COUNT FOR DIRECTORY
+    //-------------------------------------------------------
 
+    if (DirIndicesUsed)
+    {
+        if (BundleNo < 256)
+        {
+            if (DirIdx > 0)
+            {
+                AltDirBitPtr[DirIdx] = 0xfe;
+                AltDirBundleNo[DirIdx] = BufferCnt;
+                AltDirPlugin[DirIdx] = 0x40;
+            }
+        }
+        else
+        {
+            cout << "***INFO***\tThe number of file bundles is greater than 256 on this disk!\n"
+                << "A DirEntry value can only be assigned to bundles 1-255.\n";
+            return false;
+        }
+    }
+    else
+    {
+        if (BundleNo < 128)
+        {
+            DirBlocks[(BundleNo * 4) + 3] = BitPtr;
+            DirPtr[BundleNo] = BufferCnt;
+            AltDirPlugin[BundleNo]=0x40;
+        }
+        else
+        {
+            MaxBundleNoExceeded = true;
+        }
+    }
+    //BundleNo++;
+    
+    //DirBlocks[DirIdx * 4] = EORtransform(CT + 0x40);
+    //DirBlocks[(DirIdx * 4) + 1] = EORtransform(TabStartS[CT]);
+    //DirBlocks[(DirIdx * 4) + 2] = EORtransform(TabSCnt[SctPtr]);
+    //DirBlocks[(DirIdx * 4) + 3] = 0xfe;
+/*
+    int DirSct = 17;
+    if (DirIdx > 63)
+    {
+        DirSct = 18;
+        DirIdx -= 64;
+    }
+
+    DirIdx = DirIdx * 4;
+    int LastDirIdxVal = DirIdx + 3;
+    if (LastDirIdxVal == 256)
+    {
+        LastDirIdxVal -= 256;
+    }
+
+    unsigned char FirstSectorOfTrack = TabStartS[CT];
+    unsigned char RemainingSectorsOnTrack = TabSCnt[SctPtr];
+
+    Disk[Track[18] + (DirSct * 256) + LastDirIdxVal] = EORtransform(CT + 0x40);             //DirBlocks(0) = EORtransform(Track) = 35/40 + plugin flag bit (2 blocks)
+    Disk[Track[18] + (DirSct * 256) + DirIdx + 2] = EORtransform(FirstSectorOfTrack);       //DirBlocks(1) = EORtransform(Sector) = First sector of Track(35) (not first sector of file!!!)
+    Disk[Track[18] + (DirSct * 256) + DirIdx + 1] = EORtransform(RemainingSectorsOnTrack);  //DirBlocks(2) = EORtransform(Remaining sectors on track)
+    Disk[Track[18] + (DirSct * 256) + DirIdx + 0] = 0xfe;                                   //DirBlocks(3) = BitPtr
+    
+*/
     //Next Sector
     SctPtr++;
 
@@ -4885,13 +5051,17 @@ bool InjectCustomCodePlugin()
     //Mark sector off in BAM
     DeleteBit(CT, CS);
 
+    BlocksFree -= BlocksUsedByPlugin;
+    BufferCnt += BlocksUsedByPlugin;
+    BundleNo++;
+
     return true;
 
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool InjectSaverPlugin()
+bool InjectSaverPlugin(int PluginIdx, int HSFileIdx)
 {
     if (HSFile.size() == 0)
     {
@@ -4913,14 +5083,6 @@ bool InjectSaverPlugin()
     //  Add SaveCode
     //-----------------
 
-    BlocksUsedByPlugin = (HSLength / 0x100) + 1 + 2;
-
-    if (BlocksFree < BlocksUsedByPlugin)
-    {
-        cerr << "***CRITICAL***\tThe Hi-Score File and the Saver Plugin cannot be added because there is not enough free space on the disk!\n";
-        return false;
-    }
-
     unsigned char SaveCode[512]{};
     int SaveCodeSize{};
 
@@ -4929,7 +5091,7 @@ bool InjectSaverPlugin()
         SaverSupportsIO = true;
         HSFileName.replace(HSFileName.length() - 1, 1, "");
 
-        for(int i = 0; i < ssio_size; i++)
+        for (int i = 0; i < ssio_size; i++)
         {
             SaveCode[i] = ssio[i];
         }
@@ -4944,6 +5106,40 @@ bool InjectSaverPlugin()
             SaveCode[i] = ss[i];
         }
         SaveCodeSize = ss_size;
+    }
+
+    int HSBlocks = 0;
+    int HSL = HSLength;
+
+    if (SaverSupportsIO)
+    {
+        HSL -= 0xf7;
+    }
+    else
+    {
+        HSL -= 0xf8;
+    }
+    HSBlocks++;
+
+    while (HSL > 0)
+    {
+        if (SaverSupportsIO)
+        {
+            HSL -= 0xfa;
+        }
+        else
+        {
+            HSL -= 0xfb;
+        }
+        HSBlocks++;
+    }
+
+    BlocksUsedByPlugin = HSBlocks + 2;
+
+    if (BlocksFree < BlocksUsedByPlugin)
+    {
+        cerr << "***CRITICAL***\tThe Hi-Score File and the Saver Plugin cannot be added because there is not enough free space on the disk!\n";
+        return false;
     }
 
     //UpdateZP BUG REPORTED BY Rico/Pretzel Logic
@@ -4990,13 +5186,12 @@ bool InjectSaverPlugin()
         }
     }
 
-    SaveCode[3] = (HSLength / 256) + 1;
-    SaveCode[0x13] = (HSAddress - 1) & 0xff;
-    SaveCode[0x1a] = (HSAddress - 1) / 0x100;
+    SaveCode[3] = HSBlocks;
+    SaveCode[0x17] = (HSAddress - 1) & 0xff;
+    SaveCode[0x1e] = (HSAddress - 1) / 0x100;
 
     //Calculate sector pointer on disk
-    int SctPtr = SectorsPerDisk - 2;
-    SctPtr -= ((HSLength / 256) + 1);
+    int SctPtr = BufferCnt; //SectorsPerDisk - BlocksUsedByPlugin;
 
     //Identify first T/S of the saver plugin
     CT = TabT[SctPtr];
@@ -5005,24 +5200,29 @@ bool InjectSaverPlugin()
     int FirstS = CS;
     int LastT = TabT[SctPtr+1];
     int LastS = TabS[SctPtr+1];
+    
+    string strDirIndex = "";
+    if (DirIndicesUsed)
+    {
+        strDirIndex = "\tDir Index: $" + ConvertIntToHextString(PluginIdx, 2);
+    }
 
     cout << "Adding Hi-score Saver Plugin...\t\t    ->    2 blocks\t\t\t";
-    cout << ((FirstT < 10) ? "0" : "") << FirstT << ":" << ((FirstS < 10) ? "0" : "") << FirstS << " - " << ((LastT < 10) ? "0" : "") << LastT << ":" << ((LastS < 10) ? "0" : "") << LastS << "\n";
+    cout << ((FirstT < 10) ? "0" : "") << FirstT << ":" << ((FirstS < 10) ? "0" : "") << FirstS << " - " << ((LastT < 10) ? "0" : "") << LastT << ":" << ((LastS < 10) ? "0" : "") << LastS << strDirIndex << "\n";
 
-    //Copy first block of saver plugin to disk
-    for (int i = 0; i < 256; i++)
+    //Copy first block of saver plugin to disk (reverse byte order)
+
+    int B = 255;
+    
+    Disk[Track[CT] + (CS * 256) + 0] = SaveCode[0];
+    
+    for (int i = 1; i < 256; i++)
     {
-        Disk[Track[CT] + (CS * 256) + i] = SaveCode[i];
+        Disk[Track[CT] + (CS * 256) + i] = SaveCode[B--];
     }
 
     //Mark sector off in BAM
     DeleteBit(CT, CS);
-
-    //Add plugin to directory
-    Disk[Track[18] + (18 * 256) + 8] = EORtransform(CT);               //DirBlocks(0) = EORtransform(Track) = 35
-    Disk[Track[18] + (18 * 256) + 7] = EORtransform(TabStartS[CT]);    //DirBlocks(1) = EORtransform(Sector) = First sector of Track(35) (not first sector of file!!!)
-    Disk[Track[18] + (18 * 256) + 6] = EORtransform(TabSCnt[SctPtr]);  //DirBlocks(2) = EORtransform(Remaining sectors on track)
-    Disk[Track[18] + (18 * 256) + 5] = 0xfe;                                //DirBlocks(3) = BitPtr
 
     //Next Sector
     SctPtr++;
@@ -5043,6 +5243,25 @@ bool InjectSaverPlugin()
     //Mark sector off in BAM
     DeleteBit(CT, CS);
 
+    //Add plugin to directory
+    int DirSct = 17;
+    if (PluginIdx > 63)
+    {
+        DirSct = 18;
+        PluginIdx -= 64;
+    }
+
+    PluginIdx = ((63 - PluginIdx) * 4) + 1;
+    int LastPluginIdxVal = PluginIdx + 3;
+    if (LastPluginIdxVal == 256)
+    {
+        LastPluginIdxVal -= 256;
+    }
+    Disk[Track[18] + (DirSct * 256) + LastPluginIdxVal] = EORtransform(CT + 0x40);      //DirBlocks(0) = EORtransform(Track) = 35/40 + plugin flag bit (2 blocks)
+    Disk[Track[18] + (DirSct * 256) + PluginIdx + 2] = EORtransform(TabStartS[CT]);     //DirBlocks(1) = EORtransform(Sector) = First sector of Track(35) (not first sector of file!!!)
+    Disk[Track[18] + (DirSct * 256) + PluginIdx + 1] = EORtransform(TabSCnt[SctPtr]);   //DirBlocks(2) = EORtransform(Remaining sectors on track)
+    Disk[Track[18] + (DirSct * 256) + PluginIdx + 0] = 0xfe;                            //DirBlocks(3) = BitPtr
+
     //-----------------
     //  Add SaveFile
     //-----------------
@@ -5056,18 +5275,39 @@ bool InjectSaverPlugin()
     
     int HSFBC = BlocksUsedByPlugin-2;
     
-    LastT = TabT[SectorsPerDisk - 1];
-    LastS = TabS[SectorsPerDisk - 1];
+    LastT = TabT[SctPtr + HSBlocks - 1];
+    LastS = TabS[SctPtr + HSBlocks - 1];
 
     TotalOrigSize += BlocksUsedByPlugin;
 
-    cout << "Adding Hi-score File...\t\t\t    ->   " << (HSFBC < 10 ? " " : "") << HSFBC << " block" << ((HSFBC == 1) ? " \t\t\t" : "s\t\t\t");
-    cout << ((FirstT < 10) ? "0" : "") << FirstT << ":" << ((FirstS < 10) ? "0" : "") << FirstS << " - " << ((LastT < 10) ? "0" : "") << LastT << ":" << ((LastS < 10) ? "0" : "") << LastS << "\n";
+    strDirIndex = "";
+    if (DirIndicesUsed)
+    {
+        strDirIndex = "\tDir Index: $" + ConvertIntToHextString(HSFileIdx, 2);
+    }
 
-    Disk[Track[18] + (18 * 256) + 4] = EORtransform(CT);                //DirBlocks(0) = EORtransform(Track) = 35
-    Disk[Track[18] + (18 * 256) + 3] = EORtransform(TabStartS[CT]);     //DirBlocks(1) = EORtransform(Sector) = First sector of Track(35) (not first sector of file!!!)
-    Disk[Track[18] + (18 * 256) + 2] = EORtransform(TabSCnt[SctPtr]);   //DirBlocks(2) = EORtransform(Remaining sectors on track)
-    Disk[Track[18] + (18 * 256) + 1] = 0xfe;                                 //DirBlocks(3) = BitPtr
+    cout << "Adding Hi-score File...\t\t\t    ->   " << (HSFBC < 10 ? " " : "") << HSFBC << " block" << ((HSFBC == 1) ? " \t\t\t" : "s\t\t\t");
+    cout << ((FirstT < 10) ? "0" : "") << FirstT << ":" << ((FirstS < 10) ? "0" : "") << FirstS << " - " << ((LastT < 10) ? "0" : "") << LastT << ":" << ((LastS < 10) ? "0" : "") << LastS << strDirIndex << "\n";
+
+    //Add HSFile to directory
+    DirSct = 17;
+    if (HSFileIdx > 63)
+    {
+        DirSct = 18;
+        HSFileIdx -= 64;
+    }
+
+    HSFileIdx = ((63 - HSFileIdx) * 4) + 1;
+    int LastHSFileIdxVal = HSFileIdx + 3;
+    if (LastHSFileIdxVal == 256)
+    {
+        LastHSFileIdxVal -= 256;
+    }
+
+    Disk[Track[18] + (DirSct * 256) + LastHSFileIdxVal] = EORtransform(CT);             //DirBlocks(0) = EORtransform(Track) = 35
+    Disk[Track[18] + (DirSct * 256) + HSFileIdx + 2] = EORtransform(TabStartS[CT]);     //DirBlocks(1) = EORtransform(Sector) = First sector of Track(35) (not first sector of file!!!)
+    Disk[Track[18] + (DirSct * 256) + HSFileIdx + 1] = EORtransform(TabSCnt[SctPtr]);   //DirBlocks(2) = EORtransform(Remaining sectors on track)
+    Disk[Track[18] + (DirSct * 256) + HSFileIdx + 0] = 0xfe;                            //DirBlocks(3) = BitPtr
 
     DeleteBit(CT, CS);
 
@@ -5075,13 +5315,12 @@ bool InjectSaverPlugin()
     int HSStartAdd = HSAddress + HSLength - 1;
     unsigned char BlockCnt = HSLength / 256;
 
-
     //First block
     SBuffer[0] = 0;
-    SBuffer[1] = EORtransform((HSLength / 256));                //Remaining block count (EOR transformed)
-    SBuffer[255] = 0xfe;                                             //First byte of block
-    SBuffer[254] = 0x81;                                             //Bit stream
-    SBuffer[253] = HSStartAdd % 256;                                 //Last byte's address(Lo)
+    SBuffer[1] = EORtransform((HSLength / 256));                        //Remaining block count (EOR transformed)
+    SBuffer[255] = 0xfe;                                                //First byte of block
+    SBuffer[254] = 0x81;                                                //Bit stream
+    SBuffer[253] = HSStartAdd % 256;                                    //Last byte's address(Lo)
     if (SaverSupportsIO)
     {
         SBuffer[252] = 0;                                            //I/O flag
@@ -5101,9 +5340,13 @@ bool InjectSaverPlugin()
         SBuffer[i] = HSFile[HSLength - 1 - (SaverSupportsIO ? 248 : 249) + i];
     }
 
-    for (int i = 0; i < 256; i++)
+    B = 255;
+    
+    Disk[Track[CT] + (CS * 256) + 0] = SBuffer[0];
+    
+    for (int i = 1; i < 256; i++)
     {
-        Disk[Track[CT] + (CS * 256) + i] = SBuffer[i];
+        Disk[Track[CT] + (CS * 256) + i] = SBuffer[B--];
     }
 
     if (SaverSupportsIO)
@@ -5153,9 +5396,13 @@ bool InjectSaverPlugin()
             SBuffer[j] = HSFile[HSLength - 1 - (SaverSupportsIO ? 250 : 251) + j];
         }
 
-        for (int j = 0; j < 256; j++)
+        B = 255;
+
+        Disk[Track[CT] + (CS * 256) + 0] = SBuffer[0];
+        
+        for (int j = 1; j < 256; j++)
         {
-            Disk[Track[CT] + (CS * 256) + j] = SBuffer[j];
+            Disk[Track[CT] + (CS * 256) + j] = SBuffer[B--];
         }
 
         if (SaverSupportsIO)
@@ -5184,7 +5431,7 @@ bool InjectSaverPlugin()
 
 
     SBuffer[0] = 0x81;                                           //Bit stream
-    SBuffer[1] = EORtransform(0);                           //New block count = 0 (eor transformed)
+    SBuffer[1] = EORtransform(0);                                //New block count = 0 (eor transformed)
     SBuffer[255] = HSStartAdd % 256;                             //Last byte's address(Lo)
     if (SaverSupportsIO)
     {
@@ -5210,10 +5457,77 @@ bool InjectSaverPlugin()
     SBuffer[(SaverSupportsIO ? 251 : 252) - HSLength - 1] = NearLongMatchTag;    //End of Bundle: 0x84
     SBuffer[(SaverSupportsIO ? 251 : 252) - HSLength - 2] = EndOfBundleTag;      //End of Bundle: 0x00
 
+    B = 255;
+    
+    Disk[Track[CT] + (CS * 256) + 0] = SBuffer[0];
 
-    for (int i = 0; i < 256; i++)
+    for (int i = 1; i < 256; i++)
     {
-        Disk[Track[CT] + (CS * 256) + i] = SBuffer[i];
+        Disk[Track[CT] + (CS * 256) + i] = SBuffer[B--];
+    }
+
+    BlocksFree -= BlocksUsedByPlugin;
+    BufferCnt += BlocksUsedByPlugin;
+
+    return true;
+
+}
+//----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+bool AddPluginFiles()
+{
+    for (size_t i = 0; i < PluginFiles.size(); i++)
+    {
+        if (PluginFiles.at(i).PluginType == BundleTypeCustomPlugin)
+        {
+            InjectCustomCodePlugin(PluginFiles.at(i).PluginDirIndex);
+        }
+        else if (PluginFiles.at(i).PluginType == BundleTypeSaverPlugin)
+        {
+            if (i + 1 < PluginFiles.size())
+            {
+                if (PluginFiles.at(i + 1).PluginType == BundleTypeHSFile)
+                {
+                    ScriptEntryArray[0] = PluginFiles.at(i + 1).HSFileName;
+                    NumScriptEntries = 0;
+
+                    if (!PluginFiles.at(i + 1).HSFileAddress.empty())
+                    {
+                        ScriptEntryArray[1] = PluginFiles.at(i + 1).HSFileAddress;
+                        NumScriptEntries++;
+
+                        if (!PluginFiles.at(i + 1).HSFileOffset.empty())
+                        {
+                            ScriptEntryArray[2] = PluginFiles.at(i + 1).HSFileOffset;
+                            NumScriptEntries++;
+
+                            if (!PluginFiles.at(i + 1).HSFileLength.empty())
+                            {
+                                ScriptEntryArray[3] = PluginFiles.at(i + 1).HSFileLength;
+                                NumScriptEntries++;
+                            }
+                        }
+                    }
+                    if (!AddHSFile())    //Create HSFile from script entry
+                        return false;
+                    if (!InjectSaverPlugin(PluginFiles.at(i).PluginDirIndex, PluginFiles.at(i + 1).PluginDirIndex)) //Add Saver Plugin and HSFile to disk
+                        return false;
+                    i++;
+                }
+                else
+                {
+                    //ERROR - Saver plugin must be followed by HS file!!!
+                    cerr << "***CRITICAL***\tThe Saver Plugin bundle must be followed by the HSFile bundle in the script!\n";
+                    return false;
+                }
+            }
+            else
+            {
+                //ERROR - Saver plugin must be followed by HS file!!!
+                cerr << "***CRITICAL***\tThe Saver Plugin bundle must be followed by the HSFile bundle in the script!\n";
+                return false;
+            }
+        }
     }
 
     return true;
@@ -5250,17 +5564,17 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
     //-------------------
     //Add version info: YY MM DD VV
 
-    int VI = 0x5b;
-    Drive[VI + 0] = VersionBuild >> 16;
-    Drive[VI + 1] = (VersionBuild & 0xff00) >> 8;
-    Drive[VI + 2] = VersionBuild & 0xff;
-    Drive[VI + 4] = (VersionMajor << 4) + VersionMinor;
+    int VI = 0x2f;  //0x5b;
+    Drive[VI + 0] = (VersionMajor << 4) + VersionMinor;
+    Drive[VI + 3] = VersionBuild >> 16;
+    Drive[VI + 14] = (VersionBuild & 0xff00) >> 8;
+    Drive[VI + 16] = VersionBuild & 0xff;
 
     //-------------------
     //   ProductID
     //-------------------
     //Add Product ID
-    int PID = 0x1b;
+    int PID = 0x6b;  //0x1b;
     Drive[PID + 0] = ProductID >> 16;
     Drive[PID + 1] = (ProductID & 0xff00) >> 8;
     Drive[PID + 2] = ProductID & 0xff;
@@ -5287,9 +5601,9 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
     Drive[(3 * 256) + ZPILTabLoc + 3] = idcNextID % 256;
     Drive[(3 * 256) + ZPILTabLoc + 4] = 256 - IL0;
 
+    /*
     //Add PlugIn to ZP (IncSaver = $74)
     int ZPIncPluginLoc = 0x74;
-
 #ifdef TESTDISK
     if (bTestDisk)
     {
@@ -5309,7 +5623,7 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
 #ifdef TESTDISK
     }
 #endif // TESTDISK
-
+*/
     CT = 18;
     CS = 11;
 
@@ -5332,7 +5646,7 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
     Disk[BAM + 252] = EORtransform(256 - IL1);
     Disk[BAM + 251] = EORtransform(idcNextID % 256);
     Disk[BAM + 250] = EORtransform(256 - IL0);
-
+/*
     BlocksUsedByPlugin = 0;
 #ifdef TESTDISK
     if (bTestDisk)
@@ -5340,7 +5654,7 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
         bSaverPlugin = false;   //Can't have Saver and FetchTest at the same time
 
         //Add "IncludeFetchTest" flag and FetchTest plugin
-        Disk[BAM + 249] = EORtransform(1);
+        //Disk[BAM + 249] = EORtransform(1);    //No longer used
         if (!InjectTestPlugin())
             return false;
     }
@@ -5350,25 +5664,26 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
         if (bSaverPlugin)
         {
             //Add "IncludeSaveCode" flag and Saver plugin
-            Disk[BAM + 249] = EORtransform(2);
+            //Disk[BAM + 249] = EORtransform(2);    //No longer used
             if (!InjectSaverPlugin())
                 return false;
         }
         if (bCustomCodePlugin)
         {
             //Add "IncludeCustomCode" flag and Saver plugin
-            Disk[BAM + 249] = EORtransform(2);
+            //Disk[BAM + 249] = EORtransform(2);    //No longer used
             if (!InjectCustomCodePlugin())
                 return false;
         }
         else
         {
-            Disk[BAM + 249] = EORtransform(0);
+            //Disk[BAM + 249] = EORtransform(0);    //No longer used
         }
 #ifdef TESTDISK
     }
 #endif // TESTDISK
-
+*/
+    Disk[BAM + 249] = EORtransform(0);      //IncludeSaverCode flag is no longer used on BAM, will leave this here for compatibility
 
     //Also add Product ID to BAM, EOR-transformed
     Disk[BAM + 248] = EORtransform((ProductID / 0x10000) & 0xff);
@@ -5707,15 +6022,6 @@ bool AddCompressedBundlesToDisk()
         return false;
     }
 
-#ifdef TESTDISK
-    if (!bTestDisk)
-    {
-#endif // TESTDISK
-        InjectDirBlocks();
-#ifdef TESTDISK
-    }
-#endif // TESTDISK
-
     for (int i = 0; i < BufferCnt; i++)
     {
         CT = TabT[i];
@@ -5766,7 +6072,7 @@ bool FinishDisk(bool LastDisk)
     if (!BundleDone())
         return false;
     
-    //BitsNeededForNextBundle is calculated during sorting the enxt bundle, but here we have no next bundle
+    //BitsNeededForNextBundle is normally calculated during sorting the next bundle, but here we have no next bundle
     BitsNeededForNextBundle = 48;       //This is the last bundle on the disk, there is no next bundle under I/O
     
     if (!CompressBundle())
@@ -5776,7 +6082,7 @@ bool FinishDisk(bool LastDisk)
     if (!CloseBuffer())
         return false;
 
-    if (MaxBundleNoExceeded)
+    if ((MaxBundleNoExceeded) && (!DirIndicesUsed))
     {
         cout << "***INFO***\tThe number of file bundles is greater than 128 on this disk!\n"
              << "You can only access bundles 0-127 by bundle index. The rest can only be loaded using the LoadNext function.\n";
@@ -5785,6 +6091,22 @@ bool FinishDisk(bool LastDisk)
     //Now add compressed parts to disk
     if (!AddCompressedBundlesToDisk())                      //Also adds two dir sectors (18:17 and 18:18)
         return false;
+
+
+    if (PluginFiles.size() > 0)
+    {
+        if (!AddPluginFiles())
+            return false;
+    }
+
+#ifdef TESTDISK
+    if (!bTestDisk)
+    {
+#endif // TESTDISK
+        InjectDirBlocks();
+#ifdef TESTDISK
+    }
+#endif // TESTDISK
 
     if (!InjectLoader(18,7,1))                      //If InjectLoader(-1, 18, 7, 1) = False Then GoTo NoDisk
         return false;
@@ -5796,7 +6118,7 @@ bool FinishDisk(bool LastDisk)
 
     if (NextID == 255)
     {
-        NextID = LastDisk ? 0xff : DiskCnt + 1;            //Negative value means no more disk, otherwise 0x00-0x7f
+        NextID = LastDisk ? 0xff : DiskCnt + 1;            //Negative value means no more disks, otherwise 0x00-0x7e (called with +$80, 0x7f is reserved for drive reset)
     }
     if (!InjectDriveCode(ThisID,LoaderBundles,NextID))
         return false;
@@ -6267,31 +6589,67 @@ bool Build()
             }
             else if (ScriptEntryType == EntryTypeHSFile)
             {
-                if (!NewD)
+                /*
+                                if (!NewD)
+                                {
+                                    NewD = true;
+                                    if ((!FinishDisk(false)) || (!ResetDiskVariables()))
+                                        return false;
+                                }
+                */
+                if (NewBundle)
                 {
-                    NewD = true;
-                    if ((!FinishDisk(false)) || (!ResetDiskVariables()))
+                    if (!BundleDone())
                         return false;
-                }
-                if (NumScriptEntries > -1)
-                {
-                    if (ScriptEntryArray[0] !="")
-                    {
-                        if (!AddHSFile())
-                            return false;
-                    }
+
+                    NewBundle = false;
                 }
 
-                NewBundle = true;
+                if (BundleType == BundleTypeNone)
+                {
+                    BundleType = BundleTypeHSFile;
+                }
+                else if (BundleType == BundleTypeHSFile)
+                {
+                    cerr << "***CRITICAL***\tCan't have more than one HSFile in the bundle!\n";
+                    return false;
+                }
+                else
+                {
+                    cerr << "***CRITICAL***\tCan't mix the HSFile with other files/plugins in the bundle!\n";
+                    return false;
+                }
+                
+                if (NumScriptEntries > -1)
+                {
+                    HSFileName = ScriptEntryArray[0];
+                }
+
+                if (NumScriptEntries > 0)
+                {
+                    HSA = ScriptEntryArray[1];
+                }
+
+                if (NumScriptEntries > 1)
+                {
+                    HSO = ScriptEntryArray[2];
+                }
+
+                if (NumScriptEntries > 2)
+                {
+                    HSL = ScriptEntryArray[3];
+                }
             }
             else if (ScriptEntryType == EntryTypePlugin)
             {
-                if (!NewD)
+                if (NewBundle)
                 {
-                    NewD = true;
-                    if ((!FinishDisk(false)) || (!ResetDiskVariables()))
+                    if (!BundleDone())
                         return false;
+
+                    NewBundle = false;
                 }
+
                 if (NumScriptEntries > -1)
                 {
                     string PluginParam = "";
@@ -6305,11 +6663,37 @@ bool Build()
                     
                     if ((PluginParam == "cdc") || (PluginParam == "custom") || (PluginParam == "customdrivecode"))
                     {
-                        bCustomCodePlugin = true;
+                        if (BundleType == BundleTypeNone)
+                        {
+                            BundleType = BundleTypeCustomPlugin;
+                        }
+                        else if (BundleType == BundleTypeCustomPlugin)
+                        {
+                            cerr << "***CRITICAL***\tCan't have more than one Custom Plugin in the bundle!\n";
+                            return false;
+                        }
+                        else
+                        {
+                            cerr << "***CRITICAL***\tCan't mix the Custom Plugin with other files/plugins in the bundle!\n";
+                            return false;
+                        }
                     }
                     else if (PluginParam == "saver")
                     {
-                        //not used ATM, save plugin is avved via HSFile
+                        if (BundleType == BundleTypeNone)
+                        {
+                            BundleType = BundleTypeSaverPlugin;
+                        }
+                        else if (BundleType == BundleTypeCustomPlugin)
+                        {
+                            cerr << "***CRITICAL***\tCan't have more than one Saver Plugin in the bundle!\n";
+                            return false;
+                        }
+                        else
+                        {
+                            cerr << "***CRITICAL***\tCan't mix the Saver Plugin with other files/plugins in the bundle!\n";
+                            return false;
+                        }
                     }
 #ifdef TESTDISK
                     else if ((PluginParam == "testdisk") || (PluginParam == "test"))
@@ -6317,9 +6701,12 @@ bool Build()
                         bTestDisk = true;
                     }
 #endif //TESTDISK
+                    else
+                    {
+                        cerr << "***CRITICAL***\tUnrecognized plugin type!\n";
+                        return false;
+                    }
                 }
-
-                NewBundle = true;
             }
             else if (ScriptEntryType == EntryTypeScript)
             {
@@ -6333,8 +6720,15 @@ bool Build()
             else if (ScriptEntryType == EntryTypeFile)
             {
                 //Add files to bundle array, if new bundle=true, we will first sort, compress and add previous bundle to disk
+                //if (!AddFile())
+                //    return false;
+
+                //Then add file to bundle
                 if (!AddFile())
+                {
                     return false;
+                }
+
                 if (NewD)
                 {
                     CalcTabs();
@@ -6375,8 +6769,19 @@ bool Build()
                             cerr << "***CRITICAL***\tThe DirIndex value must be a hex number between $01 and $7f!\n";
                             return false;
                         }
-                        DirEntriesUsed = true;      //We have a valid DirEntry -> we will use the alternative directory
+                        
+                        if (DirIndices[tmp] != 0)
+                        {
+                            cerr << "***CRITICAL***\tDirIndex $" << ScriptEntryArray[0] << "is already in use!\n";
+                            return false;
+                        }
+                        else
+                        {
+                            DirIndices[tmp] = 1;
+                        }
+                        DirIndicesUsed = true;      //We have a valid DirEntry -> we will use the alternative directory
                         TmpDirEntryIndex = tmp;
+
                     }
                     else
                     {
@@ -6589,7 +6994,7 @@ int main(int argc, char* argv[])
 
 #ifdef DEBUG
 
-        string ScriptFileName = "c:/Sparkle/Example/Sparkle.sls";
+        string ScriptFileName = "c:/Users/Tamas/source/repos/X2024/Parts/FastTransfer/FastTransfer.sls";    //"c:/Sparkle/Example/Sparkle.sls";
         Script = ReadFileToString(ScriptFileName, true);
         SetScriptPath(ScriptFileName, AppPath);
 

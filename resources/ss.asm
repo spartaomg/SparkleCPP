@@ -27,6 +27,10 @@
 //
 //	v1.7	- optimized GCR encoding
 //
+//	v1.8	- track change during saving
+//			  allowing script syntax changes to save HSFile anywhere on the disk
+//			  HSFile can be larger then $0f00 bytes
+//
 //----------------------------
 //	BLOCK STRUCTURE
 //
@@ -45,7 +49,7 @@
 
 .const SupportIO	=cmdLineVars.get("io").asBoolean()
 
-.const	ZP			=$02
+.const ZP			=$02
 //.const Bits		=$04
 
 .const sendbyte		=$18			//AO=1, CO=1, DO=0 on C64 -> $1800=$94
@@ -70,6 +74,7 @@ ByteCnt:
 .byte $00,$77						//First 2 bytes of block - 00 and block count, will be overwritten by Byte counter
 
 SLSaveStart:
+
 //----------------------------------------
 //		Init
 //----------------------------------------
@@ -78,12 +83,14 @@ SLSaveStart:
 		bcc *+4						//Abort saving if file size is outside range
 		lda #$00
 		sta ByteCnt+1				//HiByte of total bytes to be sent, ByteCnt = #$00 by default
-		tax							//This way the function can be called with A (like the other loader functions)
-		lda ByteConv,x				//Block count EOR-transformed
-		sta BlockCnt+1
+		tay
+		ldx #$09
+		axs #$00
+		eor EorTab,x
+		sta BlockCnt+1				//Block count EOR-transformed
 		lda #$00
 		sta AdLo
-		txa
+		tya
 		clc
 		adc #$00
 		sta AdHi
@@ -223,9 +230,12 @@ Send:	sta Bits
 		sta $dd00					//4	Bus lock
 
 		rts							//6
+EorTab:
+.byte $7f,$76,$00,$00,$00,$00,$00,$00,$76,$7f
 
-ByteConv:
-.byte $7f,$77,$7d,$75,$7b,$73,$79,$71,$7e,$76,$7c,$74,$7a,$72,$78,$70
+//ByteConv:
+//.byte $7f,$77,$7d,$75,$7b,$73,$79,$71,$7e,$76,$7c,$74,$7a,$72,$78,$70
+
 BlockHdr:
 LitCnt:
 .byte FirstLit,$00
@@ -256,23 +266,30 @@ BHdrEnd:
 {
 #import "SD.sym"					//Import labels from SD.asm
 
-.const ChkSum		=DirSector		//Temporary value on ZP for H2STab preparation and GCR loop timing
+.const ChkSum		= DirSector		//Temporary value on ZP for H2STab preparation and GCR loop timing
 									//DirSector can be overwritten here
 
 *=$2a00 "Drive Save Code"
 
 .pseudopc $0100 {					//Stack pointer =#$00 at start
 
-Start:
 		lda #<SFetchJmp				//Update ReFetch vector, done once
-		sta ReFetch+1				//First 5 bytes will be overwritten with Block Header and Stack
-		jmp RcvCheck				//Let's check if we will receive anything...
+		jmp Start					//First 5 bytes will be overwritten with Block Header and Stack
 
 //--------------------------------------
 //		Find next sector in chain
 //--------------------------------------
 
+TrackChange:
+		jsr ClearList				//Y=#$00 here
+		ldy #$02					//Two half-track steps, two return checks
+		sty ReturnFlag
+		jsr NextTrkSvr				//Automatically skips track 18
+		sta $1c00					//Last half-track step with correct bitrate
+		sty SCtr					//Save SCtr
 NextBlock:
+		ldy SCtr
+		beq TrackChange
 		ldy #$02					//Reset BufLoc Hi Byte
 		sty BufLoc+2				//Doing this here saves a byte
 		dey							//Find and mark next wanted sector on track, Y=#$01 (=block count)
@@ -291,7 +308,7 @@ ByteBfr:
 		sta $0700					//And save it to buffer, overwriting internal directory
 		eor ChkSum
 		sta ChkSum					//Calculate checksum
-		dec ByteBfr+1
+		inc ByteBfr+1
 		bne GetByteLoop
 
 //--------------------------------------
@@ -311,7 +328,7 @@ SFetch:	ldy #<SHeaderJmp
 //--------------------------------------
 		//jmp (SaveJmp)				//31	
 SHeader:
-		//cmp $0103					//--	Header byte #10 (GGGHHHHH) = $55, skipped (cycles 32-63)
+		//cmp $0103					//--	Header byte #10 (GGGHHHHH) = $55, skipped (cycles [26-51] ... [32-63])
 		bne SFetch					//33	We are on Track 35/40 here, so it is ALWAYS Speed Zone 0 (32 cycles per byte)
 		lda $0103					//37
 		jsr ShufToRaw				//57	Details:
@@ -322,10 +339,10 @@ SHeader:
 											//rts				57
 		cmp LastS					//60
 		bne SFetch					//62
-		tax							//64	First gap byte = $55, skipped (cycles 64-95)
+		tax							//64	First gap byte = $55, skipped (cycles [52-77]...[64-95])
 		ldy #$05					//66
 		sty.z WList,x				//70	Mark off sector on Wanted List
-		clv							//72	Optimal CLV timing for all 4 speed zones for 275-312 rpm [70-74]
+		clv							//72	Optimal timing for all 4 speed zones for 275-312 rpm [70-74]
 
 GapLoop:
 		bvc *						//01	Skip an additional six $55 bytes (Header Gap)
@@ -346,21 +363,20 @@ SyncLoop:
 		bne SyncLoop				//11
 
 		ldy #$bb					//13
-		ldx #$02					//15
-		txa							//17
+		lax ZP02					//16
 BfrLoop2:
-		sta BfrLoop1+2				//21		22
+		sta BfrLoop1+2				//20		22
 BfrLoop1:
-		lda $0200,y					//25	16	26	Worst case scenario: 27 cycles when switching buffers from $0200 to $0700
+		lda $0200,y					//24	16	26	Worst case scenario: 27 cycles when switching buffers from $0200 to $0700
 									//				Should also work in Speed Zone 3 (but current version only writes to track 35/40)
 		bvc *						//01	01	01
 		clv							//03	03	03
-		sta $1c01					//07	07	07
+		sta $1c01					//07	07	07	Switch with CLV if write error in Zone 3
 		iny							//09	09	09
 		bne BfrLoop1				//11	12	12
 		lda #$07					//13		13
 		dex							//15		15
-		bne BfrLoop2				//17		18	
+		bne BfrLoop2				//17		18
 
 		bvc *						//01
 		jsr $fe00					//Using ROM function here to save a few bytes...
@@ -373,6 +389,8 @@ BfrLoop1:
 									//RTS
 
 		jsr ToggleLED				//Trun LED off - no proper ROM function for this unfortunately...
+
+		dec SCtr					//Sector complete, decrease sector counter
 
 //--------------------------------------
 //		Check for next block
@@ -388,7 +406,7 @@ RcvCheck:
 //		Saving done, restore loader
 //--------------------------------------
 
-		stx DirSector				//Reset DirSector to ensure next (index-based) load reloads the directory
+		stx DirSector				//Reset DirSector (X=$95) to ensure next (index-based) load reloads the directory
 		lda #<FetchJmp
 		sta ReFetch+1				//Restore ReFetch vector
 		jmp CheckATN
@@ -399,7 +417,7 @@ RcvCheck:
 
 NewByte:
 		ldx #$94					//Make sure C64 is ready to send (%10010100)
-		cpx $1800					//jsr CheckPort
+		cpx $1800					//TODO: need to save 1 more byte for this...
 		bne *-3
 
 		lda #$80					//$dd00=#$9b, $1800=#$94
@@ -447,11 +465,11 @@ GCREncode:
 		and #$0f
 GetGCR:
 		tay
-		lda GCRTab,y				//Saves 6 cycles per nibble
-		//lda $f77f,y				//GCR codes in the drive's ROM
-		//asl
-		//asl
-		//asl						//move 5 GCR bits to the left side of byte
+		//lda GCRTab,y				//Would save 6 cycles per nibble, needs additional 13 bytes
+		lda $f77f,y					//GCR codes in the drive's ROM
+		asl
+		asl
+		asl							//move 5 GCR bits to the left side of byte
 		ldy #$05					//bitcounter for GCR codes
 NextBit:
 		asl
@@ -469,8 +487,13 @@ SkipNext:
 		rts							//A=00 and Y=00 here
 
 //--------------------------------------
+//	THIS CAN BE OVERWRITTEN IN STACK
+//--------------------------------------
 
-GCRTab:
-.byte $0a*8,$0b*8,$12*8,$13*8,$0e*8,$0f*8,$16*8,$17*8,$09*8,$19*8,$1a*8,$1b*8,$0d*8,$1d*8,$1e*8,$15*8
+Start:	sta ReFetch+1				//Update ReFetch vector, done once
+		bne RcvCheck				//BRA - Let's check if we will receive anything...
+
+//GCRTab:
+//.byte $0a*8,$0b*8,$12*8,$13*8,$0e*8,$0f*8,$16*8,$17*8,$09*8,$19*8,$1a*8,$1b*8,$0d*8,$1d*8,$1e*8,$15*8
 }
 }

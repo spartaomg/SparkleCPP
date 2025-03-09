@@ -249,6 +249,7 @@
     <None Include="Resources\sl.asm" />
     <None Include="Resources\Sparkle.inc" />
     <None Include="Resources\ss.asm" />
+    <None Include="resources\st.asm" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

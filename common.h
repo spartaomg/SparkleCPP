@@ -10,7 +10,6 @@
 #include <stdio.h>      /* printf, NULL */
 #include <stdlib.h>     /* srand, rand */
 #include <iomanip>
-#include <iostream>
 #include <sstream>
 #include <filesystem>
 #include "thirdparty/lodepng.h"
@@ -60,6 +59,27 @@ extern unsigned char charsettab[];
 extern const int sc_size;
 extern unsigned char sc[];
 
+struct PluginStruct {
+    int PluginDirIndex;
+    int PluginType;
+    string HSFileName;
+    string HSFileAddress;
+    string HSFileOffset;
+    string HSFileLength;
+
+    PluginStruct(int PluginDirIndex, int PluginType, string HSFileName, string HSFileAddress, string HSFileOffset, string HSFileLength)
+    {
+        this->PluginDirIndex = PluginDirIndex;
+        this->PluginType = PluginType;
+        this->HSFileName = HSFileName;
+        this->HSFileAddress = HSFileAddress;
+        this->HSFileOffset = HSFileOffset;
+        this->HSFileLength = HSFileLength;
+    }
+};
+
+extern vector <PluginStruct> PluginFiles;
+
 struct FileStruct {
     vector<unsigned char> Prg;
     string FileName;
@@ -72,7 +92,8 @@ struct FileStruct {
     int iFileOffs;
     int iFileLen;
 
-    FileStruct(vector<unsigned char> Prg, string FileName, string FileAddr, string FileOffs, string FileLen, bool FileIO, bool FileUncompressed) {
+    FileStruct(vector<unsigned char> Prg, string FileName, string FileAddr, string FileOffs, string FileLen, bool FileIO, bool FileUncompressed)
+    {
         this->Prg = Prg;
         this->FileName = FileName;
         this->FileAddr = FileAddr;
