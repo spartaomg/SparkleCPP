@@ -914,7 +914,7 @@ SeqLoad:	tay					//A=#$00 here -> Y=#$00
 			lda BlockCtr		//End of Disk? BlockCtr never reaches zero here, only after trasfer, so if it is zero here then we have reached EoD
 			beq ToFetchBAM		//If Yes, fetch BAM, otherwise start transfer
 
-			lda SCtr			//Skip track change if either of these is not zero: (1) SCtr > 0
+			lda SCtr			//Skip track change if either of these is true: (1) SCtr > 0
 			ora ScndBuff		//(2) SCtr = 0 but we have the last block of a bundle in the second buffer
 			bne ToStartTr
 
@@ -1001,7 +1001,7 @@ BR20:		ora #$20			//Bitrate=%11
 //		Update variables
 //--------------------------------------
 
-RateDone:	sty MaxNumSct2+1	//Three extra bytes here but faster loop later
+RateDone:	sty MaxNumSct2+1
 
 			ldx ILTab-$11,y		//Inverted Custom Interleave Tab
 			stx IL+1

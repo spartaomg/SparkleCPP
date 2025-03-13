@@ -3242,7 +3242,7 @@ bool AddAsmDirEntry(string AsmDirEntry)
                                     break;
                                 }
                             }
-                            Entry[Idx++] = NextChar;
+                            Entry[Idx++] = petscii2dirart[NextChar];
                             if (Idx == 16)
                             {
                                 break;
@@ -7071,7 +7071,7 @@ int main(int argc, char* argv[])
 
 #ifdef DEBUG
 
-        string ScriptFileName = "c:/Users/Tamas/source/repos/X2024/Parts/FastTransfer/FastTransfer.sls";    //"c:/Sparkle/Example/Sparkle.sls";
+        string ScriptFileName = "c:/Sparkle/Example/Sparkle.sls";
         Script = ReadFileToString(ScriptFileName, true);
         SetScriptPath(ScriptFileName, AppPath);
 
