@@ -3242,7 +3242,7 @@ bool AddAsmDirEntry(string AsmDirEntry)
                                     break;
                                 }
                             }
-                            Entry[Idx++] = petscii2dirart[NextChar];
+                            Entry[Idx++] = NextChar;
                             if (Idx == 16)
                             {
                                 break;
@@ -3251,7 +3251,7 @@ bool AddAsmDirEntry(string AsmDirEntry)
                     }
                     for (size_t i = 0; i < 16; i++)
                     {
-                        Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = Entry[i];
+                        Disk[Track[DirTrack] + (DirSector * 256) + DirPos + 3 + i] = petscii2dirart[Entry[i]];
                     }
                 }
                 else
