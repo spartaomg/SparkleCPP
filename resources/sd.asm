@@ -367,7 +367,9 @@ FetchJmp:
 .byte											$37
 //031b
 Patch1:
-.byte												<OPC_BNE,<OPC_BNE,OPC_ALR,$07,OPC_ALR
+.byte												<OPC_BNE,<OPC_BNE,OPC_ALR
+.byte															$07
+.byte																OPC_ALR
 .byte	$a5,$a1,$a7,XX2,$ad,$a9,$67,$04,$05,$0d,$77,$00,$01,$09,$47,XX3	//PC tool stores Version info at $032f
 .byte	$07,$0f,XX4,$0a,$03,$0b,$a7,$0c,$06,$0e,$b7,$08,$02,XX1,$27,XX2	//PC tool stores release YY/MM/DD at $0331/$033d/$033f
 .byte	$af,$ab,$ae,$aa,$ac,$a8,$e7
@@ -388,7 +390,9 @@ DataJmp:
 .byte										$d9,$97
 //035b
 Patch2:
-.byte												<Mod2a-(LoopMod2+2),<Mod2b-(LoopMod2+2),$fc,$17,$fc
+.byte												<Mod2b-(LoopMod2+2),<Mod2a-(LoopMod2+2),$fc
+.byte															$17
+.byte																$fc
 .byte	XX3,$a3,$a6,$a2,$a4,$a0,$c7
 //0367
 SHeaderJmp:

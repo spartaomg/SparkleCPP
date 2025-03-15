@@ -5051,7 +5051,7 @@ bool InjectCustomCodePlugin(int DirIdx)
     //Mark sector off in BAM
     DeleteBit(CT, CS);
 
-    BlocksFree -= BlocksUsedByPlugin;
+    //BlocksFree -= BlocksUsedByPlugin; //-> this is taken care of in DeleteBit
     BufferCnt += BlocksUsedByPlugin;
     BundleNo++;
 
@@ -5186,10 +5186,17 @@ bool InjectSaverPlugin(int PluginIdx, int HSFileIdx)
         }
     }
 
-    SaveCode[3] = HSBlocks;
-    SaveCode[0x17] = (HSAddress - 1) & 0xff;
-    SaveCode[0x1e] = (HSAddress - 1) / 0x100;
-
+    SaveCode[0x03] = (HSLength / 0x100) + 1;            //We are comparing with max block count + 1
+    SaveCode[0x10] = (HSAddress - 1) / 0x100;           //High byte of the address of the last byte of the Hi-Score file
+    if (SaverSupportsIO)
+    {
+        SaveCode[0xf1] = (HSAddress - 1) & 0xff;        //Low byte of the address of the last byte of the Hi-Score file
+    }
+    else
+    {
+        SaveCode[0xec] = (HSAddress - 1) & 0xff;        //Low byte of the address of the last byte of the Hi-Score file
+    }
+    
     //Calculate sector pointer on disk
     int SctPtr = BufferCnt; //SectorsPerDisk - BlocksUsedByPlugin;
 
@@ -5300,31 +5307,31 @@ bool InjectSaverPlugin(int PluginIdx, int HSFileIdx)
     Disk[Track[18] + (DirSct * 256) + PluginIdx + 1] = EORtransform(TabSCnt[SctPtr]);   //DirBlocks(2) = EORtransform(Remaining sectors on track)
     Disk[Track[18] + (DirSct * 256) + PluginIdx + 0] = 0xfe;                            //DirBlocks(3) = BitPtr
     */
-    //-----------------
-    //  Add SaveFile
-    //-----------------
+    
+    //---------------------
+    //  Add Hi-Score File
+    //---------------------
 
     SctPtr++;
-
     CT = TabT[SctPtr];
     CS = TabS[SctPtr];
     FirstT = CT;
     FirstS = CS;
     
-    int HSFBC = BlocksUsedByPlugin-2;
+    //int HSFBC = BlocksUsedByPlugin - 2;
     
     LastT = TabT[SctPtr + HSBlocks - 1];
     LastS = TabS[SctPtr + HSBlocks - 1];
 
     TotalOrigSize += BlocksUsedByPlugin;
-
+    
     strDirIndex = "";
     if (DirIndicesUsed)
     {
         strDirIndex = "\tDir Index: $" + ConvertIntToHextString(HSFileIdx, 2);
     }
 
-    cout << "Adding Hi-score File...\t\t\t    ->   " << (HSFBC < 10 ? " " : "") << HSFBC << " block" << ((HSFBC == 1) ? " \t\t\t" : "s\t\t\t");
+    cout << "Adding Hi-score File...\t\t\t    ->   " << (HSBlocks < 10 ? " " : "") << HSBlocks << " block" << ((HSBlocks == 1) ? " \t\t\t" : "s\t\t\t");
     cout << ((FirstT < 10) ? "0" : "") << FirstT << ":" << ((FirstS < 10) ? "0" : "") << FirstS << " - " << ((LastT < 10) ? "0" : "") << LastT << ":" << ((LastS < 10) ? "0" : "") << LastS << strDirIndex << "\n";
 
     /*
@@ -5390,7 +5397,7 @@ bool InjectSaverPlugin(int PluginIdx, int HSFileIdx)
 
     unsigned char SBuffer[256]{};
     int HSStartAdd = HSAddress + HSLength - 1;
-    unsigned char BlockCnt = HSLength / 256;
+    //unsigned char BlockCnt = BlocksUsedByPlugin - 2;    // HSLength / 256;
 
     //First block
     SBuffer[0] = 0;
@@ -5438,7 +5445,7 @@ bool InjectSaverPlugin(int PluginIdx, int HSFileIdx)
     }
 
     //Blocks 1 to BlockCnt-1
-    for (int i = 1; i < BlockCnt; i++)
+    for (int i = 1; i < HSBlocks - 1; i++)
     {
         SctPtr++;
 
@@ -5543,7 +5550,7 @@ bool InjectSaverPlugin(int PluginIdx, int HSFileIdx)
         Disk[Track[CT] + (CS * 256) + i] = SBuffer[B--];
     }
 
-    BlocksFree -= BlocksUsedByPlugin;
+    //BlocksFree -= BlocksUsedByPlugin; //-> this is taken care of in DeleteBit
     BufferCnt += BlocksUsedByPlugin;
 
     return true;
@@ -7071,7 +7078,7 @@ int main(int argc, char* argv[])
 
 #ifdef DEBUG
 
-        string ScriptFileName = "c:/Sparkle/Example/Sparkle.sls";
+        string ScriptFileName = "c:/SparkleSaveTest/SparkleSaveTest.sls";
         Script = ReadFileToString(ScriptFileName, true);
         SetScriptPath(ScriptFileName, AppPath);
 

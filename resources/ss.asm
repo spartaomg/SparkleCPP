@@ -71,7 +71,8 @@
 .pseudopc $0300 {
 
 ByteCnt:
-.byte $00,$77						//First 2 bytes of block - 00 and block count, will be overwritten by Byte counter
+.byte $00,$77						//First 2 bytes of block (00 and block count), will be overwritten by Byte counter
+									//$77 = $01 EOR-transformed = block count, i.e. number of additional blocks to be loaded (drive code of saver)
 
 SLSaveStart:
 
@@ -83,19 +84,28 @@ SLSaveStart:
 		bcc *+4						//Abort saving if file size is outside range
 		lda #$00
 		sta ByteCnt+1				//HiByte of total bytes to be sent, ByteCnt = #$00 by default
-		tay
+		tax
+		beq ToSS		
+		clc
+AddrHi:	adc #$00
+		sta AdHi
+
+		ldy	#$00					//Calculate block count on disk
+		lda #$ff-(FirstLit+1)		//HHff-(FirstLit+1) (HH goes to 0 instead of -1)
+!:		iny
+		sec
+		sbc #<(NextLit+1)
+		bcs !-
+		dex
+		bne !-
+MaxBcnt:
+		tya
 		ldx #$09
 		axs #$00
 		eor EorTab,x
 		sta BlockCnt+1				//Block count EOR-transformed
-		lda #$00
-		sta AdLo
-		tya
-		clc
-		adc #$00
-		sta AdHi
 		jsr Set01
-		bne StartSend				//Branch always, first we send the block count, if 0, nothing to be saved, job done
+ToSS:	bpl StartSend				//Branch always, first we send the block count, if 0, nothing to be saved, job done
 SendNextBlock:
 
 //----------------------------------------
