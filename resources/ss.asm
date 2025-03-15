@@ -92,10 +92,10 @@ AddrHi:	adc #$00
 
 		ldy	#$00					//Calculate block count on disk
 		lda #$ff-(FirstLit+1)		//HHff-(FirstLit+1) (HH goes to 0 instead of -1)
+!:		clc
 !:		iny
-		sec
-		sbc #<(NextLit+1)
-		bcs !-
+		sbc #<NextLit
+		bcs !--
 		dex
 		bne !-
 MaxBcnt:

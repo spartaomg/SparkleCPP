@@ -7,7 +7,7 @@
 //#define NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR BUILD INFO 250309
+//  COMPILE TIME VARIABLES FOR BUILD INFO 250315
 //--------------------------------------------------------
 
 constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -5169,7 +5169,7 @@ bool InjectSaverPlugin(int PluginIdx, int HSFileIdx)
 
         for (int i = 0; i <= 249; i++)
         {
-            if ((SaveCode[i] == OPC_STAZP) || (SaveCode[i + 1] == ZPBase + 1))
+            if ((SaveCode[i] == OPC_STAZP) && (SaveCode[i + 1] == ZPBase + 1))
             {
                 SaveCode[i + 1] = ZP + 1;
                 i++;
@@ -5178,7 +5178,7 @@ bool InjectSaverPlugin(int PluginIdx, int HSFileIdx)
 
         for (int i = 0; i <= 249; i++)
         {
-            if ((SaveCode[i] == OPC_STAZP) || (SaveCode[i + 1] == ZPBase + 2))
+            if ((SaveCode[i] == OPC_STAZP) && (SaveCode[i + 1] == ZPBase + 2))
             {
                 SaveCode[i + 1] = ZP + 2;
                 i++;
