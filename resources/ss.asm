@@ -80,171 +80,163 @@ SLSaveStart:
 //		Init
 //----------------------------------------
 
-		cmp #$00					//Max. value determined by default hi-score file in script
-		bcc *+4						//Abort saving if file size is outside range
-		lda #$00
-		sta ByteCnt+1				//HiByte of total bytes to be sent, ByteCnt = #$00 by default
-		tax
-		beq ToSS		
-		clc
-AddrHi:	adc #$00
-		sta AdHi
+			cmp #$00					//Max. value determined by default hi-score file in script
+			bcc *+4						//Abort saving if file size is outside range
+			lda #$00
+			sta ByteCnt+1				//HiByte of total bytes to be sent, ByteCnt = #$00 by default
+			tax
+			beq ToSS		
+			clc
+AddrHi:		adc #$00
+			sta AdHi
 
-		ldy	#$00					//Calculate block count on disk
-		lda #$ff-(FirstLit+1)		//HHff-(FirstLit+1) (HH goes to 0 instead of -1)
-!:		clc
-!:		iny
-		sbc #<NextLit
-		bcs !--
-		dex
-		bne !-
-MaxBcnt:
-		tya
-		ldx #$09
-		axs #$00
-		eor EorTab,x
-		sta BlockCnt+1				//Block count EOR-transformed
-		jsr Set01
-ToSS:	bpl StartSend				//Branch always, first we send the block count, if 0, nothing to be saved, job done
+			ldy	#$00					//Calculate block count on disk
+			lda #$ff-(FirstLit+1)		//HHff-(FirstLit+1) (HH goes to 0 instead of -1)
+!:			clc
+!:			iny
+			sbc #<NextLit
+			bcs !--
+			dex
+			bne !-
+
+			tya
+			ldx #$09
+			axs #$00
+			eor EorTab,x
+			sta BlockCnt+1				//Block count EOR-transformed
+			jsr Set01
+ToSS:		bpl StartSend				//Branch always, first we send the block count, if 0, nothing to be saved, job done
 SendNextBlock:
 
 //----------------------------------------
 //		Send Block Header
 //----------------------------------------
 
-HdrCtr:
-		ldy #BHdrEnd-BlockHdr-1
-HdrLoop:
-		lda BlockHdr,y
-		jsr Send
-		dey
-		bpl HdrLoop
+HdrCtr:		ldy #BHdrEnd-BlockHdr-1
+HdrLoop:	lda BlockHdr,y
+			jsr Send
+			dey
+			bpl HdrLoop
 
 //----------------------------------------
 //		Update Address and Byte Counter
 //----------------------------------------
 
-		lda AdLo					//AdLo and AdHi are part of the Block Header
-		clc							//Only update them once the Block Header is sent!!!
-		sbc LitCnt
-		sta AdLo
-		sta ZP
-		lda AdHi
-		sbc #$00
-		sta AdHi
-		sta ZP+1
-
-		lda ByteCnt
-		clc							//ByteCnt-=(BlockHdr+1)
-		sbc LitCnt
-		sta ByteCnt
-		bcs *+5
-		dec ByteCnt+1
+			lda AdLo					//AdLo and AdHi are part of the Block Header
+			clc							//Only update them once the Block Header is sent!!!
+			sbc LitCnt
+			sta AdLo
+			sta ZP
+			lda AdHi
+			sbc #$00
+			sta AdHi
+			sta ZP+1
+	
+			lda ByteCnt
+			clc							//ByteCnt-=(BlockHdr+1)
+			sbc LitCnt
+			sta ByteCnt
+			bcs *+5
+			dec ByteCnt+1
 
 //----------------------------------------
 //		Send Literals
 //----------------------------------------
 
-		ldy LitCnt
-		iny
+			ldy LitCnt
+			iny
 LitLoop:
-.if (SupportIO==true)	{
-		dec $01				
-		}							//To allow saving data from under the I/O space
-		lda (ZP),y
-.if (SupportIO==true)	{
-		inc $01				
-		}							//Restore $01 to #$35 for transfer
-		jsr Send
-		dey
-		bne LitLoop
+			.if (SupportIO==true)
+			{
+			dec $01				
+			}							//To allow saving data from under the I/O space
+			lda (ZP),y
+			.if (SupportIO==true)
+			{
+			inc $01				
+			}							//Restore $01 to #$35 for transfer
+			jsr Send
+			dey
+			bne LitLoop
 
 //----------------------------------------
 //		Send Trailing Zeros
 //----------------------------------------
 
-		lda HdrCtr+1				//#$07 vs #$05
-		cmp #<BHdrLong-BlockHdr-1
-		bne SkipZeros				//#$05? - this is needed - in the case of the first block, addition's result is #$fe
-		sec							//+1 C=1 anyway?, SEC not needed here???
-		adc LitCnt					//=LitCnt-1
-		eor #$ff
-		beq SkipZeros
-		tay
-		dey
-		lda #<EoB
-		bne *+4
-ZeroLoop:
-		lda #$00
-		jsr Send
-		dey
-		bne ZeroLoop
-		lda #<NextBCt				//Closing byte = block count = $00 EOR-transformed
-		jsr Send
-SkipZeros:
-		lda #BHdrLong-BlockHdr-1
-		sta HdrCtr+1
+			lda HdrCtr+1				//#$07 vs #$05
+			cmp #<BHdrLong-BlockHdr-1
+			bne SkipZeros				//#$05? - this is needed - in the case of the first block, addition's result is #$fe
+			sec							//+1 C=1 anyway?, SEC not needed here???
+			adc LitCnt					//=LitCnt-1
+			eor #$ff
+			beq SkipZeros
+			tay
+			dey
+			lda #<EoB
+			bne *+4
+ZeroLoop:	lda #$00
+			jsr Send
+			dey
+			bne ZeroLoop
+			lda #<NextBCt				//Closing byte = block count = $00 EOR-transformed
+			jsr Send
+SkipZeros:	lda #BHdrLong-BlockHdr-1
+			sta HdrCtr+1
 
 //----------------------------------------
 //		Send BlockCnt, Update LitCnt
 //----------------------------------------
 
-		lda LitCnt
-		cmp #<FirstLit				//First block? (sending #$f8 literals)
-		bne SkipBCnt
-BlockCnt:
-		lda #$77					//=#$01 EOR-tranformed, minimum block count
-		jsr Send
-		lda #<NextLit				//Update LitCnt
-		sta LitCnt
+			lda LitCnt
+			cmp #<FirstLit				//First block? (sending #$f8 literals)
+			bne SkipBCnt
+BlockCnt:	lda #$77					//=#$01 EOR-tranformed, minimum block count
+			jsr Send
+			lda #<NextLit				//Update LitCnt
+			sta LitCnt
 SkipBCnt:
 
 //----------------------------------------
 //		Check Next Block
 //----------------------------------------
 
-StartSend:
-		lda ByteCnt+1				//If function is called with A=0 then we will return immediately
-		bne ToNext					//Otherwise, block count is sent to signal start of transfer
-		lda ByteCnt
-		beq Send					//A=#$00, signal transfer complete
-		cmp #<NextLit+1
-		bcs ToNext
-		sbc #$00					//C=0, we are subtracting 1 actually here
-		sta LitCnt					//LitCnt of last block (0-based)
-ToNext:
-		jsr Send					//A<>#$00, signal next block
-		jmp SendNextBlock
+StartSend:	lda ByteCnt+1				//If function is called with A=0 then we will return immediately
+			bne ToNext					//Otherwise, block count is sent to signal start of transfer
+			lda ByteCnt
+			beq Send					//A=#$00, signal transfer complete
+			cmp #<NextLit+1
+			bcs ToNext
+			sbc #$00					//C=0, we are subtracting 1 actually here
+			sta LitCnt					//LitCnt of last block (0-based)
+ToNext:		jsr Send					//A<>#$00, signal next block
+			jmp SendNextBlock
 
 //----------------------------------------
 //		Send a byte
 //----------------------------------------
 
-Send:	sta Bits
-		lda #$31
-		ldx #sendbyte				//CO=1, AO=1 => C64 is ready to send a byte, X=#$18
-		stx $dd00					//Signal to Drive that we want to send data
-		bit $dd00					//$dd00=#$9b, $1800=#$94
-		bmi *-3						//Wait for Drive response ($1800->00 => $dd00=#$1b, $1800=#$85)
+Send:		sta Bits
+			lda #$31
+			ldx #sendbyte				//CO=1, AO=1 => C64 is ready to send a byte, X=#$18
+			stx $dd00					//Signal to Drive that we want to send data
+			bit $dd00					//$dd00=#$9b, $1800=#$94
+			bmi *-3						//Wait for Drive response ($1800->00 => $dd00=#$1b, $1800=#$85)
 		
-									//Sending bits via AO, flipping CO to signal new bit, C can be anything at start
-!:		adc #$e7					//2	A=#$31+#$e7+C=#$18/#$19 A&X=#$18 and C=1 after addition in first pass, C=0 in all other passes
-		sax $dd00					//4	subsequent passes: A&X=#$00/#$08/#$10/#$18 and C=0
-		and #$10					//2	Clear AO
-		eor #$10					//2	A=#$18 in first pass (CO=1, AO=1) reads #$85 on $1800 - no change, first pass falls through
-		ror Bits					//5	C=1 in first pass before ROR, C=0 in all other passes
-		bne !-						//3
-									//18 cycles/bit - drive loop needs 17 cycles/bit (should work for both PAL and NTSC)
+										//Sending bits via AO, flipping CO to signal new bit, C can be anything at start
+!:			adc #$e7					//2	A=#$31+#$e7+C=#$18/#$19 A&X=#$18 and C=1 after addition in first pass, C=0 in all other passes
+			sax $dd00					//4	subsequent passes: A&X=#$00/#$08/#$10/#$18 and C=0
+			and #$10					//2	Clear AO
+			eor #$10					//2	A=#$18 in first pass (CO=1, AO=1) reads #$85 on $1800 - no change, first pass falls through
+			ror Bits					//5	C=1 in first pass before ROR, C=0 in all other passes
+			bne !-						//3
+										//18 cycles/bit - drive loop needs 17 cycles/bit (should work for both PAL and NTSC)
 								
-		lda #c64busy				//2	(A=#$f8) worst case, last bit is read by the drive on the first cycle of LDA
-		sta $dd00					//4	Bus lock
+			lda #c64busy				//2	(A=#$f8) worst case, last bit is read by the drive on the first cycle of LDA
+			sta $dd00					//4	Bus lock
 
-		rts							//6
+			rts							//6
 EorTab:
 .byte $7f,$76,$00,$00,$00,$00,$00,$00,$76,$7f
-
-//ByteConv:
-//.byte $7f,$77,$7d,$75,$7b,$73,$79,$71,$7e,$76,$7c,$74,$7a,$72,$78,$70
 
 BlockHdr:
 LitCnt:
@@ -291,216 +283,199 @@ BHdrEnd:
 //--------------------------------------
 
 TrackChange:
-		jsr ClearList				//Y=#$00 here
-		ldy #$02					//Two half-track steps, two return checks
-		sty ReturnFlag
-		jsr NextTrkSvr				//Automatically skips track 18
-		jsr ToggleLD2				//Turns LED off and updates $1c00 with correct bitrate
-		sty SCtr					//Save SCtr
-NextBlock:
-		ldy SCtr
-		beq TrackChange
-		ldy #$02					//Reset BufLoc Hi Byte
-		sty BufLoc+2				//Doing this here saves a byte
-		ldx nS
-		jsr BuildSvr				//Mark next wanted sector on wanted list, Y=#$02 (block count+1), skipping initial INY in Build loop
-		sty ChkSum					//Clear Checksum, Y=#$00 here
+			jsr ClearList				//Y=#$00 here
+			ldy #$02					//Two half-track steps, two return checks
+			sty ReturnFlag
+			jsr NextTrkSvr				//Automatically skips track 18
+			jsr ToggleLD2				//Turns LED off and updates $1c00 with correct bitrate
+			sty SCtr					//Save SCtr
+NextBlock:	ldy SCtr
+			beq TrackChange
+			ldy #$02					//Reset BufLoc Hi Byte
+			sty BufLoc+2				//Doing this here saves a byte
+			ldx nS
+			jsr BuildSvr				//Mark next wanted sector on wanted list, Y=#$02 (block count+1), skipping initial INY in Build loop
+			sty ChkSum					//Clear Checksum, Y=#$00 here
 
 //--------------------------------------
 //		Receive 256 bytes of data
 //--------------------------------------
 
 GetByteLoop:
-		jsr NewByte					//Receive 1 block from C64
+			jsr NewByte					//Receive 1 block from C64
 
-ByteBfr:
-		sta $0700					//And save it to buffer, overwriting internal directory
-		eor ChkSum
-		sta ChkSum					//Calculate checksum
-		inc ByteBfr+1
-		bne GetByteLoop
+ByteBfr:	sta $0700					//And save it to buffer, overwriting internal directory
+			eor ChkSum
+			sta ChkSum					//Calculate checksum
+			inc ByteBfr+1
+			bne GetByteLoop
 
 //--------------------------------------
 //		Encode data block
 //--------------------------------------
 
-		jsr Encode					//Data Block: $104 bytes (#$07+$100 data bytes+checksum+#$00+#$00) -> $145 GCR-bytes
-		jsr ToggleLED				//Turn LED on
+			jsr Encode					//Data Block: $104 bytes (#$07+$100 data bytes+checksum+#$00+#$00) -> $145 GCR-bytes
+			jsr ToggleLED				//Turn LED on
 
 //--------------------------------------
 //		Write data block to disk
 //--------------------------------------
 
-SFetch:	ldy #<SHeaderJmp
-		jmp FetchSHeader
+SFetch:		ldy #<SHeaderJmp
+			jmp FetchSHeader
 
 //--------------------------------------
-		//jmp (SaveJmp)				//31	
-SHeader:
-		//cmp $0103					//--	Header byte #10 (GGGHHHHH) = $55, skipped (cycles [26-51] ... [32-63])
-		bne SFetch					//33	We are on Track 35/40 here, so it is ALWAYS Speed Zone 0 (32 cycles per byte)
-		lda $0103					//37
-		jsr ShufToRaw				//57	Details:
-											//jsr ShufToRaw		43
-											//ldx #$09			45
-											//axs #$00			47
-											//eor BitShufTab,x	51
-											//rts				57
-		cmp LastS					//60
-		bne SFetch					//62
-		tax							//64	First gap byte = $55, skipped (cycles [52-77]...[64-95])
-		ldy #$05					//66
-		sty.z WList,x				//70	Mark off sector on Wanted List
-		clv							//72	Optimal timing for all 4 speed zones for 275-312 rpm [70-74]
+			//jmp (SaveJmp)				//31	
+SHeader:	//cmp $0103					//--	Header byte #10 (GGGHHHHH) = $55, skipped (cycles [26-51] ... [32-63])
+			bne SFetch					//33	We are on Track 35/40 here, so it is ALWAYS Speed Zone 0 (32 cycles per byte)
+			lda $0103					//37
+			jsr ShufToRaw				//57	Details:
+												//jsr ShufToRaw		43
+												//ldx #$09			45
+												//axs #$00			47
+												//eor BitShufTab,x	51
+												//rts				57
+			cmp LastS					//60
+			bne SFetch					//62
+			tax							//64	First gap byte = $55, skipped (cycles [52-77]...[64-95])
+			ldy #$05					//66
+			sty.z WList,x				//70	Mark off sector on Wanted List
+			clv							//72	Optimal timing for all 4 speed zones for 275-312 rpm [70-74]
 
-GapLoop:
-		bvc *						//01	Skip an additional six $55 bytes (Header Gap)
-		clv							//03	The 1541 ROM code also skips 7 gap bytes, NOT 9!!!
-		dey							//05
-		bpl GapLoop					//07
+GapLoop:	bvc *						//01	Skip an additional six $55 bytes (Header Gap)
+			clv							//03	The 1541 ROM code also skips 7 gap bytes, NOT 9!!!
+			dey							//05
+			bpl GapLoop					//07
 
-		sty $1c03					//11	R/W head to output, Y=#$ff
-		lda #$ce					//13
-		sta $1c0c					//15	Peripheral control register to output
-		ldx #$06					//19
+			sty $1c03					//11	R/W head to output, Y=#$ff
+			lda #$ce					//13
+			sta $1c0c					//15	Peripheral control register to output
+			ldx #$06					//19
 
-SyncLoop:
-		bvc *						//01
-		clv							//03	Write 6 sync bytes (#$ff)
-		sty $1c01					//07	The 1541 ROM code also writes 6 sync bytes, NOT 5!!!
-		dex							//09
-		bne SyncLoop				//11
+SyncLoop:	bvc *						//01
+			clv							//03	Write 6 sync bytes (#$ff)
+			sty $1c01					//07	The 1541 ROM code also writes 6 sync bytes, NOT 5!!!
+			dex							//09
+			bne SyncLoop				//11
 
-		ldy #$bb					//13
-		lax ZP02					//16
-BfrLoop2:
-		sta BfrLoop1+2				//20		22
-BfrLoop1:
-		lda $0200,y					//24	16	26	Worst case scenario: 27 cycles when switching buffers from $0200 to $0700
-									//				Should also work in Speed Zone 3 (but current version only writes to track 35/40)
-		bvc *						//01	01	01
-		clv							//03	03	03
-		sta $1c01					//07	07	07	Switch with CLV if write error in Zone 3
-		iny							//09	09	09
-		bne BfrLoop1				//11	12	12
-		lda #$07					//13		13
-		dex							//15		15
-		bne BfrLoop2				//17		18
+			ldy #$bb					//13
+			lax ZP02					//16
+BfrLoop2:	sta BfrLoop1+2				//20		22
+BfrLoop1:	lda $0200,y					//24	16	26	Worst case scenario: 27 cycles when switching buffers from $0200 to $0700
+										//				Should also work in Speed Zone 3 (but current version only writes to track 35/40)
+			bvc *						//01	01	01
+			clv							//03	03	03
+			sta $1c01					//07	07	07	Switch with CLV if write error in Zone 3
+			iny							//09	09	09
+			bne BfrLoop1				//11	12	12
+			lda #$07					//13		13
+			dex							//15		15
+			bne BfrLoop2				//17		18
 
-		bvc *						//01
-		jsr $fe00					//Using ROM function here to save a few bytes...
+			bvc *						//01
+			jsr $fe00					//Using ROM function here to save a few bytes...
 
-									//LDA $1c0c	Peripheral control register to input
-									//ORA #$e0
-									//STA $1c0c
-									//LDA #$00
-									//STA $1c03	R/W head to input
-									//RTS
+										//LDA $1c0c	Peripheral control register to input
+										//ORA #$e0
+										//STA $1c0c
+										//LDA #$00
+										//STA $1c03	R/W head to input
+										//RTS
 
-		jsr ToggleLED				//Trun LED off - no proper ROM function for this unfortunately...
+			jsr ToggleLED				//Trun LED off - no proper ROM function for this unfortunately...
 
-		dec SCtr					//Sector complete, decrease sector counter
+			dec SCtr					//Sector complete, decrease sector counter
 
 //--------------------------------------
 //		Check for next block
 //--------------------------------------
 
-RcvCheck:
-		jsr NewByte					//More blocks to write?
+RcvCheck:	jsr NewByte					//More blocks to write?
 
-		tay
-		bne NextBlock
+			tay
+			bne NextBlock
 
 //--------------------------------------
 //		Saving done, restore loader
 //--------------------------------------
 
-		stx DirSector				//Reset DirSector (X=$95) to ensure next (index-based) load reloads the directory
-		lda #<FetchJmp
-		sta ReFetch+1				//Restore ReFetch vector
-		jmp CheckATN
+			stx DirSector				//Reset DirSector (X=$95) to ensure next (index-based) load reloads the directory
+			lda #<FetchJmp
+			sta ReFetch+1				//Restore ReFetch vector
+			jmp CheckATN
 
 //--------------------------------------
 //		Receive a byte
 //--------------------------------------
 
-NewByte:
-		ldx #$94					//Make sure C64 is ready to send (%10010100)
-		cpx $1800
-		bne *-3
+NewByte:	ldx #$94					//Make sure C64 is ready to send (%10010100)
+			cpx $1800
+			bne *-3
 
-		lda #$80					//$dd00=#$9b, $1800=#$94
-		ldx #busy					//=#$10 (AA=1, CO=0, DO=0)
-		jsr RcvByte					//OK to use stack here
+			lda #$80					//$dd00=#$9b, $1800=#$94
+			ldx #busy					//=#$10 (AA=1, CO=0, DO=0)
+			jsr RcvByte					//OK to use stack here
 
-		ldx #$95					//Wait for C64 to signal transfer complete (%10010101)
-CheckPort:
-		cpx $1800
-		bne *-3
-		rts
+			ldx #$95					//Wait for C64 to signal transfer complete (%10010101)
+			cpx $1800
+			bne *-3
+			rts
 
 //--------------------------------------
 //		Convert 260 bytes to GCR codes
 //--------------------------------------
 
-Encode:
-		lda #$bb					//Reset BufLoc Lo Byte
-		sta BufLoc+1
+Encode:		lda #$bb					//Reset BufLoc Lo Byte
+			sta BufLoc+1
 
-		lax ZP07					//X = Bitcounter for encoded bytes: #$07
-		jsr GCREncode				//A = First byte of Data Block: #$07
+			lax ZP07					//X = Bitcounter for encoded bytes: #$07
+			jsr GCREncode				//A = First byte of Data Block: #$07
 
-EncodeLoop:
-		lda $0700					//256 data bytes
-		jsr GCREncode
+EncodeLoop:	lda $0700					//256 data bytes
+			jsr GCREncode
 
-		inc EncodeLoop+1
-		bne EncodeLoop
+			inc EncodeLoop+1
+			bne EncodeLoop
 
-		lda ChkSum					//Checksum
-		jsr GCREncode
-		jsr GCREncode				//Two trailing zeros, A=00 here
+			lda ChkSum					//Checksum
+			jsr GCREncode
+			jsr GCREncode				//Two trailing zeros, A=00 here
 
 //--------------------------------------
 
-GCREncode:
-		pha
-		lsr
-		lsr
-		lsr
-		lsr
-		jsr GetGCR					//Convert high nibble to 5-bit GCR code first
-		pla							//Then low nibble next
-		and #$0f
-GetGCR:
-		tay
-		//lda GCRTab,y				//Would save 6 cycles per nibble, needs additional 13 bytes
-		lda $f77f,y					//GCR codes in the drive's ROM
-		asl
-		asl
-		asl							//move 5 GCR bits to the left side of byte
-		ldy #$05					//bitcounter for GCR codes
-NextBit:
-		asl
-BufLoc:
-		rol $02bb					//ADDRESS LOW BYTE NEEDS TO BE RESET AT THE BEGINNING!!!
-		dex
-		bpl SkipNext
-		ldx #$07
-		inc BufLoc+1
-		bne SkipNext
-		stx BufLoc+2
-SkipNext:
-		dey
-		bne NextBit
-		rts							//A=00 and Y=00 here
+GCREncode:	pha
+			lsr
+			lsr
+			lsr
+			lsr
+			jsr GetGCR					//Convert high nibble to 5-bit GCR code first
+			pla							//Then low nibble next
+			and #$0f
+GetGCR:		tay
+			//lda GCRTab,y				//Would save 6 cycles per nibble, needs additional 13 bytes
+			lda $f77f,y					//GCR codes in the drive's ROM
+			asl
+			asl
+			asl							//move 5 GCR bits to the left side of byte
+			ldy #$05					//bitcounter for GCR codes
+NextBit:	asl
+BufLoc:		rol $02bb					//ADDRESS LOW BYTE NEEDS TO BE RESET AT THE BEGINNING!!!
+			dex
+			bpl SkipNext
+			ldx #$07
+			inc BufLoc+1
+			bne SkipNext
+			stx BufLoc+2
+SkipNext:	dey
+			bne NextBit
+			rts							//A=00 and Y=00 here
 
 //--------------------------------------
 //	THIS CAN BE OVERWRITTEN IN STACK
 //--------------------------------------
 
-Start:	sta ReFetch+1				//Update ReFetch vector, done once
-		bne RcvCheck				//BRA - Let's check if we will receive anything...
+Start:		sta ReFetch+1				//Update ReFetch vector, done once
+			bne RcvCheck				//BRA - Let's check if we will receive anything...
 
 //GCRTab:
 //.byte $0a*8,$0b*8,$12*8,$13*8,$0e*8,$0f*8,$16*8,$17*8,$09*8,$19*8,$1a*8,$1b*8,$0d*8,$1d*8,$1e*8,$15*8

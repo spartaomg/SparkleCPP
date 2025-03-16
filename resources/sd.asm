@@ -319,7 +319,7 @@
 
 .label OPC_ALR		=$4b
 .label OPC_BNE		=$d0
-.label OPC_NOP_ABS	=$0c
+.const OPC_NOP_ABS	=$0c
 
 //GCR Decoding Tables:
 .label TabZP		=$00
@@ -555,11 +555,11 @@ MarkSct:	sta WList,x			//2a 2b	Mark Sector as wanted (or used in the case of ran
 			stx LastS			//2c 2d	Save Last Sector
 IL:			axs #$00			//2e 2f	Calculate Next Sector using inverted interleave
 
-	.byte	OPC_NOP_ABS			//30	Skip next two TabG values to avoid clobbering A
+	.byte	OPC_NOP_ABS			//30	Skip next two TabG values to avoid trashing A
 	.byte	$6a					//31 	TabG (ROR)
 	.byte 	$4a					//32	TabG (LSR)
 	.byte	$ca					//33	TabG (DEX)
-			inx					//34 	compensate for DEX
+			inx					//34 	compensate for TabG DEX
 			
 MaxNumSct1:	cpx MaxNumSct2+1	//35-37	Reached Max?
 			bcc SkipSub			//38 39	Has not reached Max yet, so skip adjustments
@@ -577,7 +577,7 @@ ToCorrTrack:
 			jmp CorrTrack		//46-48
 
 //--------------------------------------
-//		Flip Detection			//Y=#$00 and X=#$00 here
+//		Flip Detection			//A/X/Y=#$00 here
 //--------------------------------------
 
 FlipDtct:	lda NextID			//49 4a	Side is done, check if there is a next side
@@ -603,7 +603,7 @@ ProdIDLoop:	lda (ZPBAMPID),y	//54 55	Also compare Product ID, only continue if s
 	.byte	$1a					//62	TabG (NOP)
 	.byte	$9a					//63	TabG (TXS) no effect X=SP=#$00
 
-CopyBAM:	lda (ZP0101),y		//64 65	= LDA $0101,y ($0101=DiskID), $102=IL3R, $103=IL2R, $104=IL1R, $0105=NextID, $106=IL0R
+CopyBAM:	lda (ZP0101),y		//64 65	($0101=DiskID), $102=IL3R, $103=IL2R, $104=IL1R, $0105=NextID, $106=IL0R
 			sta (ZPILTab),y		//66 67
 			dey					//68		
 			bne CopyBAM			//69 6a
@@ -611,10 +611,12 @@ CopyBAM:	lda (ZP0101),y		//64 65	= LDA $0101,y ($0101=DiskID), $102=IL3R, $103=I
 
 //--------------------------------------
 
-ReFetch:	jmp (FetchJmp)		//6e-70	Wrong block type, refetch everything, vector is modified from SS!!!
+ReFetch:	jmp (FetchJmp)		//6e-70	Refetch everything, vector is modified from SS!!!
 
-	.byte	$2a					//71   |  	Skipping TabG (ROL)
-	.byte	$0a					//72   |11	Skipping TabG (ASL)
+//--------------------------------------
+
+	.byte	$2a					//71	TabG (ROL)
+	.byte	$0a					//72	TabG (ASL)
 
 //--------------------------------------
 //		Got Header
@@ -625,7 +627,7 @@ Header:		bne FetchError		//Checksum mismatch -> fetch next sector header
 			lda TabD-2,y		//Y=DDDDD010
 			eor TabC,x			//X=00CCCCC0
 			tay					//ID1 - this is suboptimal...
-			lda $0102			//$0101 - Track
+			lda $0102			//$0102 - Track
 			jsr ShufToRaw
 			beq FetchError		//Track mismatch
 			cmp #$29			//Max track: 40 ($28)
