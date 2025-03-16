@@ -31,6 +31,8 @@
 //			  allowing script syntax changes to save HSFile anywhere on the disk
 //			  HSFile can be larger then $0f00 bytes
 //
+//	v1.9	- properly calculating the number of blocks needed on the disk
+//
 //----------------------------
 //	BLOCK STRUCTURE
 //
@@ -45,34 +47,36 @@
 //----------------------------
 
 {
-#import "SL.sym"					//Import labels from SL.asm
+#import "SL.sym"						//Import labels from SL.asm
 
 .const SupportIO	=cmdLineVars.get("io").asBoolean()
 
 .const ZP			=$02
 //.const Bits		=$04
 
-.const sendbyte		=$18			//AO=1, CO=1, DO=0 on C64 -> $1800=$94
-.const c64busy		=$f8			//DO NOT CHANGE IT TO #$FF!!!
+.const sendbyte		=$18				//AO=1, CO=1, DO=0 on C64 -> $1800=$94
+.const c64busy		=$f8				//DO NOT CHANGE IT TO #$FF!!!
 
-.var FirstLit		=$f7			//First block's literal count
-.var NextLit		=$fa			//All other blocks' literal count
+.var FirstLit		=$f7				//First block's literal count
+.var NextLit		=$fa				//All other blocks' literal count
 
 .if (SupportIO == true) {
 .eval FirstLit		-=1
 .eval NextLit		-=1
 }
 
-.const EoB			=$84			//End of Bundle flag
-.const NextBCt		=$7f			//Next block count - $00 EOR-transformed
+.const EoB			=$84				//End of Bundle flag
+.const NextBCt		=$7f				//Next block count - $00 EOR-transformed
+
+.const OPC_NOP_ABS	=$0c
 
 *=$2900 "C64 Save Code"
 
 .pseudopc $0300 {
 
 ByteCnt:
-.byte $00,$77						//First 2 bytes of block (00 and block count), will be overwritten by Byte counter
-									//$77 = $01 EOR-transformed = block count, i.e. number of additional blocks to be loaded (drive code of saver)
+.byte $00,$77							//First 2 bytes of block (00 and block count), will be overwritten by Byte counter
+										//$77 = $01 EOR-transformed = block count, i.e. number of additional blocks to be loaded (drive code of saver)
 
 SLSaveStart:
 
@@ -90,7 +94,7 @@ SLSaveStart:
 AddrHi:		adc #$00
 			sta AdHi
 
-			ldy	#$00					//Calculate block count on disk
+			ldy #$00					//Calculate block count on disk
 			lda #$ff-(FirstLit+1)		//HHff-(FirstLit+1) (HH goes to 0 instead of -1)
 !:			clc
 !:			iny
@@ -101,11 +105,20 @@ AddrHi:		adc #$00
 
 			tya
 			ldx #$09
+
+			.byte <OPC_NOP_ABS
+EorTab:		.byte $7f,$76
+			
 			axs #$00
 			eor EorTab,x
+			
+			.byte <OPC_NOP_ABS
+			.byte $76,$7f
+			
 			sta BlockCnt+1				//Block count EOR-transformed
 			jsr Set01
 ToSS:		bpl StartSend				//Branch always, first we send the block count, if 0, nothing to be saved, job done
+
 SendNextBlock:
 
 //----------------------------------------
@@ -235,8 +248,6 @@ Send:		sta Bits
 			sta $dd00					//4	Bus lock
 
 			rts							//6
-EorTab:
-.byte $7f,$76,$00,$00,$00,$00,$00,$00,$76,$7f
 
 BlockHdr:
 LitCnt:
@@ -245,17 +256,17 @@ AdHi:
 .byte $00
 IOFlag:
 .if (SupportIO == true) {
-.byte $00							//I/O flag
+.byte $00								//I/O flag
 }
 AdLo:
 .byte $00,$81
 BHdrLong:
-.byte $fe,$00						//First byte ($fe) can be anything, the drive code will change it to $fe anyway
+.byte $fe,$00							//First byte ($fe) can be anything, the drive code will change it to $fe anyway
 BHdrEnd:
 }
-*=$29f9 "C64 Close Sequence"		//Close Sequence of previous bundle
+*=$29f9 "C64 Close Sequence"			//Close Sequence of previous bundle
 .pseudopc $03f9 {
-.byte $00,$84,$00,$03,$fb,$01,$fe	//When the plugin is loaded, the depacker will process this sequence
+.byte $00,$84,$00,$03,$fb,$01,$fe		//When the plugin is loaded, the depacker will process this sequence
 }
 }
 
@@ -266,17 +277,17 @@ BHdrEnd:
 //----------------------------
 
 {
-#import "SD.sym"					//Import labels from SD.asm
+#import "SD.sym"						//Import labels from SD.asm
 
-.const ChkSum		= DirSector		//Temporary value on ZP for H2STab preparation and GCR loop timing
-									//DirSector can be overwritten here
+.const ChkSum		= DirSector			//Temporary value on ZP for H2STab preparation and GCR loop timing
+										//DirSector can be overwritten here
 
 *=$2a00 "Drive Save Code"
 
-.pseudopc $0100 {					//Stack pointer =#$00 at start
+.pseudopc $0100 {						//Stack pointer =#$00 at start
 
-		lda #<SFetchJmp				//Update ReFetch vector, done once
-		jmp Start					//First 5 bytes will be overwritten with Block Header and Stack
+			lda #<SFetchJmp				//Update ReFetch vector, done once
+			jmp Start					//First 5 bytes will be overwritten with Block Header and Stack
 
 //--------------------------------------
 //		Find next sector in chain

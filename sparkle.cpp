@@ -5188,14 +5188,22 @@ bool InjectSaverPlugin(int PluginIdx, int HSFileIdx)
 
     SaveCode[0x03] = (HSLength / 0x100) + 1;            //We are comparing with max block count + 1
     SaveCode[0x10] = (HSAddress - 1) / 0x100;           //High byte of the address of the last byte of the Hi-Score file
-    if (SaverSupportsIO)
+
+    int j = 255;
+    while (SaveCode[j--] != 0x81)                       //Find AdLo in SaveCode (byte before 0x81
     {
-        SaveCode[0xf1] = (HSAddress - 1) & 0xff;        //Low byte of the address of the last byte of the Hi-Score file
     }
-    else
-    {
-        SaveCode[0xec] = (HSAddress - 1) & 0xff;        //Low byte of the address of the last byte of the Hi-Score file
-    }
+
+    SaveCode[j] = (HSAddress - 1) & 0xff;                //Low byte of the address of the last byte of the Hi-Score file
+
+    //if (SaverSupportsIO)
+    //{
+        //SaveCode[0xf1] = (HSAddress - 1) & 0xff;        //Low byte of the address of the last byte of the Hi-Score file
+    //}
+    //else
+    //{
+        //SaveCode[0xec] = (HSAddress - 1) & 0xff;        //Low byte of the address of the last byte of the Hi-Score file
+    //}
     
     //Calculate sector pointer on disk
     int SctPtr = BufferCnt; //SectorsPerDisk - BlocksUsedByPlugin;
