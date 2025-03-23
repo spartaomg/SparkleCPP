@@ -168,7 +168,7 @@
 //		  ID1 and ID2 are updated when reading from track 18 (during init and disk flips)
 //		- trailing 0 first nibble check
 //		- checksum error counter
-//		  if number of consequtive read errors is greater than a full disk spin then
+//		  if number of consecutive read errors is greater than a full disk spin then
 //		  Sparkle will cycle through bitrates then take half track steps until fetching is successful
 //
 //----------------------------------------------------------------------------------------
@@ -260,6 +260,8 @@
 .label ready		=CO			//DO=0,CO=1,AA=0	$1800=#$08	dd00=100000xx (#$83)
 
 .label Sp			=$52		//Spartan Stepping constant (=82*72=5904=$1710=$17 bycles delay)
+.const ErrVal		=$18
+
 
 //ZP Usage:
 .label cT			=$00		//Current Track
@@ -291,8 +293,8 @@
 .label ZPBAMPID		=$10		//$10/$11 = $0107
 .label ZPHdrID1		=$68
 .label ZPHdrID2		=$69
-.label ZP1800		=$6b
-.label ZP1c01		=$6f
+//.label ZP1800		=$6b
+//.label ZP1c01		=$6f
 .label ZPILTab		=$71
 .label ZPProdID		=$78		//$78/$79 = $031a (ProdID-1)
 
@@ -511,13 +513,13 @@ Presync:	sty.z ModJmp+1		//de df
 			ldx #$c0			//f5 f6
 			
 			bvc *				//f7 f8|00-01
-			cmp $1c01			//f9-fb|06	Read1 = AAAAABBB  ->	01010|010(01) for Header, 01010|101(11) for Data
-			bne ReFetch			//fc fd|08
+			cmp $1c01			//f9-fb|05	Read1 = AAAAABBB  ->	01010|010(01) for Header, 01010|101(11) for Data
+			bne ReFetch			//fc fd|07
 
-ReadTwo:	ror					//fe   |10	C=1 before ROR	-> %10101001|0 for Header,	%10101010|1 for Data
-			ror					//ff   |12					-> %01010100 for Header,	%11010101 for Data
-			sax AXS+1			//00-02|16					-> %01000000 for Header,	%11000000 for Data
-			clv					//03   |18
+ReadTwo:	ror					//fe   |09	C=1 before ROR	-> %10101001|0 for Header,	%10101010|1 for Data
+			ror					//ff   |11					-> %01010100 for Header,	%11010101 for Data
+			sax AXS+1			//00-02|15					-> %01000000 for Header,	%11000000 for Data
+			clv					//03   |17
 
 			bvc *				//04 05|00-01
 			lda $1c01			//06-08|05*	*Read2 = BBCCCCCCD ->	01|CCCCC|D for Header
@@ -530,9 +532,9 @@ AXS:		axs #$00			//09 0a|07							11|CCCCC|D for Data
 			lsr					//12   |18
 	.byte	$ea					//13   |20	TabG (NOP)
 
-			ldx ZP00			//14 15|23
-			lda ZP7f			//16 17|26	Z=0, needed for BNE in GCR loop
-			jmp GCREntry		//18-1a|29	Same cycle count as in GCR loop before BNE
+			ldx #$00			//14 15|22
+			lda #$7f			//16 17|24	Z=0, needed for BNE in GCR loop
+			jmp GCREntry		//18-1a|27	Same cycle count as in GCR loop before BNE
 			
 //--------------------------------------
 //		Mark wanted sectors
@@ -622,45 +624,45 @@ ReFetch:	jmp (FetchJmp)		//6e-70	Refetch everything, vector is modified from SS!
 //		Got Header
 //--------------------------------------
 //0473
-HD:
-Header:		bne FetchError		//Checksum mismatch -> fetch next sector header
-			lda TabD-2,y		//Y=DDDDD010
-			eor TabC,x			//X=00CCCCC0
-			tay					//ID1 - this is suboptimal...
-			lda $0102			//$0102 - Track
-			jsr ShufToRaw
-			beq FetchError		//Track mismatch
-			cmp #$29			//Max track: 40 ($28)
-			bcs FetchError		//Track mismatch			
+HD:								//Cycles
+Header:		bne FetchError		//32 33	Checksum mismatch -> fetch next sector header
+			lda TabD-2,y		//34-38	Y=DDDDD010
+			eor TabC,x			//39-42	X=00CCCCC0
+			tay					//43 44	ID1 - this is suboptimal...
+			lda $0102			//45-48	$0102 - Track
+			jsr ShufToRaw		//49-68
+			beq FetchError		//69 70	Track mismatch
+			cmp #$29			//71 72	Max track: 40 ($28)
+			bcs FetchError		//73 74	Track mismatch			
 			
-			ldx $0101			//$0101 - ID2
-			cpx ZPHdrID2
-			bne CheckIDs		//ID2 mismatch
+			ldx $0101			//75-78 $0101 - ID2
+			cpx ZPHdrID2		//79-81
+			bne CheckIDs		//82 83	ID2 mismatch
 			
-			cpy ZPHdrID1
-			bne CheckIDs		//ID1 mismatch
+			cpy ZPHdrID1		//84-86
+			bne CheckIDs		//87 88	ID1 mismatch
 
-			ldy #$01
-			ldx cT
-			sta cT
-			txa
-			cmp cT
-			bne ToCorrTrack		//Wrong track -> go to wanted track
+			ldy #$01			//89 90
+			ldx cT				//91-93
+			sta cT				//94-96
+			txa					//97 98
+			cmp cT				//99-101
+			bne ToCorrTrack		//102 103	Wrong track -> go to wanted track
 
-			lda (ZP0102),y		//$0103 - Sector
-			jsr ShufToRaw
-			cmp MaxNumSct2+1
-			bcs FetchError		//Sector mismatch
+			lda (ZP0102),y		//104-108	$0103 - Sector
+			jsr ShufToRaw		//109-128
+			cmp MaxNumSct2+1	//129-132
+			bcs FetchError		//133 134	Sector mismatch
 						
-			ldy VerifCtr
-			bne ToFetchData		//Always fetch sector data if we are verifying the checksum
+			ldy VerifCtr		//135-137
+			bne ToFetchData		//138 139	Always fetch sector data if we are verifying the checksum
 
-			tay
-			ldx WList,y			//Otherwise, only fetch sector data if this is a wanted sector
-BplFetch:	bpl ReFetch			//Sector is not on wanted list -> fetch next sector header
-			sty cS				//Only save current Sector if data will be fetched
+			tay					//140 141
+			ldx WList,y			//142-145	Otherwise, only fetch sector data if this is a wanted sector
+BplFetch:	bpl ReFetch			//146 147	Sector is not on wanted list -> fetch next sector header
+			sty cS				//148-150	Only save current Sector if data will be fetched
 ToFetchData:
-			jmp FetchData		//Sector is on wanted list, save sector number and fetch data
+			jmp FetchData		//151-153	Sector is on wanted list, save sector number and fetch data
 
 //--------------------------------------
 //		Disk ID Check			//Y=#$00 here
@@ -671,7 +673,7 @@ Track18:	txa					//BAM (Sector 0) or Drive Code Block 3 (Sector 16) or Dir Block
 ToCD:		jmp CopyCode		//Sector 16 (Block 3) - copy it from the Buffer to its place, will be changed to JMP CopyDir after Block 3 copied
 
 //--------------------------------------
-//		Fetch error
+//		Check Disk IDs
 //--------------------------------------
 			
 CheckIDs:	cmp cT
@@ -682,6 +684,10 @@ CheckIDs:	cmp cT
 			sty ZPHdrID1		//Update disk ID1 and ID2 if we are on Track 18 (i.e. after disk flip)
 			stx ZPHdrID2
 
+//--------------------------------------
+//		Fetch error
+//--------------------------------------
+
 FetchError:	dec ErrCtr
 			bne	ReFetch
 
@@ -690,12 +696,11 @@ FetchError:	dec ErrCtr
 			clc
 			adc #$e0			//Cycle through bitrates %11 -> %10 -> %01 -> %00 -> %11
 			adc #$03			//Half track step down on bitrate wrap around
-			ora #$04			//Motor on (LED is only on during transfer)
-			sta $1c00
-			ora #$08
-			sta Spartan+1		//Also update Spartan step $1c00 value (with LED on)
+			ora #$0c			//Motor and LED on
+			sta Spartan+1		//Update Spartan step $1c00 value (with LED on)
+			jsr ToggleLD2		//Update $1c00 with LED off (LED is only on during transfer), JSR is OK here, we are discarding any fetched data on the stack
 
-			lda #$18			//More than the max number of sectors per track
+			lda #<ErrVal		//More than the max number of sectors per track
 			sta ErrCtr	
 BneReFetch:	bne ReFetch			//Refetch everything via ReFetch vector
 
@@ -711,10 +716,10 @@ Data:		ldx cT
 			ldy #$fc			//This loop saves 8 bytes but takes 1198 cycles (46 bytes passing under R/W head in zone 3)
 CSLoop:		eor $0102,y
 			eor $0103,y
-			dex
-			dex
-			dex
-			dex
+			dey
+			dey
+			dey
+			dey
 			bne CSLoop
 */
 			ldy #$7e			//This loop takes 856 cycles (33 bytes passing under R/W head in zone 3) but needs 8 more bytes
@@ -737,7 +742,7 @@ CSLoopEntry:
 SkipCSLoop:	tay
 			bne FetchError		//Checksum mismatch, fetch header again
 			
-			lda #$18
+			lda #<ErrVal
 			sta ErrCtr			//Reset Error Counter (only if both header and data are fetched correctly)
 
 			lsr VerifCtr		//Checksum Verification Counter
@@ -844,6 +849,7 @@ Restart:	stx $1c00			//Restart Motor and turn LED on if they were turned off
 //--------------------------------------
 
 GetByte:	lda #$80			//$dd00=#$9b, $1800=#$94
+			//sta ErrCtr
 			ldx #busy			//X=#$10 (AA=1, CO=0, DO=0) - WILL BE USED LATER IF SAVER CODE IS NEEDED
 
 TrRnd:		jsr RcvByte			//OK to use stack here
@@ -968,7 +974,7 @@ Seek:		lda $1c00
 PreCalc:	and #$1b			//we keep AND+CLC instead of ANC because the original 1541U no longer receives firmware updates :(
 			clc
 			adc StepDir			//#$03 for stepping down, #$01 for stepping up
-			ora #$0c			//LED and motor ON
+			ora #$04			//motor ON
 			cpy #$80
 			beq StoreTrack		//This was the last half step precalc, leave Stepper Loop without updating $1c00
 			sta $1c00
@@ -1227,8 +1233,8 @@ ZPCopyLoop:	lda ZPTab,x			//Copy Tables C, E, F and GCR Loop from $0600 to ZP
 			lda #$7a
 			sta $1802			//0  1  1  1  1  0  1  0  Set these 1800 bits to OUT (they read back as 0)
 			lda #busy
-			sta $1800			//0  0  0  1  0  0  0  0  CO=0, DO=1, AA=1 This reads as #$43 on $dd00
-								//AI|DN|DN|AA|CO|CI|DO|DI This also signals that the drive code has been installed
+			sta $1800			//0  0  0  1  0  0  0  0  CO=0, DO=0, AA=1
+								//AI|DN|DN|AA|CO|CI|DO|DI Signal C64 that the drive code has been installed
 
 			lda #$01			//Shift register disabled, Port A ($1c01) latching enabled, Port B ($1c00) latching disabled
 			sta $1c0b
@@ -1282,7 +1288,7 @@ ZPTab:
 .byte	$7f,$76,$3e,$16,$0e,$1c,$1e,$14,$76,$7f,$7e,$12,$4e,$18,$00,$00	//3x	Wanted List $3e-$52 (Sector 16 = #$ff)
 .byte	$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$ff,$00	//4x	(0) unfetched, (+) fetched, (-) wanted
 .byte	$00,$00,$00,$0e,$80,$0f,$c5,$07,$ff,$01,$01,$0a,$1e,$0b,$00,$03	//5x	
-.byte	$fd,$fd,$fd,$00,$fc,$0d,$00,$05,$ff,$ff,XX1,$00,$18,$09,$00,$01	//6x	$60-$64 - ILTab, $63 - NextID
+.byte	$fd,$fd,$fd,$00,$fc,$0d,$00,$05,$ff,$ff,XX1,$00,$18,$09,$00,$01	//6x	$60-$64 - ILTab, $63 - NextID, $68 - ZPHdrID1, $69 - ZPHdrID2
 .byte	$1c,<ILTab-1,>ILTab-1
 .byte				$06,$02,$0c,$00,$04,<ProductID-1,>ProductID-1
 .byte											$00,$02					//7x
@@ -1312,88 +1318,93 @@ Mod2a:		nop					//										87		95		7f
 //------------------------------------------------------------------------------------------------------
 
 								//						Zone 3	Zone 2	Zone 1	Zone 0
-GCRLoop0_2:	eor ZP0102: $0102,x	//First pass: X=#$00	--		36		36		36		85-87
-			eor ZP0103: $0103,x	//						--		40		40		40		88-8a
+								//						Zone 3	Zone 2	Zone 1	Zone 0
+GCRLoop0_2:	eor ZP0102: $0102,x	//First pass: X=#$00	--		34		34		34		85-87
+			eor ZP0103: $0103,x	//						--		38		38		38		88-8a
 
 //------------------------------------------------------------------------------------------------------
 
 								//						Zone 3	Zone 2	Zone 1	Zone 0
-GCRLoop3:	sta.z PartialCSum+1	//						35		43		43		43		8b 8c
+GCRLoop3:	sta.z PartialCSum+1	//						33		41		41		41		8b 8c
 
 								//					   [26-51	28-55	30-59	32-63]
-			lda $1c01			//DDDDEEEE				39/-12	47/-8	47/-12	47/+15	8d-8f
-			ldx #$0f			//						41		49		49		49		90 91
-			sax.z tE+1			//tE+1=0000EEEE			44		52		52		52		92 93
-			arr #$f0			//						46		54		54		54		94 95
-			tay					//Y=DDDDD000			48		56		56		56		96
+			lda $1c01			//DDDDEEEE				37/-14	45/-10	45/-14	45/+13	8d-8f
+								//						211-413	187-366	200-420	213-420
+			ldx #$0f			//						39		47		47		47		90 91
+			sax.z tE+1			//tE+1=0000EEEE			42		50		50		50		92 93
+			arr #$f0			//						44		52		52		52		94 95
+			tay					//Y=DDDDD000			46		54		54		54		96
 
-tC:			lda TabC			//00CCCCC0 (ZP)			51		59		59		59		97 98
-tD:			eor TabD,y			//00000001,DDDDD000		55		63		63		63		99-9b
-			pha					//$0104/$0100			58		66		66		66		9c
+tC:			lda TabC			//00CCCCC0 (ZP)			49		57		57		57		97 98
+tD:			eor TabD,y			//00000001,DDDDD000		53		61		61		61		99-9b
+			pha					//$0104/$0100			56		64		64		64		9c
 								//$0104 = Checksum
 PartialCSum:
-			eor #$7f			//						60		68		68		68		9d 9e
-CSum:		eor #$00			//						62		70		70		70		9f a0
-			sta.z CSum+1		//						65		73		73		73		a1 a2
+			eor #$7f			//						58		66		66		66		9d 9e
+CSum:		eor #$00			//						60		68		68		68		9f a0
+			sta.z CSum+1		//						63		71		71		71		a1 a2
 								//				       [52-77	56-83	60-89	64-95]
-			lda $1c01			//EFFFFFGG				69/-8	77/-6	77/-14	77/+11	a3-a5
-			ldx #$03			//						71		79		79		79		a6 a7
-			sax.z tG+1			//tG+1=000000GG			74		82		82		82		a8 a9
-LoopMod2:	alr #$fc			//					C=0	76		84		--		--		aa ab
-			tax					//X=0EFFFFF0			78		86		96		104		ac
+			lda $1c01			//EFFFFFGG				67/-10	75/-8	75/-14	75/+11	a3-a5
+								//						233-344	224-332	240-356	256-380
+			ldx #$03			//						69		77		77		77		a6 a7
+			sax.z tG+1			//tG+1=000000GG			72		80		80		80		a8 a9
+LoopMod2:	alr #$fc			//					C=0	74		82		--		--		aa ab
+			tax					//X=0EFFFFF0			76		84		94		102		ac
 
-tE:			lda TabE			//0000EEEE (ZP)			81		89		99		107		ad ae
-tF:			adc TabF,x			//00000001,0EFFFFF0 (ZP)85		93		103		111		af b0
-			pha					//$0103/$01ff			88		96		106		114		b1
+tE:			lda TabE			//0000EEEE (ZP)			79		87		97		105		ad ae
+tF:			adc TabF,x			//00000001,0EFFFFF0 (ZP)83		91		101		109		af b0
+			pha					//$0103/$01ff			86		94		104		112		b1
 								//$0103 = Sector
 								//				       [78-103	84-111	90-119	96-127]
-			lax $1c01			//GGGHHHHH				92/-11	100/-11	110/-9	118/-9	b2-b4
-			alr #$e0			//A=0GGG0000			94		102		112		120		b5 b6
-			tay					//Y=0GGG0000			96		104		114		122		b7
-			lda #$1f			//						98		106		116		124		b8 b9
-			axs #$00			//X=000HHHHH		C=1	100		108		118		126		ba bb
+			lax $1c01			//GGGHHHHH				90/-13	98/-13	108/-11	116/-11	b2-b4
+								//						260-343	257-339	250-330	249-328
+			alr #$e0			//A=0GGG0000			92		100		110		118		b5 b6
+			tay					//Y=0GGG0000			94		102		112		120		b7
+			lda #$1f			//						96		104		114		122		b8 b9
+			axs #$00			//X=000HHHHH		C=1	98		106		116		124		ba bb
 
-tG:			lda TabG,y			//000000GG,0GGG0000		104		112		122		130		bc-be
-tH:			eor TabH,x			//10001011,000HHHHH		108		116		126		134		bf-c1
-			pha					//$0102/$01fe			111		119		129		137		c2
+tG:			lda TabG,y			//000000GG,0GGG0000		102		110		120		128		bc-be
+tH:			eor TabH,x			//10001011,000HHHHH		106		114		124		132		bf-c1
+			pha					//$0102/$01fe			109		117		127		135		c2
 								//$0102 = Track
-			lax ZP07			//						114		122		132		140		c3 c4
+			lax ZP07			//						112		120		130		138		c3 c4
 								//					   [104-129	112-139	120-149	128-159]
-			sbc $1c01			//AAAAABBB			V=0	118/-11	126/-13	136/-13	144/-15	c5-c7
-			sax.z tB+1			//tB+1=-00000BBB		121		129		139		147		c8 c9
+			sbc $1c01			//AAAAABBB			V=0	116/-11	124/+12	134/+14	142/+14	c5-c7
+								//						269-333	271-336	269-333	271-335
+			sax.z tB+1			//tB+1=-00000BBB		119		127		137		145		c8 c9
 			
-			alr #$f8			//						123		131		141		149		ca cb
+			alr #$f8			//						121		129		139		147		ca cb
+			tay					//Y=-0AAAAA00			123		131		141		149		ce
 
 								//Total length (cycles):124		132		142		150
-
+								//Max. RPM:				314.5	318.1	316.9	320.0
+								
 //------------------------------------------------------------------------------------------------------
-
 								//						Zone 3	Zone 2	Zone 1	Zone 0
 			bvc *				//						00-01							cc cd
-			tay					//Y=-0AAAAA00			03								ce
 								//					   [00-25	00-27	00-29	00-31]	
-			lda $1c01			//BBCCCCCD				07/-18	07/-20	07/-22	07/-24	cf-d1
-			ldx #$3e			//						09								d2 d3
-			sax.z tC+1			//tC+1=00CCCCC0			12								d4 d5
-			alr #$c1			//						14								d6 d7
-			tax					//X=0BB00000		C=D	16								d8
+			lda $1c01			//BBCCCCCD				05/-18	07/-20	07/-22	07/-24	cf-d1
+			ldx #$3e			//						07								d2 d3
+			sax.z tC+1			//tC+1=00CCCCC0			10								d4 d5
+			alr #$c1			//						12								d6 d7
+			tax					//X=0BB00000		C=D	14								d8
 
-tA:			lda TabA,y			//00010010,-0AAAAA00	20								d9-da
-tB:			eor TabB,x			//-00000BBB,0BB00000	24								db-de
-			pha					//$0101/$01fd			27								df
+tA:			lda TabA,y			//00010010,-0AAAAA00	18								d9-da
+tB:			eor TabB,x			//-00000BBB,0BB00000	22								db-de
+			pha					//$0101/$01fd			25								df
 								//$0101 = ID2
-			tsx					//SP = $00/$fc ...		29								e0
-GCREntry:	bne GCRLoop0_2		//We start on Track 18	32/31							e1 e2
+			tsx					//SP = $00/$fc ...		27								e0
+GCREntry:	bne GCRLoop0_2		//We start on Track 18	30/29							e1 e2
 
 //------------------------------------------------------------------------------------------------------
 
 								//						Zone 3	Zone 2	Zone 1	Zone 0
-			eor (ZP0102,x)		//						37		37		37		37		e3 e4
-			tax					//						39		39		39		39		e5
+			eor (ZP0102,x)		//						35								e3 e4
+			tax					//						37								e5
+			clv					//						39								e9
 								//					   [26-51	28-55	30-59	32-63]
 			lda $1c01			//Final read = DDDD0101	43/-8	43/-12	43/+13	43/+11	e6-e8
-			clv					//						45		45		45		45		e9
-			ror					//A=DDDDD010|C=1		47		47		47		47		ea
+			ror					//A=DDDDD010|C=1		45		45		45		45		ea
 			bvc *				//						00-01							eb ec
 			tay					//						03								ed
 			txa					//						05								ee
