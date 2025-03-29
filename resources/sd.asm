@@ -1374,15 +1374,15 @@ tH:			eor TabH,x			//10001011,000HHHHH		106		114		124		132		bf-c1
 			sax.z tB+1			//tB+1=-00000BBB		119		127		137		145		c8 c9
 			
 			alr #$f8			//						121		129		139		147		ca cb
-			tay					//Y=-0AAAAA00			123		131		141		149		ce
+			tay					//Y=-0AAAAA00			123		131		141		149		cc
 
 								//Total length (cycles):124		132		142		150
 								//Max. RPM:				314.5	318.1	316.9	320.0
 								
 //------------------------------------------------------------------------------------------------------
 								//						Zone 3	Zone 2	Zone 1	Zone 0
-			bvc *				//						00-01							cc cd
-								//					   [00-25	00-27	00-29	00-31]	
+			bvc *				//						00-01							cd ce
+								//					   [00-25	00-27	00-29	00-31]
 			lda $1c01			//BBCCCCCD				05/-18	07/-20	07/-22	07/-24	cf-d1
 			ldx #$3e			//						07								d2 d3
 			sax.z tC+1			//tC+1=00CCCCC0			10								d4 d5
@@ -1401,9 +1401,9 @@ GCREntry:	bne GCRLoop0_2		//We start on Track 18	30/29							e1 e2
 								//						Zone 3	Zone 2	Zone 1	Zone 0
 			eor (ZP0102,x)		//						35								e3 e4
 			tax					//						37								e5
-			clv					//						39								e9
 								//					   [26-51	28-55	30-59	32-63]
-			lda $1c01			//Final read = DDDD0101	43/-8	43/-12	43/+13	43/+11	e6-e8
+			lda $1c01			//Final read = DDDD0101	41/-10	41/+13	41/+11	41/+9	e6-e8
+			clv					//						43								e9
 			ror					//A=DDDDD010|C=1		45		45		45		45		ea
 			bvc *				//						00-01							eb ec
 			tay					//						03								ed
