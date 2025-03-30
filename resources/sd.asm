@@ -575,8 +575,7 @@ SkipSub:	dey					//40	Any more blocks to be put in chain?
 
 //--------------------------------------
 
-ToCorrTrack:
-			jmp CorrTrack		//46-48
+ReFetch:	jmp (FetchJmp)		//46-48	Refetch everything, vector is modified from SS!!!
 
 //--------------------------------------
 //		Flip Detection			//A/X/Y=#$00 here
@@ -594,7 +593,7 @@ FlipDtct:	lda NextID			//49 4a	Side is done, check if there is a next side
 
 ProdIDLoop:	lda (ZPBAMPID),y	//54 55	Also compare Product ID, only continue if same ($0107 = BAMProdID-1)
 			cmp (ZPProdID),y	//56 57
-			bne ReFetch			//58 59	Product ID mismatch, fetch again until same
+BneReFetch:	bne ReFetch			//58 59	Product ID mismatch, fetch again until same
 			dey					//5a
 			bne ProdIDLoop		//5b 5c
 
@@ -609,60 +608,61 @@ CopyBAM:	lda (ZP0101),y		//64 65	($0101=DiskID), $102=IL3R, $103=IL2R, $104=IL1R
 			sta (ZPILTab),y		//66 67
 			dey					//68		
 			bne CopyBAM			//69 6a
-			jmp ToCheckDir		//6b-6d	Y=A=#$00 - Reload first directory sector
-
-//--------------------------------------
-
-ReFetch:	jmp (FetchJmp)		//6e-70	Refetch everything, vector is modified from SS!!!
-
-//--------------------------------------
-
-	.byte	$2a					//71	TabG (ROL)
-	.byte	$0a					//72	TabG (ASL)
+			tya					//6b
+			jmp CheckDir		//6c-6e	Y=A=#$00 - Reload first directory sector
 
 //--------------------------------------
 //		Got Header
 //--------------------------------------
 //0473
-HD:								//Cycles
-Header:		bne FetchError		//32 33	Checksum mismatch -> fetch next sector header
-			lda TabD-2,y		//34-38	Y=DDDDD010
-			eor TabC,x			//39-42	X=00CCCCC0
-			tay					//43 44	ID1 - this is suboptimal...
-			lda $0102			//45-48	$0102 - Track
-			jsr ShufToRaw		//49-68
-			beq FetchError		//69 70	Track mismatch
-			cmp #$29			//71 72	Max track: 40 ($28)
-			bcs FetchError		//73 74	Track mismatch			
-			
-			ldx $0101			//75-78 $0101 - ID2
-			cpx ZPHdrID2		//79-81
-			bne CheckIDs		//82 83	ID2 mismatch
-			
-			cpy ZPHdrID1		//84-86
-			bne CheckIDs		//87 88	ID1 mismatch
+HD:								//Mem	Cycles
+Header:		bne FetchError		//6f 70	32 33	Checksum mismatch -> fetch next sector header
 
-			ldy #$01			//89 90
-			ldx cT				//91-93
-			sta cT				//94-96
-			txa					//97 98
-			cmp cT				//99-101
-			bne ToCorrTrack		//102 103	Wrong track -> go to wanted track
+	.byte	$2a					//71	34 35	TabG (ROL) - A=#$00, no effect
+	.byte	$0a					//72	36 37	TabG (ASL) - A=#$00, no effect
 
-			lda (ZP0102),y		//104-108	$0103 - Sector
-			jsr ShufToRaw		//109-128
-			cmp MaxNumSct2+1	//129-132
-			bcs FetchError		//133 134	Sector mismatch
+			lda TabD-2,y		//		38-32	Y=DDDDD010
+			eor TabC,x			//		43-46	X=00CCCCC0
+			tay					//		47 48	ID1 - this is suboptimal...
+			lda $0102			//		49-52	$0102 - Track
+			jsr ShufToRaw		//		53-72
+			beq FetchError		//		73 74	Track mismatch
+			cmp #$29			//		75 76	Max track: 40 ($28)
+			bcs FetchError		//		77 78	Track mismatch			
+			
+			ldx $0101			//		79-82 $0101 - ID2
+			cpx ZPHdrID2		//		83-85
+			bne CheckIDs		//		86 87	ID2 mismatch
+			
+			cpy ZPHdrID1		//		88-90
+			bne CheckIDs		//		91 92	ID1 mismatch
+
+			ldy #$01			//		93 94
+			ldx cT				//		95-97
+			sta cT				//		98-100
+			txa					//		101 102
+			cmp cT				//		103-105
+			bne ToCorrTrack		//		106 107	Wrong track -> go to wanted track
+
+			lda (ZP0102),y		//		108-112	$0103 - Sector
+			jsr ShufToRaw		//		113-132
+			cmp MaxNumSct2+1	//		133-136
+			bcs FetchError		//		137 138	Sector mismatch
 						
-			ldy VerifCtr		//135-137
-			bne ToFetchData		//138 139	Always fetch sector data if we are verifying the checksum
+			ldy VerifCtr		//		139-141
+			bne ToFetchData		//		142 143	Always fetch sector data if we are verifying the checksum
 
-			tay					//140 141
-			ldx WList,y			//142-145	Otherwise, only fetch sector data if this is a wanted sector
-BplFetch:	bpl ReFetch			//146 147	Sector is not on wanted list -> fetch next sector header
-			sty cS				//148-150	Only save current Sector if data will be fetched
+			tay					//		144 145
+			ldx WList,y			//		146-149	Otherwise, only fetch sector data if this is a wanted sector
+BplFetch:	bpl ReFetch			//		150 151	Sector is not on wanted list -> fetch next sector header
+			sty cS				//		152-154	Only save current Sector if data will be fetched
 ToFetchData:
-			jmp FetchData		//151-153	Sector is on wanted list, save sector number and fetch data
+			jmp FetchData		//		155-157	Sector is on wanted list, save sector number and fetch data
+
+//--------------------------------------
+
+ToCorrTrack:
+			jmp CorrTrack
 
 //--------------------------------------
 //		Disk ID Check			//Y=#$00 here
@@ -689,7 +689,8 @@ CheckIDs:	cmp cT
 //--------------------------------------
 
 FetchError:	dec ErrCtr
-			bne	ReFetch
+ToBneReFetch:
+			bne	BneReFetch
 
 			lda $1c00			//Based on Krill's track correction code
 			and #$63
@@ -702,7 +703,8 @@ FetchError:	dec ErrCtr
 
 			lda #<ErrVal		//More than the max number of sectors per track
 			sta ErrCtr	
-BneReFetch:	bne ReFetch			//Refetch everything via ReFetch vector
+
+			bne ToBneReFetch	//Refetch everything via ReFetch vector
 
 //--------------------------------------
 //		Got Data
@@ -783,7 +785,7 @@ StoreLoop:	pla
 			bne StoreLoop
 
 			inc ScndBuff
-			bne BneReFetch			//ALWAYS back to Fetch
+			bne ToBneReFetch		//ALWAYS back to Fetch
 
 //--------------------------------------
 //		Check Last Block		//Y=#$00 here
@@ -1404,7 +1406,7 @@ GCREntry:	bne GCRLoop0_2		//We start on Track 18	30/29							e1 e2
 								//					   [26-51	28-55	30-59	32-63]
 			lda $1c01			//Final read = DDDD0101	41/-10	41/+13	41/+11	41/+9	e6-e8
 			clv					//						43								e9
-			ror					//A=DDDDD010|C=1		45		45		45		45		ea
+			ror					//A=DDDDD010|C=1		45								ea
 			bvc *				//						00-01							eb ec
 			tay					//						03								ed
 			txa					//						05								ee
