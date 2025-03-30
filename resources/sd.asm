@@ -293,8 +293,6 @@
 .label ZPBAMPID		=$10		//$10/$11 = $0107
 .label ZPHdrID1		=$68
 .label ZPHdrID2		=$69
-//.label ZP1800		=$6b
-//.label ZP1c01		=$6f
 .label ZPILTab		=$71
 .label ZPProdID		=$78		//$78/$79 = $031a (ProdID-1)
 
@@ -307,8 +305,10 @@
 .label ZP02			=$7b
 .label ZP01ff		=$58		//$58/$59 = $01ff
 .label ZP0101		=$59		//$59/$5a = $0101
+.label ZP0200		=$6b		//$6b/$6c = $0200
 .label ZP0100		=$6e		//$6b/$6c = $0100
-.label ZP0200		=$7a		//$7a/$7b = $0200
+.label ZP02ff		=$7a		//$7a/$7b = $02ff
+.label ZPTabDm2		=$7a		//$7a/$7b = $02ff = TabD-2
 
 //BAM constants:
 .label BAM_DiskID	=$0101
@@ -616,52 +616,53 @@ CopyBAM:	lda (ZP0101),y		//64 65	($0101=DiskID), $102=IL3R, $103=IL2R, $104=IL1R
 //--------------------------------------
 //0473
 HD:								//Mem	Cycles
-Header:		bne FetchError		//6f 70	32 33	Checksum mismatch -> fetch next sector header
+Header:		bne FetchError		//6f 70	33	Checksum mismatch -> fetch next sector header
 
-	.byte	$2a					//71	34 35	TabG (ROL) - A=#$00, no effect
-	.byte	$0a					//72	36 37	TabG (ASL) - A=#$00, no effect
+	.byte	$2a					//71	35	TabG (ROL) - A not needed here, no effect
+	.byte	$0a					//72	37	TabG (ASL) - A not needed here, no effect
 
-			lda TabD-2,y		//		38-32	Y=DDDDD010
-			eor TabC,x			//		43-46	X=00CCCCC0
-			tay					//		47 48	ID1 - this is suboptimal...
-			lda $0102			//		49-52	$0102 - Track
-			jsr ShufToRaw		//		53-72
-			beq FetchError		//		73 74	Track mismatch
-			cmp #$29			//		75 76	Max track: 40 ($28)
-			bcs FetchError		//		77 78	Track mismatch			
+			lda (ZPTabDm2),y	//		43	Y=DDDDD010
+			eor TabC,x			//		47	X=00CCCCC0
+			tay					//		49	Y = ID1
+
+			lda $0103			//		53	$0103 (Sector)
+			jsr ShufToRaw		//		73
+			cmp MaxNumSct2+1	//		77
+			bcs FetchError		//		79	Sector mismatch
+			sta cS				//		82
+
+			lda $0102			//		86	A = $0102 (Track)
+			jsr ShufToRaw		//		106
+			beq FetchError		//		108	Track mismatch
+			cmp #$29			//		110	Max track: 40 ($28)
+			bcs FetchError		//		112	Track mismatch			
 			
-			ldx $0101			//		79-82 $0101 - ID2
-			cpx ZPHdrID2		//		83-85
-			bne CheckIDs		//		86 87	ID2 mismatch
+			ldx $0101			//		116 X = $0101 (ID2)
+			cpx ZPHdrID2		//		119
+			bne CheckIDs		//		121	ID2 mismatch
 			
-			cpy ZPHdrID1		//		88-90
-			bne CheckIDs		//		91 92	ID1 mismatch
+			cpy ZPHdrID1		//		124
+			bne CheckIDs		//		126	ID1 mismatch
 
-			ldy #$01			//		93 94
-			ldx cT				//		95-97
-			sta cT				//		98-100
-			txa					//		101 102
-			cmp cT				//		103-105
-			bne ToCorrTrack		//		106 107	Wrong track -> go to wanted track
-
-			lda (ZP0102),y		//		108-112	$0103 - Sector
-			jsr ShufToRaw		//		113-132
-			cmp MaxNumSct2+1	//		133-136
-			bcs FetchError		//		137 138	Sector mismatch
+			ldx cT				//		129
+			sta cT				//		132
+			txa					//		134
+			cmp cT				//		137
+			bne ToCorrTrack		//		139	Wrong track -> go to wanted track
 						
-			ldy VerifCtr		//		139-141
-			bne ToFetchData		//		142 143	Always fetch sector data if we are verifying the checksum
+			ldy VerifCtr		//		142
+			bne ToFetchData		//		144	Always fetch sector data if we are verifying the checksum
 
-			tay					//		144 145
-			ldx WList,y			//		146-149	Otherwise, only fetch sector data if this is a wanted sector
-BplFetch:	bpl ReFetch			//		150 151	Sector is not on wanted list -> fetch next sector header
-			sty cS				//		152-154	Only save current Sector if data will be fetched
+			ldy cS				//		147
+			ldx WList,y			//		151	Otherwise, only fetch sector data if this is a wanted sector
+BplFetch:	bpl ReFetch			//		153	Sector is not on wanted list -> fetch next sector header
 ToFetchData:
-			jmp FetchData		//		155-157	Sector is on wanted list, save sector number and fetch data
+			jmp FetchData		//		156	Sector is on wanted list -> fetch data
 
 //--------------------------------------
 
 ToCorrTrack:
+			ldy #$01
 			jmp CorrTrack
 
 //--------------------------------------
@@ -1290,10 +1291,10 @@ ZPTab:
 .byte	$7f,$76,$3e,$16,$0e,$1c,$1e,$14,$76,$7f,$7e,$12,$4e,$18,$00,$00	//3x	Wanted List $3e-$52 (Sector 16 = #$ff)
 .byte	$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$ff,$00	//4x	(0) unfetched, (+) fetched, (-) wanted
 .byte	$00,$00,$00,$0e,$80,$0f,$c5,$07,$ff,$01,$01,$0a,$1e,$0b,$00,$03	//5x	
-.byte	$fd,$fd,$fd,$00,$fc,$0d,$00,$05,$ff,$ff,XX1,$00,$18,$09,$00,$01	//6x	$60-$64 - ILTab, $63 - NextID, $68 - ZPHdrID1, $69 - ZPHdrID2
+.byte	$fd,$fd,$fd,$00,$fc,$0d,$00,$05,$ff,$ff,XX1,$00,$02,$09,$00,$01	//6x	$60-$64 - ILTab, $63 - NextID, $68 - ZPHdrID1, $69 - ZPHdrID2
 .byte	$1c,<ILTab-1,>ILTab-1
 .byte				$06,$02,$0c,$00,$04,<ProductID-1,>ProductID-1
-.byte											$00,$02					//7x
+.byte											$ff,$02					//7x
 }
 //007c
 GCRLoop:
