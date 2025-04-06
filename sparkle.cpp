@@ -1,13 +1,13 @@
 #include "common.h"
 
-//#define DEBUG
+#define DEBUG
 
 //#define TESTDISK
 
 //#define NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR BUILD INFO 250330
+//  COMPILE TIME VARIABLES FOR BUILD INFO 250406
 //--------------------------------------------------------
 
 constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -1127,6 +1127,7 @@ bool AddHSFile()
     {
         return false;
     }
+
     if (bEntryHasExpression)
     {
         ParsedEntries += "Hi-score File:\t";
@@ -1325,7 +1326,7 @@ bool AddHSFile()
     else
     {
         //HSFile does not exist, see if we can create a blank HSFile using the provided parameters...
-        if(NumParams == 4)
+        if((NumParams == 4) && (ScriptEntryArray[0] == "blank"))
         {
             FA = ScriptEntryArray[1];                                   //Load address from script
             FO = ScriptEntryArray[2];                                   //Offset from script
@@ -1346,7 +1347,7 @@ bool AddHSFile()
                 //}
             }
 
-            //Round UP to nearest $100, at least $100 but not more than $0f00 bytes
+            //Round UP to nearest $100, at least $100 but not more than $ff00 bytes
             if ((FLN % 0x100 != 0) || (FLN == 0))
             {
                 FLN += 0x100;
@@ -2011,7 +2012,7 @@ bool CompressBundle()             //NEEDS PackFile() and CloseFile()
         cout << "\t\t\t\t  Original\tCompressed\t Ratio\t\t T:S  -  T:S\n";
     }
 
-    cout << "Compressing bundle #" << (BundleNo - 1) << "...\t";
+    cout << "Compressing   bundle #" << (BundleNo - 1) << "...\t";
 
     for (size_t i = 0; i < Prgs.size(); i++)
     {
@@ -2403,29 +2404,33 @@ bool BundleDone()
  
     if ((BundleType == BundleTypeCustomPlugin) || (BundleType == BundleTypeSaverPlugin))
     {
-        int DI;
-        if (DirIndicesUsed)
+        int DI = 0;
+        bool HasDirIdx = false;
+        if ((DirIndicesUsed) && (TmpDirEntryIndex != 0))
         {
             DI = TmpDirEntryIndex;
+            HasDirIdx = true;
         }
         else
         {
             DI = BundleNo;
         }
-        PluginFiles.push_back(PluginStruct(DI, BundleType, "", "", "", ""));
+        PluginFiles.push_back(PluginStruct(HasDirIdx, DI, BundleType, "", "", "", ""));
     }
     else if (BundleType == BundleTypeHSFile)
     {
-        int DI;
-        if (DirIndicesUsed)
+        int DI = 0;
+        bool HasDirIdx = false;
+        if ((DirIndicesUsed) && (TmpDirEntryIndex != 0))
         {
             DI = TmpDirEntryIndex;
+            HasDirIdx = true;
         }
         else
         {
             DI = BundleNo;
         }
-        PluginFiles.push_back(PluginStruct(DI, BundleType, HSFileName, HSA, HSO, HSL));
+        PluginFiles.push_back(PluginStruct(HasDirIdx, DI, BundleType, HSFileName, HSA, HSO, HSL));
     }
 
     BundleType = BundleTypeNone;
@@ -2460,8 +2465,9 @@ bool BundleDone()
         VFiles = tmpVFiles;                 //TmpVFiles gets cleared in ResetBundleVariables
 
         //Then reset bundle variables (file vectors, prg vector, block cnt), increase bundle counter
-        ResetBundleVariables();
     }
+
+    ResetBundleVariables();
 
     return true;
 }
@@ -2484,17 +2490,13 @@ bool AddVirtualFile()
         {
             ErrorMsg += "Script entries in the same bundle.\n";
         }
-        else if (BundleType == BundleTypeSaverPlugin)
+        else if ((BundleType == BundleTypeSaverPlugin) || (BundleType == BundleTypeCustomPlugin))
         {
             ErrorMsg += "Plugin entries in the same bundle.\n";
         }
         else if (BundleType == BundleTypeHSFile)
         {
             ErrorMsg += "HSFile entries in the same bundle.\n";
-        }
-        else if (BundleType == BundleTypeCustomPlugin)
-        {
-            ErrorMsg += "Plugin entries in the same bundle.\n";
         }
         cerr << ErrorMsg;
         return false;
@@ -2748,17 +2750,13 @@ bool AddFile()
         {
             ErrorMsg += "Script entries in the same bundle.\n";
         }
-        else if (BundleType == BundleTypeSaverPlugin)
+        else if ((BundleType == BundleTypeSaverPlugin) || (BundleType == BundleTypeCustomPlugin))
         {
             ErrorMsg += "Plugin entries in the same bundle.\n";
         }
         else if (BundleType == BundleTypeHSFile)
         {
             ErrorMsg += "HSFile entries in the same bundle.\n";
-        }
-        else if (BundleType == BundleTypeCustomPlugin)
-        {
-            ErrorMsg += "Plugin entries in the same bundle.\n";
         }
         cerr << ErrorMsg;
         return false;
@@ -4912,7 +4910,7 @@ bool InjectTestPlugin()
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool InjectCustomCodePlugin(int DirIdx)
+bool InjectCustomCodePlugin(bool HasDirIdx, int DirIdx, int PluginIdx)
 {
 
     BlocksUsedByPlugin = 2;
@@ -4944,12 +4942,12 @@ bool InjectCustomCodePlugin(int DirIdx)
     int LastS = TabS[SctPtr + 1];
 
     string strDirIndex = "";
-    if (DirIndicesUsed)
+    if ((DirIndicesUsed) && (HasDirIdx))
     {
         strDirIndex = "\tDir Index: $" + ConvertIntToHextString(DirIdx, 2);
     }
 
-    cout << "Adding Custom Drive Code Plugin...\t    ->    2 blocks\t\t\t";
+    cout << "Custom Plugin bundle #" << (BundleNo + PluginIdx) << "...\t\t    ->    2 blocks\t\t\t";
     cout << ((FirstT < 10) ? "0" : "") << FirstT << ":" << ((FirstS < 10) ? "0" : "") << FirstS << " - " << ((LastT < 10) ? "0" : "") << LastT << ":" << ((LastS < 10) ? "0" : "") << LastS << strDirIndex <<"\n";
 
     //Copy first block of custom code plugin to disk (reverse byte order)
@@ -5061,8 +5059,10 @@ bool InjectCustomCodePlugin(int DirIdx)
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool InjectSaverPlugin(int PluginIdx, int HSFileIdx)
+bool InjectSaverPlugin(int PluginIdx)
 {
+    int HSFileIdx = PluginIdx + 1;   
+    
     if (HSFile.size() == 0)
     {
         cerr << "***CRITICAL***\tThe Hi-Score File's size must be a multiple of $100 bytes, but not greater than $f00 bytes.\n";
@@ -5217,12 +5217,12 @@ bool InjectSaverPlugin(int PluginIdx, int HSFileIdx)
     int LastS = TabS[SctPtr+1];
     
     string strDirIndex = "";
-    if (DirIndicesUsed)
+    if ((DirIndicesUsed) && (PluginFiles.at(PluginIdx).HasDirIndex))
     {
-        strDirIndex = "\tDir Index: $" + ConvertIntToHextString(PluginIdx, 2);
+        strDirIndex = "\tDir Index: $" + ConvertIntToHextString(PluginFiles.at(PluginIdx).PluginDirIndex, 2);
     }
 
-    cout << "Adding Hi-score Saver Plugin...\t\t    ->    2 blocks\t\t\t";
+    cout << "Saver Plugin  bundle #" << (BundleNo + PluginIdx) << "...\t\t    ->    2 blocks\t\t\t";
     cout << ((FirstT < 10) ? "0" : "") << FirstT << ":" << ((FirstS < 10) ? "0" : "") << FirstS << " - " << ((LastT < 10) ? "0" : "") << LastT << ":" << ((LastS < 10) ? "0" : "") << LastS << strDirIndex << "\n";
 
     //Copy first block of saver plugin to disk (reverse byte order)
@@ -5245,15 +5245,15 @@ bool InjectSaverPlugin(int PluginIdx, int HSFileIdx)
     //SAVE CURRENT BIT POINTER AND BUFFER COUNT FOR DIRECTORY
     //-------------------------------------------------------
 
-    if (DirIndicesUsed)
+    if ((DirIndicesUsed) && (PluginFiles.at(PluginIdx).HasDirIndex))
     {
         if (BundleNo < 256)
         {
-            if (PluginIdx > 0)
+            if (PluginFiles.at(PluginIdx).PluginDirIndex > 0)
             {
-                AltDirBitPtr[PluginIdx] = 0xfe;
-                AltDirBundleNo[PluginIdx] = SctPtr;
-                AltDirPlugin[PluginIdx] = 0x40;
+                AltDirBitPtr[PluginFiles.at(PluginIdx).PluginDirIndex] = 0xfe;
+                AltDirBundleNo[PluginFiles.at(PluginIdx).PluginDirIndex] = SctPtr;
+                AltDirPlugin[PluginFiles.at(PluginIdx).PluginDirIndex] = 0x40;
             }
         }
         else
@@ -5334,12 +5334,12 @@ bool InjectSaverPlugin(int PluginIdx, int HSFileIdx)
     TotalOrigSize += BlocksUsedByPlugin;
     
     strDirIndex = "";
-    if (DirIndicesUsed)
+    if ((DirIndicesUsed) && (PluginFiles.at(HSFileIdx).HasDirIndex))
     {
-        strDirIndex = "\tDir Index: $" + ConvertIntToHextString(HSFileIdx, 2);
+        strDirIndex = "\tDir Index: $" + ConvertIntToHextString(PluginFiles.at(HSFileIdx).PluginDirIndex, 2);
     }
 
-    cout << "Adding Hi-score File...\t\t\t    ->   " << (HSBlocks < 10 ? " " : "") << HSBlocks << " block" << ((HSBlocks == 1) ? " \t\t\t" : "s\t\t\t");
+    cout << "Hi-score File bundle #" << (BundleNo + HSFileIdx) << "...\t\t    ->   " << (HSBlocks < 10 ? " " : "") << HSBlocks << " block" << ((HSBlocks == 1) ? " \t\t\t" : "s\t\t\t");
     cout << ((FirstT < 10) ? "0" : "") << FirstT << ":" << ((FirstS < 10) ? "0" : "") << FirstS << " - " << ((LastT < 10) ? "0" : "") << LastT << ":" << ((LastS < 10) ? "0" : "") << LastS << strDirIndex << "\n";
 
     /*
@@ -5371,15 +5371,15 @@ bool InjectSaverPlugin(int PluginIdx, int HSFileIdx)
     //SAVE CURRENT BIT POINTER AND BUFFER COUNT FOR DIRECTORY
     //-------------------------------------------------------
 
-    if (DirIndicesUsed)
+    if ((DirIndicesUsed) && (PluginFiles.at(HSFileIdx).HasDirIndex))
     {
         if (BundleNo < 256)
         {
-            if (HSFileIdx > 0)
+            if (PluginFiles.at(HSFileIdx).PluginDirIndex > 0)
             {
-                AltDirBitPtr[HSFileIdx] = 0xfe;
-                AltDirBundleNo[HSFileIdx] = SctPtr;
-                AltDirPlugin[HSFileIdx] = 0x00;
+                AltDirBitPtr[PluginFiles.at(HSFileIdx).PluginDirIndex] = 0xfe;
+                AltDirBundleNo[PluginFiles.at(HSFileIdx).PluginDirIndex] = SctPtr;
+                AltDirPlugin[PluginFiles.at(HSFileIdx).PluginDirIndex] = 0x00;
             }
         }
         else
@@ -5572,7 +5572,7 @@ bool AddPluginFiles()
     {
         if (PluginFiles.at(i).PluginType == BundleTypeCustomPlugin)
         {
-            InjectCustomCodePlugin(PluginFiles.at(i).PluginDirIndex);
+            InjectCustomCodePlugin(PluginFiles.at(i).HasDirIndex ,PluginFiles.at(i).PluginDirIndex, i);
         }
         else if (PluginFiles.at(i).PluginType == BundleTypeSaverPlugin)
         {
@@ -5602,23 +5602,29 @@ bool AddPluginFiles()
                     }
                     if (!AddHSFile())    //Create HSFile from script entry
                         return false;
-                    if (!InjectSaverPlugin(PluginFiles.at(i).PluginDirIndex, PluginFiles.at(i + 1).PluginDirIndex)) //Add Saver Plugin and HSFile to disk
+                    if (!InjectSaverPlugin(i)) //Add Saver Plugin and HSFile to disk
                         return false;
                     i++;
                 }
                 else
                 {
                     //ERROR - Saver plugin must be followed by HS file!!!
-                    cerr << "***CRITICAL***\tThe Saver Plugin bundle must be followed by the HSFile bundle in the script!\n";
+                    cerr << "***CRITICAL***\tThe Saver Plugin bundle must always be followed by an HSFile bundle in the script!\n";
                     return false;
                 }
             }
             else
             {
                 //ERROR - Saver plugin must be followed by HS file!!!
-                cerr << "***CRITICAL***\tThe Saver Plugin bundle must be followed by the HSFile bundle in the script!\n";
+                cerr << "***CRITICAL***\tThe Saver Plugin bundle must always be followed by an HSFile bundle in the script!\n";
                 return false;
             }
+        }
+        else if (PluginFiles.at(i).PluginType == BundleTypeHSFile)
+        {
+            //ERROR - HSFile must be preceded by Saver plugin!!!
+            cerr << "***CRITICAL***\tAn HSFile bundle must always be preceded by a Saver Plugin bundle in the script!\n";
+            return false;
         }
     }
 
@@ -6753,7 +6759,7 @@ bool Build()
                         }
                     }
                     
-                    if ((PluginParam == "cdc") || (PluginParam == "custom") || (PluginParam == "customdrivecode"))
+                    if ((PluginParam == "cdc") || (PluginParam == "custom") || (PluginParam == "customdrivecode") || (PluginParam == "customcode"))
                     {
                         if (BundleType == BundleTypeNone)
                         {

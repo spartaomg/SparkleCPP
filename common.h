@@ -60,6 +60,7 @@ extern const int sc_size;
 extern unsigned char sc[];
 
 struct PluginStruct {
+    bool HasDirIndex;
     int PluginDirIndex;
     int PluginType;
     string HSFileName;
@@ -67,8 +68,9 @@ struct PluginStruct {
     string HSFileOffset;
     string HSFileLength;
 
-    PluginStruct(int PluginDirIndex, int PluginType, string HSFileName, string HSFileAddress, string HSFileOffset, string HSFileLength)
+    PluginStruct(bool HasDirIndex, int PluginDirIndex, int PluginType, string HSFileName, string HSFileAddress, string HSFileOffset, string HSFileLength)
     {
+        this->HasDirIndex = HasDirIndex;
         this->PluginDirIndex = PluginDirIndex;
         this->PluginType = PluginType;
         this->HSFileName = HSFileName;

@@ -7,7 +7,7 @@
 //----------------------------------------------------------------------------------------
 //	- 2-bit + ATN protocol, combined fixed-order and out-of-order loading
 //	- 124-cycle GCR read-decode-verify loop with 1 BVC instruction
-//	- tolerates disk rotation speeds between 269-314 rpm in VICE in all 4 disk zones
+//	- tolerates disk rotation speeds between 272-314 rpm in VICE in all 4 disk zones
 //	- 72 bycles/block transfer
 //	- Spartan Stepping (TM) for uninterrupted loading across neighboring tracks
 //	- LZ blockwise back-to-back compression
@@ -152,7 +152,7 @@
 //	v21	- track check in header verification code
 //		  if the R/W head lands on the wrong track, then Sparkle will correct it
 //
-//	v22 - reversing transfer loop direction in C64 resident code
+//	v22	- reversing transfer loop direction in C64 resident code
 //		  this allows transfer loop patches in both the drive and C64 codes
 //		- simplified GCR loop patch code saving 14 bytes (patch tables on page 3)
 //		- code modifications to allow track change during file saving
@@ -260,8 +260,7 @@
 .label ready		=CO			//DO=0,CO=1,AA=0	$1800=#$08	dd00=100000xx (#$83)
 
 .label Sp			=$52		//Spartan Stepping constant (=82*72=5904=$1710=$17 bycles delay)
-.const ErrVal		=$18
-
+.const ErrVal		=$2a		//=42 missed consecutive sectors, two full rotations in zode 3, 2.5 full rotations in zone 0
 
 //ZP Usage:
 .label cT			=$00		//Current Track
@@ -513,17 +512,17 @@ Presync:	sty.z ModJmp+1		//de df
 			ldx #$c0			//f5 f6
 			
 			bvc *				//f7 f8|00-01
-			cmp $1c01			//f9-fb|05	Read1 = AAAAABBB  ->	01010|010(01) for Header, 01010|101(11) for Data
+			cmp $1c01			//f9-fb|05	Read1 = AAAAABBB -> H: 01010|010(01), D: 01010|101(11)
 			bne ReFetch			//fc fd|07
 
-ReadTwo:	ror					//fe   |09	C=1 before ROR	-> %10101001|0 for Header,	%10101010|1 for Data
-			ror					//ff   |11					-> %01010100 for Header,	%11010101 for Data
-			sax AXS+1			//00-02|15					-> %01000000 for Header,	%11000000 for Data
+			ror					//fe   |09	C=1 before ROR -> H: 10101001|0, D: 10101010|1
+			ror					//ff   |11				   -> H: 01010100,   D: 11010101
+			sax AXS+1			//00-02|15				   -> H: 01000000,   D: 11000000
 			clv					//03   |17
 
 			bvc *				//04 05|00-01
-			lda $1c01			//06-08|05*	*Read2 = BBCCCCCCD ->	01|CCCCC|D for Header
-AXS:		axs #$00			//09 0a|07							11|CCCCC|D for Data
+			lda $1c01			//06-08|05*	*Read2 = BBCCCCCCD -> H: 01CCCCCD
+AXS:		axs #$00			//09 0a|07						  D: 11CCCCCD
 			bne ReFetch			//0b 0c|09	X = BB000000 - X1000000, if X = 0 then proper block type is fetched
 			ldx #$3e			//0d 0e|11
 			sax.z tC+1			//0f 10|14
@@ -786,7 +785,7 @@ StoreLoop:	pla
 			bne StoreLoop
 
 			inc ScndBuff
-			bne ToBneReFetch		//ALWAYS back to Fetch
+			bne ToBneReFetch	//ALWAYS back to Fetch
 
 //--------------------------------------
 //		Check Last Block		//Y=#$00 here
@@ -820,7 +819,7 @@ ChkScnd:	lda WantedCtr
 //--------------------------------------
 
 CheckATN:	lda $1c00			//Fetch Motor and LED status
-			ora #$08			//Make sure LED will be on when we restart
+			ora #$0c			//Make sure LED will be on when we restart
 			tax					//This needs to be done here, so that we do not affect Z flag at Restart
 
 Frames:		ldy #$64			//100 frames (2 seconds) delay before turning motor off (#$fa for 5 sec)
@@ -852,7 +851,6 @@ Restart:	stx $1c00			//Restart Motor and turn LED on if they were turned off
 //--------------------------------------
 
 GetByte:	lda #$80			//$dd00=#$9b, $1800=#$94
-			//sta ErrCtr
 			ldx #busy			//X=#$10 (AA=1, CO=0, DO=0) - WILL BE USED LATER IF SAVER CODE IS NEEDED
 
 TrRnd:		jsr RcvByte			//OK to use stack here
@@ -861,7 +859,6 @@ TrRndRet:	cmp #$ff
 			beq Reset			//C64 requests drive reset
 
 TestRet:	ldy #$00			//Needed later (for FetchBAM if this is a flip request, and FetchDir too)
-			//sty ScndBuff		//THIS SHOULD NOT BE NEEDED
 
 			asl
 			bcs NewDiskID		//A=#$80-#$fe, Y=#$00 - flip disk
@@ -886,9 +883,9 @@ DirLoop:	lda $0700,x
 			dex
 			bpl DirLoop
 			ldx #$c0
-			sax Plugin			//A=#$40 if file is Saver or Custom Drive Code plugin, #$80 for transfer test, #$00 otherwise
+			sax Plugin			//A&X=#$40 if file is Saver or Custom Drive Code plugin, #$80 for transfer test, #$00 otherwise
 			and #$3f
-			sta LastT			//Track 1-40 (%00000001-%00101000)
+			sta LastT			//Delete upper 2 bits
 
 			jsr ClearList		//Clear Wanted List, Y=00 here
 
@@ -898,12 +895,12 @@ DirLoop:	lda $0700,x
 			jsr BitRate			//Update Build loop, Y=MaxSct after this
 								//Also find interleave and sector count for requested track
 
-			ldx LastS			//This is actually the first sector on the track here
+			ldx LastS			//This is actually the first sector on the track after track change (i.e. nS), always < MaxNumSct
 			tya					//A=MaxSct
 			//sec				//Not needed, C=1 after LSR ReturnFlag
 			sbc SCtr			//Remaining sectors on track
 			tay					//Y=already fetched sectors on track
-			beq SkipUsed		//Y=0, we start with the first sector, skip marking used sectors
+			beq SkipUsed		//Y=0, we start with the first sector, skip marking used sectors (not essential)
 			dec MarkSct			//Change STA ZP,x to STY ZP,x ($95 -> $94) (A=$ff - wanted, Y>#$00 - used)
 			jsr Build			//Mark all sectors as USED -before- first sector to be fetched
 			inc MarkSct			//Restore Build loop
@@ -931,7 +928,7 @@ SeqLoad:	tay					//A=#$00 here -> Y=#$00
 			lda BlockCtr		//End of Disk? BlockCtr never reaches zero here, only after trasfer, so if it is zero here then we have reached EoD
 			beq ToFetchBAM		//If Yes, fetch BAM, otherwise start transfer
 
-			lda SCtr			//Skip track change if either of these is true: (1) SCtr > 0
+			lda SCtr			//Skip track change if either of these is true: (1) SCtr > 0 OR
 			ora ScndBuff		//(2) SCtr = 0 but we have the last block of a bundle in the second buffer
 			bne ToStartTr
 
@@ -1192,7 +1189,7 @@ EndOfDriveCode:
 .pseudopc $0700 {
 
 //--------------------------------------
-//		Initialization	//$0700
+//		Initialization
 //--------------------------------------
 
 CodeStart:	ldx #$06
@@ -1266,7 +1263,7 @@ CCLoop:		pla					//=lda $0100,y
 			sta ToCD+1
 			lda #>CopyDir
 			sta ToCD+2
-ToCheckDir:	tya					//A=#$00 - Bundle #$00 to be loaded
+			tya					//A=#$00 - Bundle #$00 to be loaded
 			jmp CheckDir		//Load 1st Dir Sector and then first Bundle, Y=A=#$00
 
 .text "SPARKLE 3.2 BY OMG"
