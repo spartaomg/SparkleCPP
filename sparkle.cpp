@@ -1,13 +1,13 @@
 #include "common.h"
 
-#define DEBUG
+//#define DEBUG
 
 //#define TESTDISK
 
 //#define NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR BUILD INFO 250406
+//  COMPILE TIME VARIABLES FOR BUILD INFO 250410
 //--------------------------------------------------------
 
 constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -1279,30 +1279,45 @@ bool AddHSFile()
         FON = ConvertHexStringToInt(FO);
         FLN = ConvertHexStringToInt(FL);
 
-        //Make sure file length is not longer than actual file (should not happen)
-        if (FON + FLN > HSFile.size())
+        //Make sure file offset is within the file
+        if (FON > HSFile.size())
         {
-            FLN = HSFile.size() - FON;
+            cerr << "***CRITICAL***\tInvalid hi-score file offset!\n";
+            return false;
+        }
+
+        //Make sure file length is valid
+        if ((FON + FLN > HSFile.size()) || (FLN == 0))
+        {
+            //FLN = HSFile.size() - FON;
+            cerr << "***CRITICAL***\tInvalid hi-score file length!\n";
+            return false;
+        }
+
+        //Round UP to nearest $100, at least $100 but not more than $0f00 bytes
+        if (FLN % 0x100 != 0)
+        {
+            cerr << "***CRITICAL***\tHi-score file must be rounded up to the nearest $100 bytes!\n";
+            return false;
+            //FLN += 0x100;
+        }
+
+        //Make sure hi-score file doesn't overlap with the loader
+        if ((FAN < 0x400) && (FAN + FLN >= 0x160))
+        {
+            cerr << "***CRITICAL***\tHi-score file overlaps with the loader in the RAM!\n";
+            return false;
         }
 
         //Make sure file address+length<=&H10000
         if (FAN + FLN > 0x10000)
         {
-            FLN = (0x10000 - FAN);// & 0xf00;
-            //if (FLN < 0x100)
-            //{
-            //    cerr << "***CRITICAL***\tThe Hi-Score File's size must be at least $100 bytes!\n";
-            //        return false;
-            //}
+            //FLN = (0x10000 - FAN);// & 0xf00;
+            cerr << "***CRITICAL***\tHi-score file is too big!\n";
+            return false;
         }
 
-        //Round UP to nearest $100, at least $100 but not more than $0f00 bytes
-        if ((FLN % 0x100 != 0) || (FLN == 0))
-        {
-            FLN += 0x100;
-        }
-
-        FLN &= 0xff00;
+        //FLN &= 0xff00;
 
         FL = ConvertIntToHextString(FLN, 4);
 
@@ -1336,24 +1351,45 @@ bool AddHSFile()
             FON = ConvertHexStringToInt(FO);
             FLN = ConvertHexStringToInt(FL);
 
+            //Make sure file offset is within the file
+            if (FON > HSFile.size())
+            {
+                cerr << "***CRITICAL***\tInvalid hi-score file offset!\n";
+                return false;
+            }
+
+            //Make sure file length is valid
+            if ((FON + FLN > HSFile.size()) || (FLN == 0))
+            {
+                //FLN = HSFile.size() - FON;
+                cerr << "***CRITICAL***\tInvalid hi-score file length!\n";
+                return false;
+            }
+
+            //Round UP to nearest $100, at least $100 but not more than $0f00 bytes
+            if (FLN % 0x100 != 0)
+            {
+                cerr << "***CRITICAL***\tHi-score file must be rounded up to the nearest $100 bytes!\n";
+                return false;
+                //FLN += 0x100;
+            }
+
+            //Make sure hi-score file doesn't overlap with the loader
+            //if ((FAN < 0x400) && (FAN + FLN >= 0x160))
+            //{
+            //    cerr << "***CRITICAL***\tHi-score file overlaps with the loader in the RAM!\n";
+            //    return false;
+            //}
+
             //Make sure file address+length<=&H10000
             if (FAN + FLN > 0x10000)
             {
-                FLN = (0x10000 - FAN);// & 0xf00;
-                //if (FLN < 0x100)
-                //{
-                //    cerr << "***CRITICAL***\tThe Hi-Score File's size must be at least $100 bytes!\n";
-                //        return false;
-                //}
+                //FLN = (0x10000 - FAN);// & 0xf00;
+                cerr << "***CRITICAL***\tHi-score file is too big!\n";
+                return false;
             }
 
-            //Round UP to nearest $100, at least $100 but not more than $ff00 bytes
-            if ((FLN % 0x100 != 0) || (FLN == 0))
-            {
-                FLN += 0x100;
-            }
-
-            FLN &= 0xff00;
+            //FLN &= 0xff00;
 
             FL = ConvertIntToHextString(FLN, 4);
 
@@ -2975,6 +3011,14 @@ bool AddFile()
             cerr << "***CRITICAL***\tInvalid file address and/or length in the following File entry: " << ScriptEntry << "\n";
             return false;
         }
+
+        //Make sure file doesn't overlap with the loader
+        //if ((FAN < 0x400) && (FAN + FLN >= 0x160))
+        //{
+        //    cerr << "***CRITICAL***\tFile overlaps with the loader in the RAM: " << ScriptEntry << "\n";
+        //    return false;
+        //}
+        //}
 
         //Trim file to the specified chunk (FLN number of bytes starting at FON, to Address of FAN)
         if (FON + FLN < P.size())

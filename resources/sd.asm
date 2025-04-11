@@ -1414,7 +1414,7 @@ GCREntry:	bne GCRLoop0_2		//We start on Track 18	30/29							e1 e2
 			eor $0103			//						21								f6-f8
 			eor CSum+1			//						24								f9 fa
 			sbc #$00			//Trailing 0 check		26								fb fc
-ModJmp:		jmp (HeaderJmp)		//Calc final checksum	31								fd-ff
+ModJmp:		jmp (HeaderJmp)		//A = final checksum	31								fd-ff
 
 //------------------------------------------------------------------------------------------------------
 }
