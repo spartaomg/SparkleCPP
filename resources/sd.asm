@@ -170,6 +170,8 @@
 //		- checksum error counter
 //		  if number of consecutive read errors is greater than a full disk spin then
 //		  Sparkle will cycle through bitrates then take half track steps until fetching is successful
+//		- minor GCR loop adjustment for better high rotation speed tolerance in Zone 2
+//		  loop tolerates at least 272-314 rpm in all 4 speed zones
 //
 //----------------------------------------------------------------------------------------
 //	Memory Layout
@@ -1087,17 +1089,17 @@ W3:			sta $1800			//10-13
 
 			lsr					//00 01
 			alr #$30			//02 03
-ByteCt:		cpy #$101-Sp		//04 05			Sending #$52 bytes before Spartan Stepping (#$59 for $1a bycles) CPY #$AF/#$01
-			bit $1800			//06-09			#$52 x 72 = #$17 bycles*, #$31 bycles left for 2nd halftrack step and settling
-			bpl *-3				//10 11			*actual time is #$18-$1a+ bycles, and can be (much) longer
-W4:			sta $1800			//12-15			if C64 is not immediately ready to receive fetched block
-								//(16 cycles)	thus, the drive may actually stop on halftracks before transfer continues
+ByteCt:		cpy #$101-Sp		//04 05			Sending #$52 bytes before Spartan Stepping (#$59 for $19 bycles) CPY #$AF/#$01
+			bit $1800			//06-09			#$52 x 72 = #$17 bycles - actual time is #$18+ bycles, and can be much longer
+			bpl *-3				//10 11			
+W4:			sta $1800			//12-15
+								//(16 cycles)
 		
 			bcs Loop			//00-02
 
 //--------------------------------------
-//	SPARTAN STEPPING (TM)				<< -	Uninterrupted data transfer across adjacent tracks - >>
-//--------------------------------------		Transfer starts 1-2 bycles after first halftrack step initiated
+//	SPARTAN STEPPING (TM)						<< - Uninterrupted data transfer across adjacent tracks - >>
+//--------------------------------------
 
 Spartan:	lda #$00			//02 03			Last halftrack step is taken during data transfer
 			sta $1c00			//04-07			Update bitrate and stepper with precalculated value
@@ -1369,7 +1371,7 @@ tH:			eor TabH,x			//10001011,000HHHHH		106		114		124		132		bf-c1
 								//$0102 = Track
 			lax ZP07			//						112		120		130		138		c3 c4
 								//					   [104-129	112-139	120-149	128-159]
-			sbc $1c01			//AAAAABBB			V=0	116/-11	124/+12	134/+14	142/+14	c5-c7
+			sbc $1c01			//AAAAABBB			V=0	116/+12	124/+12	134/+14	142/+14	c5-c7
 								//						269-333	271-336	269-333	271-335
 			sax.z tB+1			//tB+1=-00000BBB		119		127		137		145		c8 c9
 			
@@ -1383,14 +1385,14 @@ tH:			eor TabH,x			//10001011,000HHHHH		106		114		124		132		bf-c1
 								//						Zone 3	Zone 2	Zone 1	Zone 0
 			bvc *				//						00-01							cd ce
 								//					   [00-25	00-27	00-29	00-31]
-			lda $1c01			//BBCCCCCD				05/-18	07/-20	07/-22	07/-24	cf-d1
+			lda $1c01			//BBCCCCCD				05/-20	05/-22	05/-24	05/-26	cf-d1
 			ldx #$3e			//						07								d2 d3
 			sax.z tC+1			//tC+1=00CCCCC0			10								d4 d5
 			alr #$c1			//						12								d6 d7
 			tax					//X=0BB00000		C=D	14								d8
 
-tA:			lda TabA,y			//00010010,-0AAAAA00	18								d9-da
-tB:			eor TabB,x			//-00000BBB,0BB00000	22								db-de
+tA:			lda TabA,y			//00010010,-0AAAAA00	18								d9-db
+tB:			eor TabB,x			//-00000BBB,0BB00000	22								dc-de
 			pha					//$0101/$01fd			25								df
 								//$0101 = ID2
 			tsx					//SP = $00/$fc ...		27								e0
@@ -1404,7 +1406,7 @@ GCREntry:	bne GCRLoop0_2		//We start on Track 18	30/29							e1 e2
 								//					   [26-51	28-55	30-59	32-63]
 			lda $1c01			//Final read = DDDD0101	41/-10	41/+13	41/+11	41/+9	e6-e8
 			clv					//						43								e9
-			ror					//A=DDDDD010|C=1		45								ea
+			ror					//A=DDDDD010|C=1		45/-6	45/-10	45/-14	45/+13	ea
 			bvc *				//						00-01							eb ec
 			tay					//						03								ed
 			txa					//						05								ee
