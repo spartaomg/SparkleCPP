@@ -7045,7 +7045,6 @@ void PrintInfo()
     cout << "Start:\t\tabcd\t\t\t\t\t\t<< 4-digit hex number, first part's start address\n";
     cout << "DirArt:\t\t\"filepath/dirartfile.d64\"\t\t\t<< D64, TXT, PRG, BIN, C array, KickAss ASM, PET, JSON, PNG, BMP file formats accepted\n";
     cout << "Tracks:\t\t35\t\t\t\t\t\t<< 35 vs 40, default: 35 if entry is omitted\n";
-    cout << "HSFile:\t\t\"filepath/hsfile.bin\" abcd abcdabcd abcd\t<< (address) (offset) (length) can be omitted if not needed\n";
     cout << "ProdID:\t\tabcdef\t\t\t\t\t\t<< 6-digit hex number, once per script, must be the same for disks of a multidisk prod, random if omitted\n";
     cout << "ThisSide:\tab\t\t\t\t\t\t<< 2-digit hex number, only if disks of a multidisk prod are built separately\n";
     cout << "NextSide:\tab\t\t\t\t\t\t<< 2-digit hex number, only if disks of a multidisk prod are built separately\n";
@@ -7063,6 +7062,9 @@ void PrintInfo()
     cout << "File:\t\t\"filepath/file3.prg*\" abcd abcdabcd abcd\t<< (address) (offset) (length)\n\n";
     cout << "<< Bundle 2\n";
     cout << "Script:\t\t\"filepath/scriptfile.sls\"\t\t\t<< this will import another script here...\n\n";
+    cout << "Plugin:\t\tsaver\n\n";
+    cout << "HSFile:\t\t\"filepath/hsfile.bin\" abcd abcdabcd abcd\t<< (address) (offset) (length) can be omitted if not needed\n\n";
+    cout << "Plugin:\t\tcustom\n\n";
     cout << "<< Entries can be fully omitted if they are not needed or their default value is used.\n";
     cout << "<< Use TAB(s) to separate entry types and their values.\n";
     cout << "<< Put file names in \"double quotes\" if you want to use SPACE as file parameter separator.\n";
