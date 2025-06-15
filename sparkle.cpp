@@ -94,6 +94,7 @@ const string EntryTypeMem = "mem:";
 const string EntryTypeAlign = "align";
 const string EntryTypeDirIndex = "dirindex:";
 const string EntryTypeComment = "comment:";
+const string EntryTypePluginIndex = "plgindex:";
 
 unsigned char BundleTypeNone = 0;
 unsigned char BundleTypeFile = 1;
@@ -133,9 +134,11 @@ bool UncompressedFile = false;
 unsigned char DirBlocks[512]{};
 int DirPtr[128]{};
 
-unsigned char AltDirBitPtr[128]{};
-int AltDirBundleNo[128]{};
-unsigned char AltDirPlugin[128]{};
+const int MaxAltDirEntries = 256; //Maximum number of alternative directory entries
+
+unsigned char AltDirBitPtr[MaxAltDirEntries]{};
+int AltDirBundleNo[MaxAltDirEntries]{};
+unsigned char AltDirPlugin[MaxAltDirEntries]{};
 
 int TmpDirEntryIndex = 0;
 int DirEntryIndex = 0;
@@ -727,7 +730,7 @@ void InjectDirBlocks()
         }
 
         //Overwrite directory entries if an alternative DirEntry index was assigned
-        for (int i = 1; i < 128; i++)
+        for (int i = 1; i < MaxAltDirEntries; i++)
         {
             if (AltDirBitPtr[i] != 0)
             {
@@ -746,8 +749,11 @@ void InjectDirBlocks()
         {
             for (int i = BundleNo + 1; i < 128; i++)
             {
-                DirBlocks[(i * 4) + 3] = DirBlocks[(BundleNo * 4) + 3];
-                DirPtr[i] = DirPtr[BundleNo];
+                if (DirBlocks[(i * 4) + 3] == 0)
+                {
+                    DirBlocks[(i * 4) + 3] = DirBlocks[(BundleNo * 4) + 3];
+                    DirPtr[i] = DirPtr[BundleNo];
+                }
             }
         }
 
@@ -1352,19 +1358,19 @@ bool AddHSFile()
             FLN = ConvertHexStringToInt(FL);
 
             //Make sure file offset is within the file
-            if (FON > HSFile.size())
-            {
-                cerr << "***CRITICAL***\tInvalid hi-score file offset!\n";
-                return false;
-            }
+            //if (FON > HSFile.size())
+            //{
+            //    cerr << "***CRITICAL***\tInvalid hi-score file offset!\n";
+            //    return false;
+            //}
 
             //Make sure file length is valid
-            if ((FON + FLN > HSFile.size()) || (FLN == 0))
-            {
-                //FLN = HSFile.size() - FON;
-                cerr << "***CRITICAL***\tInvalid hi-score file length!\n";
-                return false;
-            }
+            //if ((FON + FLN > HSFile.size()) || (FLN == 0))
+            //{
+            //    //FLN = HSFile.size() - FON;
+            //    cerr << "***CRITICAL***\tInvalid hi-score file length!\n";
+            //    return false;
+            //}
 
             //Round UP to nearest $100, at least $100 but not more than $0f00 bytes
             if (FLN % 0x100 != 0)
@@ -1594,10 +1600,10 @@ bool ResetDiskVariables()
     //Reset directory arrays
     fill_n(DirBlocks, 512, 0);
     fill_n(DirPtr, 128, 0);
-    fill_n(AltDirBitPtr, 128, 0);
-    fill_n(AltDirBundleNo, 128, 0);
+    fill_n(AltDirBitPtr, MaxAltDirEntries, 0);
+    fill_n(AltDirBundleNo, MaxAltDirEntries, 0);
     fill_n(DirIndices, 128, 0);
-    fill_n(AltDirPlugin, 128, 0);
+    fill_n(AltDirPlugin, MaxAltDirEntries, 0);
 
     //Reset disk system to support 35 tracks
     TracksPerDisk = StdTracksPerDisk;
@@ -2005,7 +2011,7 @@ bool CompressBundle()             //NEEDS PackFile() and CloseFile()
     
     if (DirIndicesUsed)
     {
-        if (BundleNo < 256)
+        if (BundleNo < MaxAltDirEntries)
         {
             if (DirEntryIndex > 0)
             {
@@ -2016,8 +2022,8 @@ bool CompressBundle()             //NEEDS PackFile() and CloseFile()
         }
         else
         {
-            cout << "***INFO***\tThe number of file bundles is greater than 256 on this disk!\n"
-                << "A DirEntry value can only be assigned to bundles 1-255.\n";
+            cout << "***INFO***\tThe number of file bundles is greater than " << dec << MaxAltDirEntries << " on this disk!\n"
+                << "A DirIndex value can only be assigned to bundles 1-" <<  MaxAltDirEntries - 1 << ".\n";
             return false;
         }
     }
@@ -2442,30 +2448,24 @@ bool BundleDone()
     {
         int DI = 0;
         bool HasDirIdx = false;
-        if ((DirIndicesUsed) && (TmpDirEntryIndex != 0))
+        if (TmpDirEntryIndex != 0)
         {
             DI = TmpDirEntryIndex;
             HasDirIdx = true;
         }
-        else
-        {
-            DI = BundleNo;
-        }
+
         PluginFiles.push_back(PluginStruct(HasDirIdx, DI, BundleType, "", "", "", ""));
     }
     else if (BundleType == BundleTypeHSFile)
     {
         int DI = 0;
         bool HasDirIdx = false;
-        if ((DirIndicesUsed) && (TmpDirEntryIndex != 0))
+        if (TmpDirEntryIndex != 0)
         {
             DI = TmpDirEntryIndex;
             HasDirIdx = true;
         }
-        else
-        {
-            DI = BundleNo;
-        }
+
         PluginFiles.push_back(PluginStruct(HasDirIdx, DI, BundleType, HSFileName, HSA, HSO, HSL));
     }
 
@@ -5015,7 +5015,7 @@ bool InjectCustomCodePlugin(bool HasDirIdx, int DirIdx, int PluginIdx)
 
     if (DirIndicesUsed)
     {
-        if (BundleNo < 256)
+        if (BundleNo < MaxAltDirEntries)
         {
             if (DirIdx > 0)
             {
@@ -5026,8 +5026,8 @@ bool InjectCustomCodePlugin(bool HasDirIdx, int DirIdx, int PluginIdx)
         }
         else
         {
-            cout << "***INFO***\tThe number of file bundles is greater than 256 on this disk!\n"
-                << "A DirEntry value can only be assigned to bundles 1-255.\n";
+            cout << "***INFO***\tThe number of file bundles is greater than " << dec << MaxAltDirEntries << " on this disk!\n"
+                << "A PlgIndex value can only be assigned to bundles 1-" << MaxAltDirEntries - 1 << ".\n";
             return false;
         }
     }
@@ -5117,12 +5117,22 @@ bool InjectSaverPlugin(int PluginIdx)
         cerr << "***CRITICAL***\tThe Hi-Score File's name is not defined.\n";
         return false;
     }
-    if (BundleNo > 125)
+    if (BundleNo + PluginIdx > 127)
     {
-        cerr << "***CRITICAL***\tThe Hi-Score File Saver Plugin cannot be added to the disk because the number of file bundles exceeds 126!\n"
-        << "The Plugin and the Hi-Score File would use bundle indices $7e and $7f, respectively.\n";
+        cerr << "***CRITICAL***\tThe Hi-Score File Saver Plugin cannot be added to the disk because the number of file bundles exceeds 128!\n";
         return false;
     }
+    
+	if (!DirIndicesUsed && PluginFiles.at(PluginIdx).HasDirIndex)
+	{
+        if (PluginFiles.at(PluginIdx).PluginDirIndex <= BundleNo)
+        {
+			cerr << "PlgIndex:\t" << hex << PluginFiles.at(PluginIdx).PluginDirIndex << dec << "\n";
+            cerr << "***CRITICAL***\tThe PlgIndex value must be a hex number greater than the number of file bundles, if DirIndices are not used!\n";
+            return false;
+        }
+    }   
+    
     //-----------------
     //  Add SaveCode
     //-----------------
@@ -5261,7 +5271,7 @@ bool InjectSaverPlugin(int PluginIdx)
     int LastS = TabS[SctPtr+1];
     
     string strDirIndex = "";
-    if ((DirIndicesUsed) && (PluginFiles.at(PluginIdx).HasDirIndex))
+    if (PluginFiles.at(PluginIdx).HasDirIndex)
     {
         strDirIndex = "\tDir Index: $" + ConvertIntToHextString(PluginFiles.at(PluginIdx).PluginDirIndex, 2);
     }
@@ -5289,31 +5299,37 @@ bool InjectSaverPlugin(int PluginIdx)
     //SAVE CURRENT BIT POINTER AND BUFFER COUNT FOR DIRECTORY
     //-------------------------------------------------------
 
-    if ((DirIndicesUsed) && (PluginFiles.at(PluginIdx).HasDirIndex))
+    if (PluginFiles.at(PluginIdx).HasDirIndex)
     {
-        if (BundleNo < 256)
+        if (BundleNo + PluginIdx < MaxAltDirEntries)
         {
             if (PluginFiles.at(PluginIdx).PluginDirIndex > 0)
             {
-                AltDirBitPtr[PluginFiles.at(PluginIdx).PluginDirIndex] = 0xfe;
-                AltDirBundleNo[PluginFiles.at(PluginIdx).PluginDirIndex] = SctPtr;
-                AltDirPlugin[PluginFiles.at(PluginIdx).PluginDirIndex] = 0x40;
+				int DirIdx = PluginFiles.at(PluginIdx).PluginDirIndex;
+
+                //Update both regular and alternative directories
+
+                AltDirBitPtr[DirIdx] = 0xfe;
+                AltDirBundleNo[DirIdx] = SctPtr;
+                DirBlocks[(DirIdx * 4) + 3] = 0xfe; //BitPtr;
+                DirPtr[DirIdx] = SctPtr;
+                AltDirPlugin[DirIdx] = 0x40;
             }
         }
         else
         {
-            cout << "***INFO***\tThe number of file bundles is greater than 256 on this disk!\n"
-                << "A DirEntry value can only be assigned to bundles 1-255.\n";
+            cout << "***INFO***\tThe number of file bundles is greater than " << dec << MaxAltDirEntries << " on this disk!\n"
+                << "A PlgIndex value can only be assigned to bundles 1-" << MaxAltDirEntries - 1 << ".\n";
             return false;
         }
     }
     else
     {
-        if (BundleNo < 128)
+        if (BundleNo + PluginIdx < 128)
         {
-            DirBlocks[(BundleNo * 4) + 3] = BitPtr;
-            DirPtr[BundleNo] = SctPtr;
-            AltDirPlugin[BundleNo] = 0x40;
+            DirBlocks[((BundleNo + PluginIdx) * 4) + 3] = 0xfe; // BitPtr;
+            DirPtr[BundleNo + PluginIdx] = SctPtr;
+            AltDirPlugin[BundleNo + PluginIdx] = 0x40;
         }
         else
         {
@@ -5378,8 +5394,14 @@ bool InjectSaverPlugin(int PluginIdx)
     TotalOrigSize += BlocksUsedByPlugin;
     
     strDirIndex = "";
-    if ((DirIndicesUsed) && (PluginFiles.at(HSFileIdx).HasDirIndex))
+    if (PluginFiles.at(HSFileIdx).HasDirIndex)
     {
+        if (!DirIndicesUsed && PluginFiles.at(HSFileIdx).PluginDirIndex <= BundleNo)
+        {
+            cerr << "PlgIndex:\t" << hex << PluginFiles.at(HSFileIdx).PluginDirIndex << dec << "\n";
+            cerr << "***CRITICAL***\tThe PlgIndex value must be a hex number greater than the number of file bundles, if DirIndices are not used!\n";
+            return false;
+        }
         strDirIndex = "\tDir Index: $" + ConvertIntToHextString(PluginFiles.at(HSFileIdx).PluginDirIndex, 2);
     }
 
@@ -5415,31 +5437,37 @@ bool InjectSaverPlugin(int PluginIdx)
     //SAVE CURRENT BIT POINTER AND BUFFER COUNT FOR DIRECTORY
     //-------------------------------------------------------
 
-    if ((DirIndicesUsed) && (PluginFiles.at(HSFileIdx).HasDirIndex))
+    if (PluginFiles.at(HSFileIdx).HasDirIndex)
     {
-        if (BundleNo < 256)
+        if (BundleNo + HSFileIdx < MaxAltDirEntries)
         {
             if (PluginFiles.at(HSFileIdx).PluginDirIndex > 0)
             {
-                AltDirBitPtr[PluginFiles.at(HSFileIdx).PluginDirIndex] = 0xfe;
-                AltDirBundleNo[PluginFiles.at(HSFileIdx).PluginDirIndex] = SctPtr;
-                AltDirPlugin[PluginFiles.at(HSFileIdx).PluginDirIndex] = 0x00;
+                int DirIdx = PluginFiles.at(HSFileIdx).PluginDirIndex;
+
+				//Update both regular and alternative directories
+
+                AltDirBitPtr[DirIdx] = 0xfe;
+                AltDirBundleNo[DirIdx] = SctPtr;
+                DirBlocks[(DirIdx * 4) + 3] = 0xfe; //BitPtr;
+                DirPtr[DirIdx] = SctPtr;
+                AltDirPlugin[DirIdx] = 0x00;
             }
         }
         else
         {
-            cout << "***INFO***\tThe number of file bundles is greater than 256 on this disk!\n"
-                << "A DirEntry value can only be assigned to bundles 1-255.\n";
+            cout << "***INFO***\tThe number of file bundles is greater than " << dec << MaxAltDirEntries << " on this disk!\n"
+                << "A PlgIndex value can only be assigned to bundles 1-" << MaxAltDirEntries - 1 << ".\n";
             return false;
         }
     }
     else
     {
-        if (BundleNo < 128)
+        if (BundleNo + HSFileIdx < 128)
         {
-            DirBlocks[(BundleNo * 4) + 3] = BitPtr;
-            DirPtr[BundleNo] = SctPtr;
-            AltDirPlugin[BundleNo] = 0x00;
+            DirBlocks[((BundleNo + HSFileIdx) * 4) + 3] = 0xfe; // BitPtr;
+            DirPtr[BundleNo + HSFileIdx] = SctPtr;
+            AltDirPlugin[BundleNo + HSFileIdx] = 0x00;
         }
         else
         {
@@ -6886,6 +6914,74 @@ bool Build()
 
                 NewBundle = false;
                 //NewD - false;     //IS THIS NEEDED???
+            }
+            else if (ScriptEntryType == EntryTypePluginIndex)
+            {
+                if (NumScriptEntries > -1)
+                {
+                    if (IsHexString(ScriptEntryArray[0]))
+                    {
+                        int tmp = ConvertHexStringToInt(ScriptEntryArray[0]);
+
+                        if (NewBundle)
+                        {
+                            NewBundle = false;
+                            if (!BundleDone())
+                                return false;
+                        }
+
+                        if ((tmp == 0) || (tmp > 127))
+                        {
+                            cerr << "***CRITICAL***\tThe PlgIndex value must be a hex number between $01 and $7f!\n";
+                            return false;
+                        }
+
+                        //if (DirIndicesUsed)
+                        //{
+                            if (DirIndices[tmp] != 0)
+                            {
+                                cerr << "***CRITICAL***\tDirectory index $" << ScriptEntryArray[0] << "is already in use!\n";
+                                return false;
+                            }
+                            else
+                            {
+                                DirIndices[tmp] = 1;
+                            }
+                            TmpDirEntryIndex = tmp;
+                        //}
+                        //else
+                        //{
+                            //if (tmp <= BundleNo)
+                            //{
+                            //    cerr << "***CRITICAL***\tThe PlgIndex value must be a hex number greater than the number of file bundles, if DirIndices are not used!\n";
+                            //    return false;
+                            //}
+                            //if (DirIndices[tmp] != 0)
+                            //{
+                            //    cerr << "***CRITICAL***\tDirectory index $" << ScriptEntryArray[0] << "is already in use!\n";
+                            //    return false;
+                            //}
+                            //else
+                            //{
+                            //    DirIndices[tmp] = 1;
+                            //}
+                            //TmpDirEntryIndex = tmp;
+                        //}
+
+                    }
+                    else
+                    {
+                        cerr << "***CRITICAL***\tThe PlgIndex value must be a hex number between $01 and $7f!\n";
+                        return false;
+                    }
+                }
+                else
+                {
+                    cerr << "***CRITICAL***\tThe PlgIndex value must be a hex number between $01 and $7f!\n";
+                    return false;
+                }
+
+                //NewBundle = true; //NOT NEEDED!!! This would result in merging to adjacent bundles...
             }
             else if (ScriptEntryType == EntryTypeDirIndex)
             {
