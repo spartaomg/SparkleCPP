@@ -7,7 +7,7 @@
 //#define NEWIO
 
 //--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR BUILD INFO 250412
+//  COMPILE TIME VARIABLES FOR BUILD INFO 250615
 //--------------------------------------------------------
 
 constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -4647,6 +4647,8 @@ void AddDirArt()
     DirTrack = 18;
     DirSector = 1;
 
+    cout << "\n";
+
     if (DirArtType == "d64")                // Import from D64
     {
         cout << "Importing DirArt from D64 file...\n";
@@ -4991,6 +4993,7 @@ bool InjectCustomCodePlugin(bool HasDirIdx, int DirIdx, int PluginIdx)
         strDirIndex = "\tDir Index: $" + ConvertIntToHextString(DirIdx, 2);
     }
 
+    cout << "---------------------------------------------------------------------------------------------\n";
     cout << "Custom Plugin bundle #" << (BundleNo + PluginIdx) << "...\t\t    ->    2 blocks\t\t\t";
     cout << ((FirstT < 10) ? "0" : "") << FirstT << ":" << ((FirstS < 10) ? "0" : "") << FirstS << " - " << ((LastT < 10) ? "0" : "") << LastT << ":" << ((LastS < 10) ? "0" : "") << LastS << strDirIndex <<"\n";
 
@@ -5125,10 +5128,10 @@ bool InjectSaverPlugin(int PluginIdx)
     
 	if (!DirIndicesUsed && PluginFiles.at(PluginIdx).HasDirIndex)
 	{
-        if (PluginFiles.at(PluginIdx).PluginDirIndex <= BundleNo)
+        if (PluginFiles.at(PluginIdx).PluginDirIndex < BundleNo)
         {
-			cerr << "PlgIndex:\t" << hex << PluginFiles.at(PluginIdx).PluginDirIndex << dec << "\n";
-            cerr << "***CRITICAL***\tThe PlgIndex value must be a hex number greater than the number of file bundles, if DirIndices are not used!\n";
+			cerr << "PlgIndex:\t" << dec << PluginFiles.at(PluginIdx).PluginDirIndex << "\n";
+            cerr << "***CRITICAL***\tThe PlgIndex value must be greater than the last file bundles index if DirIndex entries are not used!\n";
             return false;
         }
     }   
@@ -5275,7 +5278,7 @@ bool InjectSaverPlugin(int PluginIdx)
     {
         strDirIndex = "\tDir Index: $" + ConvertIntToHextString(PluginFiles.at(PluginIdx).PluginDirIndex, 2);
     }
-
+    cout << "---------------------------------------------------------------------------------------------\n";
     cout << "Saver Plugin  bundle #" << (BundleNo + PluginIdx) << "...\t\t    ->    2 blocks\t\t\t";
     cout << ((FirstT < 10) ? "0" : "") << FirstT << ":" << ((FirstS < 10) ? "0" : "") << FirstS << " - " << ((LastT < 10) ? "0" : "") << LastT << ":" << ((LastS < 10) ? "0" : "") << LastS << strDirIndex << "\n";
 
