@@ -134,7 +134,7 @@ bool UncompressedFile = false;
 unsigned char DirBlocks[512]{};
 int DirPtr[128]{};
 
-const int MaxAltDirEntries = 256; //Maximum number of alternative directory entries
+const int MaxAltDirEntries = 65536; //Maximum number of alternative directory entries
 
 unsigned char AltDirBitPtr[MaxAltDirEntries]{};
 int AltDirBundleNo[MaxAltDirEntries]{};
@@ -4956,15 +4956,33 @@ bool InjectTestPlugin()
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool InjectCustomCodePlugin(bool HasDirIdx, int DirIdx, int PluginIdx)
+bool InjectCustomCodePlugin(int PluginIdx)
 {
-
+    bool HasDirIdx = PluginFiles[PluginIdx].HasDirIndex;
+    int DirIdx = PluginFiles[PluginIdx].PluginDirIndex;
+    
     BlocksUsedByPlugin = 2;
 
     if (BlocksFree < BlocksUsedByPlugin)
     {
         cerr << "***CRITICAL***\tThe Custom Drive Code Plugin cannot be added because there is not enough free space on the disk!\n";
         return false;
+    }
+
+    if (!DirIndicesUsed)
+    {
+        if (!HasDirIdx && BundleNo + PluginIdx > 127)
+        {
+            cerr << "***CRITICAL***\tThe Custom Drive Code Plugin cannot be added to the disk because the number of file bundles exceeds 128!\n";
+            return false;
+        }
+
+        if (HasDirIdx && DirIdx < BundleNo)
+        {
+            cerr << "PlgIndex:\t" << dec << PluginFiles.at(PluginIdx).PluginDirIndex << "\n";
+            cerr << "***CRITICAL***\tThe PlgIndex value must be greater than the last file bundles index if DirIndex entries are not used!\n";
+            return false;
+        }
     }
 
     unsigned char CustomCode[512]{};
@@ -4988,7 +5006,7 @@ bool InjectCustomCodePlugin(bool HasDirIdx, int DirIdx, int PluginIdx)
     int LastS = TabS[SctPtr + 1];
 
     string strDirIndex = "";
-    if ((DirIndicesUsed) && (HasDirIdx))
+    if (HasDirIdx)
     {
         strDirIndex = "\tDir Index: $" + ConvertIntToHextString(DirIdx, 2);
     }
@@ -5016,67 +5034,47 @@ bool InjectCustomCodePlugin(bool HasDirIdx, int DirIdx, int PluginIdx)
     //SAVE CURRENT BIT POINTER AND BUFFER COUNT FOR DIRECTORY
     //-------------------------------------------------------
 
-    if (DirIndicesUsed)
+    if (HasDirIdx)
     {
-        if (BundleNo < MaxAltDirEntries)
+        if (BundleNo + PluginIdx < MaxAltDirEntries)
         {
             if (DirIdx > 0)
             {
+                //Update both regular and alternative directories
+
                 AltDirBitPtr[DirIdx] = 0xfe;
-                AltDirBundleNo[DirIdx] = BufferCnt;
+                AltDirBundleNo[DirIdx] = SctPtr;
+                DirBlocks[(DirIdx * 4) + 3] = 0xfe;
+                DirPtr[DirIdx] = SctPtr;
                 AltDirPlugin[DirIdx] = 0x40;
+            }
+            else
+            {
+                cout << "***CRITICAL***\tThe PlgIndex must be greater than 0! The directory index 0 is reserved and is internally used for bundle #0.\n";
+				return false;
             }
         }
         else
         {
-            cout << "***INFO***\tThe number of file bundles is greater than " << dec << MaxAltDirEntries << " on this disk!\n"
+            cout << "***CRITICAL***\tThe number of file bundles is greater than " << dec << MaxAltDirEntries << " on this disk!\n"
                 << "A PlgIndex value can only be assigned to bundles 1-" << MaxAltDirEntries - 1 << ".\n";
             return false;
         }
     }
     else
     {
-        if (BundleNo < 128)
+        if (BundleNo + PluginIdx < 128)
         {
-            DirBlocks[(BundleNo * 4) + 3] = BitPtr;
-            DirPtr[BundleNo] = BufferCnt;
-            AltDirPlugin[BundleNo]=0x40;
+            DirBlocks[((BundleNo + PluginIdx) * 4) + 3] = 0xfe;
+            DirPtr[BundleNo + PluginIdx] = SctPtr;
+            AltDirPlugin[BundleNo + PluginIdx] = 0x40;
         }
         else
         {
             MaxBundleNoExceeded = true;
         }
     }
-    //BundleNo++;
-    
-    //DirBlocks[DirIdx * 4] = EORtransform(CT + 0x40);
-    //DirBlocks[(DirIdx * 4) + 1] = EORtransform(TabStartS[CT]);
-    //DirBlocks[(DirIdx * 4) + 2] = EORtransform(TabSCnt[SctPtr]);
-    //DirBlocks[(DirIdx * 4) + 3] = 0xfe;
-/*
-    int DirSct = 17;
-    if (DirIdx > 63)
-    {
-        DirSct = 18;
-        DirIdx -= 64;
-    }
 
-    DirIdx = DirIdx * 4;
-    int LastDirIdxVal = DirIdx + 3;
-    if (LastDirIdxVal == 256)
-    {
-        LastDirIdxVal -= 256;
-    }
-
-    unsigned char FirstSectorOfTrack = TabStartS[CT];
-    unsigned char RemainingSectorsOnTrack = TabSCnt[SctPtr];
-
-    Disk[Track[18] + (DirSct * 256) + LastDirIdxVal] = EORtransform(CT + 0x40);             //DirBlocks(0) = EORtransform(Track) = 35/40 + plugin flag bit (2 blocks)
-    Disk[Track[18] + (DirSct * 256) + DirIdx + 2] = EORtransform(FirstSectorOfTrack);       //DirBlocks(1) = EORtransform(Sector) = First sector of Track(35) (not first sector of file!!!)
-    Disk[Track[18] + (DirSct * 256) + DirIdx + 1] = EORtransform(RemainingSectorsOnTrack);  //DirBlocks(2) = EORtransform(Remaining sectors on track)
-    Disk[Track[18] + (DirSct * 256) + DirIdx + 0] = 0xfe;                                   //DirBlocks(3) = BitPtr
-    
-*/
     //Next Sector
     SctPtr++;
 
@@ -5096,9 +5094,8 @@ bool InjectCustomCodePlugin(bool HasDirIdx, int DirIdx, int PluginIdx)
     //Mark sector off in BAM
     DeleteBit(CT, CS);
 
-    //BlocksFree -= BlocksUsedByPlugin; //-> this is taken care of in DeleteBit
     BufferCnt += BlocksUsedByPlugin;
-    BundleNo++;
+    //BundleNo++;                       //Do NOT increase BundleNo!!! BundleNo remains pointing at the first plugin bundle index
 
     return true;
 
@@ -5110,9 +5107,12 @@ bool InjectSaverPlugin(int PluginIdx)
 {
     int HSFileIdx = PluginIdx + 1;   
     
+    bool HasDirIdx = PluginFiles.at(PluginIdx).HasDirIndex;
+	int DirIdx = PluginFiles.at(PluginIdx).PluginDirIndex; 
+
     if (HSFile.size() == 0)
     {
-        cerr << "***CRITICAL***\tThe Hi-Score File's size must be a multiple of $100 bytes, but not greater than $f00 bytes.\n";
+        cerr << "***CRITICAL***\tThe Hi-Score File's size must be a multiple of $100 bytes.\n";
         return false;
     }
     if (HSFileName.empty())
@@ -5120,21 +5120,21 @@ bool InjectSaverPlugin(int PluginIdx)
         cerr << "***CRITICAL***\tThe Hi-Score File's name is not defined.\n";
         return false;
     }
-    if (BundleNo + PluginIdx > 127)
+    if (!DirIndicesUsed)
     {
-        cerr << "***CRITICAL***\tThe Hi-Score File Saver Plugin cannot be added to the disk because the number of file bundles exceeds 128!\n";
-        return false;
-    }
-    
-	if (!DirIndicesUsed && PluginFiles.at(PluginIdx).HasDirIndex)
-	{
-        if (PluginFiles.at(PluginIdx).PluginDirIndex < BundleNo)
+        if (!HasDirIdx && BundleNo + PluginIdx > 127)
         {
-			cerr << "PlgIndex:\t" << dec << PluginFiles.at(PluginIdx).PluginDirIndex << "\n";
+            cerr << "***CRITICAL***\tThe Hi-Score File Saver Plugin cannot be added to the disk because the number of file bundles exceeds 128!\n";
+            return false;
+        }
+
+        if (HasDirIdx && DirIdx < BundleNo)
+        {
+            cerr << "PlgIndex:\t" << dec << DirIdx << "\n";
             cerr << "***CRITICAL***\tThe PlgIndex value must be greater than the last file bundles index if DirIndex entries are not used!\n";
             return false;
         }
-    }   
+    }
     
     //-----------------
     //  Add SaveCode
@@ -5252,15 +5252,6 @@ bool InjectSaverPlugin(int PluginIdx)
     }
 
     SaveCode[j] = (HSAddress - 1) & 0xff;                //Low byte of the address of the last byte of the Hi-Score file
-
-    //if (SaverSupportsIO)
-    //{
-        //SaveCode[0xf1] = (HSAddress - 1) & 0xff;        //Low byte of the address of the last byte of the Hi-Score file
-    //}
-    //else
-    //{
-        //SaveCode[0xec] = (HSAddress - 1) & 0xff;        //Low byte of the address of the last byte of the Hi-Score file
-    //}
     
     //Calculate sector pointer on disk
     int SctPtr = BufferCnt; //SectorsPerDisk - BlocksUsedByPlugin;
@@ -5274,9 +5265,9 @@ bool InjectSaverPlugin(int PluginIdx)
     int LastS = TabS[SctPtr+1];
     
     string strDirIndex = "";
-    if (PluginFiles.at(PluginIdx).HasDirIndex)
+    if (HasDirIdx)
     {
-        strDirIndex = "\tDir Index: $" + ConvertIntToHextString(PluginFiles.at(PluginIdx).PluginDirIndex, 2);
+        strDirIndex = "\tDir Index: $" + ConvertIntToHextString(DirIdx, 2);
     }
     cout << "---------------------------------------------------------------------------------------------\n";
     cout << "Saver Plugin  bundle #" << (BundleNo + PluginIdx) << "...\t\t    ->    2 blocks\t\t\t";
@@ -5302,14 +5293,12 @@ bool InjectSaverPlugin(int PluginIdx)
     //SAVE CURRENT BIT POINTER AND BUFFER COUNT FOR DIRECTORY
     //-------------------------------------------------------
 
-    if (PluginFiles.at(PluginIdx).HasDirIndex)
+    if (HasDirIdx)
     {
         if (BundleNo + PluginIdx < MaxAltDirEntries)
         {
-            if (PluginFiles.at(PluginIdx).PluginDirIndex > 0)
+            if (DirIdx > 0)
             {
-				int DirIdx = PluginFiles.at(PluginIdx).PluginDirIndex;
-
                 //Update both regular and alternative directories
 
                 AltDirBitPtr[DirIdx] = 0xfe;
@@ -5318,10 +5307,15 @@ bool InjectSaverPlugin(int PluginIdx)
                 DirPtr[DirIdx] = SctPtr;
                 AltDirPlugin[DirIdx] = 0x40;
             }
+            else
+            {
+                cout << "***CRITICAL***\tThe PlgIndex must be greater than 0! The directory index 0 is reserved and is internally used for bundle #0.\n";
+                return false;
+            }
         }
         else
         {
-            cout << "***INFO***\tThe number of file bundles is greater than " << dec << MaxAltDirEntries << " on this disk!\n"
+            cout << "***CRITICAL***\tThe number of file bundles is greater than " << dec << MaxAltDirEntries << " on this disk!\n"
                 << "A PlgIndex value can only be assigned to bundles 1-" << MaxAltDirEntries - 1 << ".\n";
             return false;
         }
@@ -5359,29 +5353,27 @@ bool InjectSaverPlugin(int PluginIdx)
     //Mark sector off in BAM
     DeleteBit(CT, CS);  
     
-    /*
-    int DirSct = 17;
-    if (PluginIdx > 63)
-    {
-        DirSct = 18;
-        PluginIdx -= 64;
-    }
-
-    PluginIdx = ((63 - PluginIdx) * 4) + 1;
-    int LastPluginIdxVal = PluginIdx + 3;
-    if (LastPluginIdxVal == 256)
-    {
-        LastPluginIdxVal -= 256;
-    }
-    Disk[Track[18] + (DirSct * 256) + LastPluginIdxVal] = EORtransform(CT + 0x40);      //DirBlocks(0) = EORtransform(Track) = 35/40 + plugin flag bit (2 blocks)
-    Disk[Track[18] + (DirSct * 256) + PluginIdx + 2] = EORtransform(TabStartS[CT]);     //DirBlocks(1) = EORtransform(Sector) = First sector of Track(35) (not first sector of file!!!)
-    Disk[Track[18] + (DirSct * 256) + PluginIdx + 1] = EORtransform(TabSCnt[SctPtr]);   //DirBlocks(2) = EORtransform(Remaining sectors on track)
-    Disk[Track[18] + (DirSct * 256) + PluginIdx + 0] = 0xfe;                            //DirBlocks(3) = BitPtr
-    */
-    
     //---------------------
     //  Add Hi-Score File
     //---------------------
+
+	HasDirIdx = PluginFiles.at(HSFileIdx).HasDirIndex;
+    DirIdx = PluginFiles.at(HSFileIdx).PluginDirIndex;
+
+    if (!DirIndicesUsed)
+    {
+        if (HasDirIdx && DirIdx <= BundleNo)
+        {
+            cerr << "PlgIndex:\t" << dec << DirIdx << "\n";
+            cerr << "***CRITICAL***\tThe PlgIndex value must be a hex number greater than the number of file bundles, if DirIndices are not used!\n";
+            return false;
+        }
+        if (!HasDirIdx && BundleNo + HSFileIdx > 127)
+        {
+            cerr << "***CRITICAL***\tThe Hi-Score File cannot be added to the disk because the number of file bundles exceeds 128!\n";
+            return false;
+        }
+    }
 
     SctPtr++;
     CT = TabT[SctPtr];
@@ -5389,49 +5381,21 @@ bool InjectSaverPlugin(int PluginIdx)
     FirstT = CT;
     FirstS = CS;
     
-    //int HSFBC = BlocksUsedByPlugin - 2;
-    
     LastT = TabT[SctPtr + HSBlocks - 1];
     LastS = TabS[SctPtr + HSBlocks - 1];
 
     TotalOrigSize += BlocksUsedByPlugin;
-    
+
     strDirIndex = "";
-    if (PluginFiles.at(HSFileIdx).HasDirIndex)
+
+    if (HasDirIdx)
     {
-        if (!DirIndicesUsed && PluginFiles.at(HSFileIdx).PluginDirIndex <= BundleNo)
-        {
-            cerr << "PlgIndex:\t" << hex << PluginFiles.at(HSFileIdx).PluginDirIndex << dec << "\n";
-            cerr << "***CRITICAL***\tThe PlgIndex value must be a hex number greater than the number of file bundles, if DirIndices are not used!\n";
-            return false;
-        }
-        strDirIndex = "\tDir Index: $" + ConvertIntToHextString(PluginFiles.at(HSFileIdx).PluginDirIndex, 2);
+        strDirIndex = "\tDir Index: $" + ConvertIntToHextString(DirIdx, 2);
     }
 
     cout << "Hi-score File bundle #" << (BundleNo + HSFileIdx) << "...\t\t    ->   " << (HSBlocks < 10 ? " " : "") << HSBlocks << " block" << ((HSBlocks == 1) ? " \t\t\t" : "s\t\t\t");
     cout << ((FirstT < 10) ? "0" : "") << FirstT << ":" << ((FirstS < 10) ? "0" : "") << FirstS << " - " << ((LastT < 10) ? "0" : "") << LastT << ":" << ((LastS < 10) ? "0" : "") << LastS << strDirIndex << "\n";
 
-    /*
-    //Add HSFile to directory
-    DirSct = 17;
-    if (HSFileIdx > 63)
-    {
-        DirSct = 18;
-        HSFileIdx -= 64;
-    }
-
-    HSFileIdx = ((63 - HSFileIdx) * 4) + 1;
-    int LastHSFileIdxVal = HSFileIdx + 3;
-    if (LastHSFileIdxVal == 256)
-    {
-        LastHSFileIdxVal -= 256;
-    }
-
-    Disk[Track[18] + (DirSct * 256) + LastHSFileIdxVal] = EORtransform(CT);             //DirBlocks(0) = EORtransform(Track) = 35
-    Disk[Track[18] + (DirSct * 256) + HSFileIdx + 2] = EORtransform(TabStartS[CT]);     //DirBlocks(1) = EORtransform(Sector) = First sector of Track(35) (not first sector of file!!!)
-    Disk[Track[18] + (DirSct * 256) + HSFileIdx + 1] = EORtransform(TabSCnt[SctPtr]);   //DirBlocks(2) = EORtransform(Remaining sectors on track)
-    Disk[Track[18] + (DirSct * 256) + HSFileIdx + 0] = 0xfe;                            //DirBlocks(3) = BitPtr
-    */
     DeleteBit(CT, CS);
 
     //Add plugin to directory
@@ -5440,14 +5404,12 @@ bool InjectSaverPlugin(int PluginIdx)
     //SAVE CURRENT BIT POINTER AND BUFFER COUNT FOR DIRECTORY
     //-------------------------------------------------------
 
-    if (PluginFiles.at(HSFileIdx).HasDirIndex)
+    if (HasDirIdx)
     {
         if (BundleNo + HSFileIdx < MaxAltDirEntries)
         {
-            if (PluginFiles.at(HSFileIdx).PluginDirIndex > 0)
+            if (DirIdx > 0)
             {
-                int DirIdx = PluginFiles.at(HSFileIdx).PluginDirIndex;
-
 				//Update both regular and alternative directories
 
                 AltDirBitPtr[DirIdx] = 0xfe;
@@ -5456,10 +5418,15 @@ bool InjectSaverPlugin(int PluginIdx)
                 DirPtr[DirIdx] = SctPtr;
                 AltDirPlugin[DirIdx] = 0x00;
             }
+            else
+            {
+                cout << "***CRITICAL***\tThe PlgIndex must be greater than 0! The directory index 0 is reserved and is internally used for bundle #0.\n";
+                return false;
+            }
         }
         else
         {
-            cout << "***INFO***\tThe number of file bundles is greater than " << dec << MaxAltDirEntries << " on this disk!\n"
+            cout << "***CRITICAL***\tThe number of file bundles is greater than " << dec << MaxAltDirEntries << " on this disk!\n"
                 << "A PlgIndex value can only be assigned to bundles 1-" << MaxAltDirEntries - 1 << ".\n";
             return false;
         }
@@ -5480,7 +5447,6 @@ bool InjectSaverPlugin(int PluginIdx)
 
     unsigned char SBuffer[256]{};
     int HSStartAdd = HSAddress + HSLength - 1;
-    //unsigned char BlockCnt = BlocksUsedByPlugin - 2;    // HSLength / 256;
 
     //First block
     SBuffer[0] = 0;
@@ -5633,7 +5599,6 @@ bool InjectSaverPlugin(int PluginIdx)
         Disk[Track[CT] + (CS * 256) + i] = SBuffer[B--];
     }
 
-    //BlocksFree -= BlocksUsedByPlugin; //-> this is taken care of in DeleteBit
     BufferCnt += BlocksUsedByPlugin;
 
     return true;
@@ -5647,7 +5612,7 @@ bool AddPluginFiles()
     {
         if (PluginFiles.at(i).PluginType == BundleTypeCustomPlugin)
         {
-            InjectCustomCodePlugin(PluginFiles.at(i).HasDirIndex ,PluginFiles.at(i).PluginDirIndex, i);
+            InjectCustomCodePlugin(i);
         }
         else if (PluginFiles.at(i).PluginType == BundleTypeSaverPlugin)
         {
