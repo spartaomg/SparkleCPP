@@ -306,7 +306,8 @@
 .label ZP02			=$7b
 .label ZP01ff		=$58		//$58/$59 = $01ff
 .label ZP0101		=$59		//$59/$5a = $0101
-.label ZP1800		=$6b		//$6b/$6c = $1800
+//.label ZP1800		=$6b		//$6b/$6c = $0200
+.label ZP0200		=$6b		//$6b/$6c = $1800
 .label ZP0100		=$6e		//$6b/$6c = $0100
 .label ZP02ff		=$7a		//$7a/$7b = $02ff
 .label ZPTabDm2		=$7a		//$7a/$7b = $02ff = TabD-2
@@ -785,7 +786,7 @@ Reset:		jmp ($fffc)
 
 StoreLoop:	pla
 			iny
-			sta $0200,y
+			sta (ZP0200),y
 			bne StoreLoop
 
 			inc ScndBuff
@@ -905,7 +906,7 @@ DirLoop:	lda $0700,x
 			//sec				//Not needed, C=1 after LSR ReturnFlag
 			sbc SCtr			//Remaining sectors on track
 			tay					//Y=already fetched sectors on track
-			beq SkipUsed		//Y=0, we start with the first sector, skip marking used sectors (not essential)
+			//beq SkipUsed		//Y=0, we start with the first sector, skip marking used sectors (not essential)
 			dec MarkSct			//Change STA ZP,x to STY ZP,x ($95 -> $94) (A=$ff - wanted, Y>#$00 - used)
 			jsr Build			//Mark all sectors as USED -before- first sector to be fetched
 			inc MarkSct			//Restore Build loop
@@ -1063,7 +1064,7 @@ StoreBR:	sta Spartan+1		//Store bitrate for Spartan step
 StartTr:	ldy #$00			//transfer loop counter
 			ldx #Msk			//bit mask for SAX = $ef
 			lda #ready			//A=#$08, ATN=0, AA not needed
-TrSeq:		sta (<ZP1800-Msk,x)
+TrSeq:		sta $1800
 
 //--------------------------------------
 //		Transfer loop
@@ -1087,7 +1088,7 @@ W2:			sta $1800			//12-15
 			alr #$f0			//02 03
 			bit $1800			//04-07
 			bmi *-3				//08 09
-W3:			sta (<ZP1800-Msk,x)	//10-15
+W3:			sta $1800			//10-15
 								//(16 cycles)
 
 			lsr					//00 01
@@ -1121,20 +1122,17 @@ ChkPt:		bpl Loop			//16-18
 
 //--------------------------------------
 
-TrSeqRet:	lda #busy + 1		//16,17 		A=#$11 AA + DI (which doesn't matter)
+TrSeqRet:	lda #busy			//16,17 		A=#$11 AA + DI (which doesn't matter)
 			bit $1800			//18-21		 	Last bitpair received by C64?
 			bmi *-3				//22,23
-			sta (<ZP1800-Msk,x)	//24-29			Transfer finished, send Busy Signal to C64
-
-			sax Loop+2			//Restore transfer loop (A & X = $11 & $EF = $01)
+			sta $1800			//24-29			Transfer finished, send Busy Signal to C64
 			
-			//bit $1800			//Make sure C64 pulls ATN before continuing - could change to LDA (ZP1800-$ef,x) if needed
-			lda (<ZP1800-Msk,x)	//Make sure C64 pulls ATN before continuing
-			bpl *-2				//Without this the next ATN check may fall through
+			bit $1800			//Make sure C64 pulls ATN before continuing
+			bpl *-3				//Without this the next ATN check may fall through
 								//resulting in early reset of the drive
 
-			//iny				//Y=#$01
-			//sty Loop+2		//Restore transfer loop
+			iny					//Y=#$01
+			sty Loop+2			//Restore transfer loop
 			
 			jsr ToggleLED		//Transfer complete - turn LED off, leave motor on
 
@@ -1296,7 +1294,7 @@ ZPTab:
 .byte	$7f,$76,$3e,$16,$0e,$1c,$1e,$14,$76,$7f,$7e,$12,$4e,$18,$00,$00	//3x	Wanted List $3e-$52 (Sector 16 = #$ff)
 .byte	$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$ff,$00	//4x	(0) unfetched, (+) fetched, (-) wanted
 .byte	$00,$00,$00,$0e,$80,$0f,$c5,$07,$ff,$01,$01,$0a,$1e,$0b,$00,$03	//5x	
-.byte	$fd,$fd,$fd,$00,$fc,$0d,$00,$05,$ff,$ff,XX1,$00,$18,$09,$00,$01	//6x	$60-$64 - ILTab, $63 - NextID, $68 - ZPHdrID1, $69 - ZPHdrID2
+.byte	$fd,$fd,$fd,$00,$fc,$0d,$00,$05,$ff,$ff,XX1,$00,$02,$09,$00,$01	//6x	$60-$64 - ILTab, $63 - NextID, $68 - ZPHdrID1, $69 - ZPHdrID2
 .byte	XX2,<ILTab-1,>ILTab-1
 .byte				$06,$02,$0c,$00,$04,<ProductID-1,>ProductID-1
 .byte											$ff,$02					//7x
