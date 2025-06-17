@@ -316,7 +316,7 @@ Sparkle_LoadFetched:
 			bvs *-3					//$dd00=#$cx - drive is busy, $0x - drive is ready	00,01	(BMI would also work)
 			stx $dd00				//Release ATN										02-05
 			inx						//To compensate for first DEX in loop
-			jsr Set01				//Waste a few cycles... (drive takes 16 cycles)		06-28 (minimum needed here is 06-15, 10 cycles, including DEX!!!)
+			jsr Set01				//Waste a few cycles... (drive takes 16 cycles)		06-28 (minimum needed here is 06-15, 10 cycles, including INX!!!)
 
 //-------------------------------------
 //
