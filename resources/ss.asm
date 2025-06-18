@@ -29,7 +29,7 @@
 //
 //	v1.8	- track change during saving
 //			  allowing script syntax changes to save HSFile anywhere on the disk
-//			  HSFile can be larger then $0f00 bytes
+//			  HSFile can be larger than $0f00 bytes
 //
 //	v1.9	- properly calculating the number of blocks needed on the disk
 //

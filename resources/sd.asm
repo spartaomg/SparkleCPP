@@ -154,22 +154,23 @@
 //
 //	v22	- reversing transfer loop direction in C64 resident code
 //		  this allows transfer loop patches in both the drive and C64 codes
-//		- simplified GCR loop patch code saving 14 bytes (patch tables on page 3)
+//		- simplified GCR loop patch code (patch tables on page 3)
 //		- code modifications to allow track change during file saving
+//		  HSFile can be larger than $0f00 bytes
 //		- reworked plugin detection
 //		  number of plugin blocks is stored in the two most significant bits of the Track byte in the directory
-//		  allows multiple plugins per disk side
-//		  plugins must be loaded using index-based loader calls
+//		  allows multiple plugins and HSFiles per disk side
+//		  plugins and HSFiles must be loaded using index-based loader calls
 //		- simplified track seek code
 //		  eliminating early track change during sequential loading (stepping before ATN check)
 //		- reworked fetch code
-//		- adding multiple sanity checks to header block
+//		- adding multiple header block sanity checks
 //		  ID1, ID2, Track, and Sector checks
 //		  ID1 and ID2 are updated when reading from track 18 (during init and disk flips)
 //		- trailing 0 first nibble check
 //		- checksum error counter
-//		  if number of consecutive read errors is greater than a full disk spin then
-//		  Sparkle will cycle through bitrates then take half track steps until fetching is successful
+//		  if number of consecutive read errors is greater than 2 full disk rotations then
+//		  Sparkle will cycle through bitrates before taking half track steps until fetching is successful (adopted from Krill)
 //		- minor GCR loop adjustment for better high rotation speed tolerance in Zone 2
 //		  loop tolerates at least 272-314 rpm in all 4 speed zones
 //
@@ -182,7 +183,7 @@
 //	0200	02ff	Second Data Buffer
 //	0300	03f1	GCR tables with code interleaved
 //	0411	0472	GCR table with code interleaved
-//	0300	06f4	Drive Code
+//	0300	06ff	Drive Code
 //	0700	07ff	Directory (4 bytes per entry, 64 entries per dir block, 2 dir blocks on disk)
 //
 //	Layout at Start
@@ -190,7 +191,7 @@
 //	0300	03f1	GCR tables					block 0
 //	0300	05ff	Code						blocks 0-2
 //	0600	06ff	ZP GCR tables and GCR loop	block 3
-//	0700	0736	Installer					block 4
+//	0700	0781	Installer					block 4
 //
 //	Layout in PRG
 //
@@ -198,7 +199,7 @@
 //	2411	2472	GCR table					block 1
 //	2300	26f4	Drive Code					blocks 0-3 3 -> block 5
 //	2700	27ff	ZP GCR tables and GCR loop	block 	   4 -> block 3
-//	2800	2836	Installer					block 	   5 -> block 4
+//	2800	2881	Installer					block 	   5 -> block 4
 //
 //----------------------------------------------------------------------------------------
 //	Track 18
@@ -306,8 +307,8 @@
 .label ZP02			=$7b
 .label ZP01ff		=$58		//$58/$59 = $01ff
 .label ZP0101		=$59		//$59/$5a = $0101
-//.label ZP1800		=$6b		//$6b/$6c = $0200
-.label ZP0200		=$6b		//$6b/$6c = $1800
+//.label ZP1800		=$6b		//$6b/$6c = $1800 - use it to free 4 more bytes if needed
+.label ZP0200		=$6b		//$6b/$6c = $0200
 .label ZP0100		=$6e		//$6b/$6c = $0100
 .label ZP02ff		=$7a		//$7a/$7b = $02ff
 .label ZPTabDm2		=$7a		//$7a/$7b = $02ff = TabD-2
@@ -324,8 +325,7 @@
 .label OPC_ALR		=$4b
 .label OPC_BNE		=$d0
 .const OPC_NOP_ABS	=$0c
-.const Msk			=$ef		//X register value, bit mask for SAX instructions in the transfer loop
-
+.const Msk			=$ef		//bit mask value in X for SAX in the transfer loop
 
 //GCR Decoding Tables:
 .label TabZP		=$00
@@ -344,6 +344,8 @@
 .label XX2			=$9d
 .label XX3			=$e5
 .label XX4			=$67
+
+//----------------------------------------------------------------------------------------
 
 *=$2300 "Drive Code"
 .pseudopc $0300 {
@@ -872,7 +874,7 @@ TestRet:	ldy #$00			//Needed later (for FetchBAM if this is a flip request, and 
 			inc Random
 CheckDir:	ldx #$11			//A=#$00-#$7f, X=#$11 (dir sector 17) - DO NOT CHANGE TO INX, IT IS ALSO A JUMP TARGET!!!
 			asl
-			sta DirLoop+1		//Relative address within Dir block
+			sta DirLoop+1		//Dir entry offset within dir block
 			bcc CompareDir
 			inx					//A=#$40-#$7f, X=#$12 (dir sector 18)
 CompareDir:	cpx DirSector		//Dir Sector, initial value=#$c5
@@ -908,7 +910,7 @@ DirLoop:	lda $0700,x
 			tay					//Y=already fetched sectors on track
 			//beq SkipUsed		//Y=0, we start with the first sector, skip marking used sectors (not essential)
 			dec MarkSct			//Change STA ZP,x to STY ZP,x ($95 -> $94) (A=$ff - wanted, Y>#$00 - used)
-			jsr Build			//Mark all sectors as USED -before- first sector to be fetched
+			jsr Build			//Mark all sectors as FETCHED -before- first sector to be fetched
 			inc MarkSct			//Restore Build loop
 
 SkipUsed:	iny					//Mark the first sector of the new bundle as WANTED
@@ -931,7 +933,7 @@ ToFetchBAM:	jmp FetchBAM		//Go to Track 18 to fetch Sector 0 (BAM) for Next Side
 //--------------------------------------
 
 SeqLoad:	tay					//A=#$00 here -> Y=#$00
-			lda BlockCtr		//End of Disk? BlockCtr never reaches zero here, only after trasfer, so if it is zero here then we have reached EoD
+			lda BlockCtr		//End of Disk? BlockCtr can only be 0 here if the last NBC was 0 and we requested sequential loading -> EoD -> sequential flip disk request
 			beq ToFetchBAM		//If Yes, fetch BAM, otherwise start transfer
 
 			lda SCtr			//Skip track change if either of these is true: (1) SCtr > 0 OR
@@ -1122,11 +1124,13 @@ ChkPt:		bpl Loop			//16-18
 
 //--------------------------------------
 
-TrSeqRet:	lda #busy			//16,17 		A=#$11 AA + DI (which doesn't matter)
+TrSeqRet:	lda #busy			//16,17			use #busy + 1 here (AA + DI = $11) for SAX Loop + 1 below ($11 & $EF = $01)
 			bit $1800			//18-21		 	Last bitpair received by C64?
 			bmi *-3				//22,23
 			sta $1800			//24-29			Transfer finished, send Busy Signal to C64
 			
+			//sax Loop + 1
+
 			bit $1800			//Make sure C64 pulls ATN before continuing
 			bpl *-3				//Without this the next ATN check may fall through
 								//resulting in early reset of the drive
@@ -1149,7 +1153,7 @@ UpdateBCtr:	lda NBC				//New Block Count
 
 JmpCATN:	jmp CheckATN		//No more blocks to fetch in sequence, wait for next loader call
 								//If next loader call is sequential -> will go to BAM for flip check/reset
-								//If next loader call is random -> will load requested file
+								//If next loader call is random -> will load requested file/flip disk/reset
 
 //--------------------------------------
 
