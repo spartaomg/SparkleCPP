@@ -872,17 +872,16 @@ TestRet:	ldy #$00			//Needed later (for FetchBAM if this is a flip request, and 
 			bcs NewDiskID		//A=#$80-#$fe, Y=#$00 - flip disk
 			beq CheckDir		//A=#$00, skip Random flag (first bundle on disk)
 			inc Random
-CheckDir:	ldx #$11			//A=#$00-#$7f, X=#$11 (dir sector 17) - DO NOT CHANGE TO INX, IT IS ALSO A JUMP TARGET!!!
-			asl
+CheckDir:	asl
 			sta DirLoop+1		//Dir entry offset within dir block
-			bcc CompareDir
-			inx					//A=#$40-#$7f, X=#$12 (dir sector 18)
-CompareDir:	cpx DirSector		//Dir Sector, initial value=#$c5
+			tya					//DirIndex=#$00-#$3f -> C=0 -> A will be $11 (dir sector 17)
+			adc #$11			//DirIndex=#$40-#$7f -> C=1 -> A will be $12 (dir sector 18)
+			cmp DirSector
 			beq DirFetchReturn	//Is the needed Dir block fetched?
 
-			stx DirSector		//No, store new Dir block index and fetch directory sector
-			stx LastS			//Also store it in LastS to be fetched
-			jmp FetchDir		//ALWAYS, fetch directory, Y=#$00 here (needed)
+			sta DirSector		//No, store new Dir block index and fetch directory sector
+			sta LastS			//Also store it in LastS to be fetched
+			jmp FetchDir		//Fetch directory sector, Y=#$00 here
 
 DirFetchReturn:
 			ldx #$03
@@ -908,7 +907,6 @@ DirLoop:	lda $0700,x
 			//sec				//Not needed, C=1 after LSR ReturnFlag
 			sbc SCtr			//Remaining sectors on track
 			tay					//Y=already fetched sectors on track
-			//beq SkipUsed		//Y=0, we start with the first sector, skip marking used sectors (not essential)
 			dec MarkSct			//Change STA ZP,x to STY ZP,x ($95 -> $94) (A=$ff - wanted, Y>#$00 - used)
 			jsr Build			//Mark all sectors as FETCHED -before- first sector to be fetched
 			inc MarkSct			//Restore Build loop
@@ -921,7 +919,7 @@ SkipUsed:	iny					//Mark the first sector of the new bundle as WANTED
 
 //--------------------------------------
 
-NewDiskID:	lsr					//Next Disk's ID for flip detection
+NewDiskID:	lsr					//Next Disk's ID for flip detection - LSR can be eliminated if we store DiskID x 2 and NextID x 2
 			sta NextID
 
 ToFetchBAM:	jmp FetchBAM		//Go to Track 18 to fetch Sector 0 (BAM) for Next Side Info, Y=#$00
@@ -1059,7 +1057,7 @@ StoreBR:	sta Spartan+1		//Store bitrate for Spartan step
 			lsr ReturnFlag
 			bcs Return
 
-			sty SCtr						//Reset Sector Counter, but only if this is not a random block which gets SCtr from Dir
+			sty SCtr						//Reset Sector Counter, but only if this is not a random bundle which gets SCtr from Dir
 
 //--------------------------------------
 
@@ -1090,8 +1088,8 @@ W2:			sta $1800			//12-15
 			alr #$f0			//02 03
 			bit $1800			//04-07
 			bmi *-3				//08 09
-W3:			sta $1800			//10-15
-								//(16 cycles)
+W3:			sta $1800			//10-13
+								//(14 cycles)
 
 			lsr					//00 01
 			alr #$30			//02 03
@@ -1124,19 +1122,16 @@ ChkPt:		bpl Loop			//16-18
 
 //--------------------------------------
 
-TrSeqRet:	lda #busy			//16,17			use #busy + 1 here (AA + DI = $11) for SAX Loop + 1 below ($11 & $EF = $01)
+TrSeqRet:	lda #busy+1			//16,17			use #busy + 1 here (AA + DI = $11) for SAX Loop+2 below ($11 & $EF = $01)
 			bit $1800			//18-21		 	Last bitpair received by C64?
 			bmi *-3				//22,23
 			sta $1800			//24-29			Transfer finished, send Busy Signal to C64
 			
-			//sax Loop + 1
+			sax Loop+2			//A&X=$01, restore transfer loop
 
 			bit $1800			//Make sure C64 pulls ATN before continuing
 			bpl *-3				//Without this the next ATN check may fall through
 								//resulting in early reset of the drive
-
-			iny					//Y=#$01
-			sty Loop+2			//Restore transfer loop
 			
 			jsr ToggleLED		//Transfer complete - turn LED off, leave motor on
 
@@ -1183,6 +1178,8 @@ NewWCtr:	sty WantedCtr		//Store new Wanted Counter (SCtr vs BlockCtr whichever i
 JmpFetch2:	jmp Fetch			//then fetch
 
 //--------------------------------------
+
+.text "OMG"
 
 EndOfDriveCode:
 
