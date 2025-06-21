@@ -9,7 +9,7 @@
 //--------------------------------------------------------
 //  COMPILE TIME VARIABLES FOR BUILD INFO 250615
 //--------------------------------------------------------
-
+/*
 constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
 
 constexpr unsigned int Year = ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
@@ -26,9 +26,12 @@ constexpr unsigned int Month = (__DATE__[0] == 'J') ? ((__DATE__[1] == 'a') ? 1 
 constexpr unsigned int Day = (__DATE__[4] == ' ') ? (__DATE__[5] - '0') : (__DATE__[4] - '0') * 10 + (__DATE__[5] - '0');
 
 constexpr unsigned int VersionBuild = ((Year / 10) * 0x100000) + ((Year % 10) * 0x10000) + ((Month / 10) * 0x1000) + ((Month % 10) * 0x100) + ((Day / 10) * 0x10) + (Day % 10);
+*/
 
 constexpr int VersionMajor = 3;
 constexpr int VersionMinor = 2;
+constexpr int VersionBuild = 250621;
+constexpr int FullYear = 2025;
 
 string OptionPause = "";
 
@@ -5700,7 +5703,7 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
     //-------------------
     //   VersionInfo
     //-------------------
-    //Add version info: YY MM DD VV
+    //Add version info: VV YY MM DD
 
     int VI = 0x2f;  //0x5b;
     Drive[VI + 0] = (VersionMajor << 4) + VersionMinor;

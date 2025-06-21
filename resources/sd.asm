@@ -263,7 +263,7 @@
 .label ready		=CO			//DO=0,CO=1,AA=0	$1800=#$08	dd00=100000xx (#$83)
 
 .label Sp			=$52		//Spartan Stepping constant (=82*72=5904=$1710=$17 bycles delay)
-.const ErrVal		=$2a		//=42 missed consecutive sectors, two full rotations in zode 3, 2.5 full rotations in zone 0
+.const ErrVal		=$2a		//=42 missed consecutive sectors, two full rotations in zone 3, 2.5 full rotations in zone 0
 
 //ZP Usage:
 .label cT			=$00		//Current Track
@@ -507,14 +507,15 @@ Presync:	sty.z ModJmp+1		//de df
 			ldy #$00			//e0 e1
 			sty.z CSum+1		//e2 e3
 			sta (ZP0102),y		//e4 e5
-			sta (ZP0103),y		//e6 e7
+			ldx #$82			//e6 e7	Counter for Sync loop - 130 *3076 = 3998800 cycles = 2 full disk rotations before sync error is triggered
+
 			nop #$dc			//e8 e9 Skipping TabD value $dc (NOP ABS,X)
 			
-			bit $1c00			//ea-ec
-			bmi *-3				//ed ee
+			jsr Sync			//ea-ec	JSR overwrites $0103-$0104 or $01ff-$0100, JSR is OK, it either returns here or SP gets reset to $04 after Error code
+			sta $0103			//ed-ef	$103 must be set AFTER JSR, Y can no longer be used here 
 
-			clv					//ef
 			nop #$d6			//f0 f1	Skipping TabD value (DEC ZP,X)		
+
 			nop $1c01			//f2-f4
 			ldx #$c0			//f5 f6
 			
@@ -540,7 +541,7 @@ AXS:		axs #$00			//09 0a|07						  D: 11CCCCCD
 
 			ldx #$00			//14 15|22
 			lda #$7f			//16 17|24	Z=0, needed for BNE in GCR loop
-			jmp GCREntry		//18-1a|27	Same cycle count as in GCR loop before BNE
+			jmp GCREntry		//18-1a|27	Same cycle count as in GCR loop before BNE, Y can be any value here
 			
 //--------------------------------------
 //		Mark wanted sectors
@@ -668,8 +669,7 @@ ToFetchData:
 //--------------------------------------
 
 ToCorrTrack:
-			ldy #$01
-			jmp CorrTrack
+			jmp CorrTrack		//Y can be anything
 
 //--------------------------------------
 //		Disk ID Check			//Y=#$00 here
@@ -699,7 +699,7 @@ FetchError:	dec ErrCtr
 ToBneReFetch:
 			bne	BneReFetch
 
-			lda $1c00			//Based on Krill's track correction code
+TrackCorr:	lda $1c00			//Based on Krill's track correction code
 			and #$63
 			clc
 			adc #$e0			//Cycle through bitrates %11 -> %10 -> %01 -> %00 -> %11
@@ -721,8 +721,8 @@ DT:
 Data:		ldx cT
 			cpx #$12
 			bcs SkipCSLoop  
-/*
-			ldy #$fc			//This loop saves 8 bytes but takes 1198 cycles (46 bytes passing under R/W head in zone 3)
+
+			ldy #$fc			//This loop takes 1198 cycles (46 bytes passing under R/W head in zone 3)
 CSLoop:		eor $0102,y
 			eor $0103,y
 			dey
@@ -730,7 +730,7 @@ CSLoop:		eor $0102,y
 			dey
 			dey
 			bne CSLoop
-*/
+/*
 			ldy #$7e			//This loop takes 856 cycles (33 bytes passing under R/W head in zone 3) but needs 8 more bytes
 			bne CSLoopEntry
 CSLoop:		eor $0102,y
@@ -747,7 +747,7 @@ CSLoopEntry:
 			dey
 			dey
 			bne CSLoop
-
+*/
 SkipCSLoop:	tay
 			bne FetchError		//Checksum mismatch, fetch header again
 			
@@ -777,6 +777,19 @@ RegBlockRet:
 			asl Plugin
 			bcc ChkLastBlock
 			jmp $0100			//Plugin code drive block fetched
+
+//--------------------------------------
+//		Waiting for SYNC mark
+//--------------------------------------
+
+NoSync:		dey					//2
+			bne Sync			//3
+			dex					//2
+			beq TrackCorr		//2
+Sync:		bit $1c00			//4
+			bmi NoSync			//3	Sync loop takes 12 cycles * 255 + 16 cycles = 3076 cycles * 142 = 437,752 cycles
+			clv
+			rts
 
 //--------------------------------------
 
@@ -837,7 +850,7 @@ DelayIn:	lda $1c05
 			dey
 			bne DelayOut
 			lda #$73			//Timer finished, turn motor off
-			sta ErrCtr			//Reset Error Counter for motor spinup
+			sta ErrCtr			//Reset Error Counter for motor spinup - allows 5.5 full rotations in zone 3 during spin-up before Error code is triggered
 			sax $1c00
 			lda #<CSV			//Reset Checksum Verification Counter
 			sta VerifCtr		//When motor restarts, first we verify proper read
@@ -1117,7 +1130,7 @@ ChkPt:		bpl Loop			//16-18
 .print "ChkPt: $0" + toHexString(ChkPt)
 
 .if ([>Loop] != [>ChkPt]) {
-.error "ERROR!!! Transfer loop crosses pages!!!"
+.error "Transfer loop crosses pages!!!"
 }
 
 //--------------------------------------
@@ -1179,13 +1192,11 @@ JmpFetch2:	jmp Fetch			//then fetch
 
 //--------------------------------------
 
-.text "OMG"
-
 EndOfDriveCode:
 
 		.if (EndOfDriveCode > $0700)
 		{
-			.error "Error!!! Drive code too long!!!" + toHexString(EndOfDriveCode)
+			.error "Drive code " + toHexString(EndOfDriveCode - $0700) + " bytes too long!"
 		}
 }
 
