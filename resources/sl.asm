@@ -399,7 +399,7 @@ SpSDelay:	lda #<RcvLoop-<ChgJmp	//2 20 Restore Receive loop
 			txa						//2 26
 			eor #<$100-Sp			//2 28 Invert byte counter (EOR #$AE)
 			sta SpComp+1			//4 32 SpComp+1=(#$AF <-> #$01)
-			bpl RcvLoop				//3 (35) (Drive loop takes 33 cycles)
+			bpl RcvLoop				//3 (35) (Drive loop takes 34 cycles)
 
 			lda #busy				//Bus lock
 			sta $dd00

@@ -290,6 +290,8 @@
 
 .label ReturnFlag	=$66		//Indicates whether StepTimer code is called in subroutine
 
+.label ZPSpVal		=$70		//Spartan step VIA 2 Port B value
+
 .label Plugin		=$76		//Indicates whether fetch block is a plugin
 
 .label ZPBAMPID		=$10		//$10/$11 = $0107
@@ -305,9 +307,11 @@
 .label ZP00			=$6b		//TabF value
 .label ZP01			=$59
 .label ZP02			=$7b
+
+.label ZP1c00		=$34		//$34/$35 = $1c00 (VIA 2 Port B)
+.label ZP1800		=$3c		//$3c/$3d = $1840 (VIA 1 Port B)
 .label ZP01ff		=$58		//$58/$59 = $01ff
 .label ZP0101		=$59		//$59/$5a = $0101
-//.label ZP1800		=$6b		//$6b/$6c = $1800 - use it to free 4 more bytes if needed
 .label ZP0200		=$6b		//$6b/$6c = $0200
 .label ZP0100		=$6e		//$6b/$6c = $0100
 .label ZP02ff		=$7a		//$7a/$7b = $02ff
@@ -325,6 +329,7 @@
 .label OPC_ALR		=$4b
 .label OPC_BNE		=$d0
 .const OPC_NOP_ABS	=$0c
+
 .const Msk			=$ef		//bit mask value in X for SAX in the transfer loop
 
 //GCR Decoding Tables:
@@ -384,18 +389,18 @@ Patch1:
 //0347
 HeaderJmp:
 .byte								<HD,>HD
-.byte										$d0,$f7
+.byte										$de,$f7
 //034b
 ToggleLED:	lda $1c00			//4b-4d
 ToggleLD2:	eor #$08			//4e 4f
-			nop #$d1			//50 51	SKIPPING TabD value
+			nop #$df			//50 51	SKIPPING TabD value
 			sta $1c00			//52-54
 			rts					//55
 .byte							$87
 //0357
 DataJmp:
 .byte								<DT,>DT
-.byte										$d9,$97
+.byte										$d7,$97
 //035b
 Patch2:
 .byte												<Mod2b-(LoopMod2+2),<Mod2a-(LoopMod2+2),$fc
@@ -405,7 +410,7 @@ Patch2:
 //0367
 SHeaderJmp:
 .byte								<SH,>SH
-.byte										$d4,$d7
+.byte										$da,$d7
 //036b
 ProductID:
 .byte												XX4,XX1,XX2,$57
@@ -413,14 +418,14 @@ ProductID:
 SFetchJmp:
 .byte																<SF
 .byte	>SF
-.byte	    $d5
+.byte	    $db
 //0372
 ShufToRaw:	ldx #$09			//72 73	Fetched data are bit shuffled and
 			axs #$00			//74 75	EOR transformed for fast transfer, sets C
 			eor.z BitShufTab,x	//76 77
 			rts					//78
 //0379
-.byte										$dd
+.byte										$d3
 //037a
 RcvByte:	ldy #$85			//7a 7b
 			sax $1800			//7c-7e		A&X = #$80 & #$10 = #$00, $dd00=#$1b, $1800=#$85
@@ -433,7 +438,7 @@ RBLoop:		cpy $1800			//7f-81	4
 			stx $1800			//9c-9e		Drive busy
 			rts					//9f		20 bytes total, A = Bundle Index
 //0390
-.byte	XX1,$d3
+.byte	XX1,$dd
 
 //----------------------------------------------
 //		HERE STARTS THE FUN
@@ -443,8 +448,8 @@ RBLoop:		cpy $1800			//7f-81	4
 //0392
 FetchBAM:	sty LastS			//92 93	Y=#$00
 FetchDir:	jsr ClearList		//94-96 C=1 after this
-			bcs *+3				//97 98 SKIPPING TabD value
-	.byte	$db					//99	TabD
+			bcs *+3				//97 98 Skipping TabD value
+	.byte	$d5					//99	TabD
 			ldx LastS			//9a 9b
 			dec WList,x			//9c 9d	Mark sector as wanted
 			lax ZP12			//9e 9f	Both FetchBAM and FetchDir need track 18
@@ -458,28 +463,28 @@ GotoTrack:	iny					//a2
 ContCode:	sty WantedCtr		//a3 a4	Y=#$01 here
 			sty BlockCtr		//a5 a6
 CorrTrack:	sec					//a7	CorrTrack needs Y=#$01
-			nop #$de			//a8 a9 Skipping TabD
+			nop #$d0			//a8 a9 Skipping TabD value
 			sbc cT				//aa ab	Calculate Stepper Direction and number of Steps
 			beq ResetVerif		//ac ad	We are staying on the same Track, skip track change
 			bcs SkipStepDn		//ae af
-			nop #$d7			//b0 b1 Skipping TabD
+			nop #$d9			//b0 b1 Skipping TabD value
 			eor #$ff			//b2 b3
 			adc #$01			//b4 b5
 			ldy #$03			//b6 b7	Y=#$03 -> Stepper moves Down/Outward
-			nop #$df			//b8 b9 TabD
+			nop #$d1			//b8 b9 Skipping TabD value
 			sty StepDir			//ba bb	Only store stepper direction DOWN/OUTWARD here (Y=#$03)
 SkipStepDn:	ldy #$02			//bc bd
 			sty ReturnFlag		//be bf	->#$02 - signals need for RTS 
 			asl					//c0
 			tay					//c1	Y=Number of half-track changes
-			jsr StepTmr			//c2-c4	Move head to track and update bitrate (also stores new Track number to cT and calculates SCtr but doesn't store it)
+			jsr StepTmr			//c2-c4	Move head to track and update bitrate (also stores new Track number in cT and calculates SCtr but doesn't store it)
 
 //--------------------------------------
 //		Multi-track stepping	//A=bitrate, Y=SCtr here
 //--------------------------------------
 
 			sta $1c00			//c5-c7	Needed to update bitrate!!!
-			nop	#$d8			//c8 c9	Skipping TabD = CLD
+			nop	#$d6			//c8 c9	Skipping TabD value
 ResetVerif:	lda #CSV			//ca cb
 			sta VerifCtr		//cc cd	Verify track after head movement
 
@@ -491,13 +496,13 @@ FT:
 Fetch:
 FetchHeader:
 			ldy #<HeaderJmp		//ce cf	Checksum verification after GCR loop will jump to Header Code
-			nop #$d2			//d0 d1 Skipping TabD value $d2 (CMP izy)
+			nop #$dc			//d0 d1 Skipping TabD value
 FetchSHeader:
 			lda #$52			//d2 d3	First 8 bits of Header ID (01010010)
 			ldx #$04			//d4 d5	4 bytes to stack
 			txs					//d6	Header: $0104,$0103..$0101
 			bne Presync			//d7 d8 Skip Data Block fetch
-	.byte	$da					//d9	NOP (TabD)
+	.byte	$d4					//d9 (TabD)
 				
 FetchData:	ldy #<DataJmp		//da db	Checksum verification after GCR loop will jump to Data Code
 			lda #$55			//dc dd	First 8 bits of Data ID (01010101)
@@ -507,14 +512,15 @@ Presync:	sty.z ModJmp+1		//de df
 			ldy #$00			//e0 e1
 			sty.z CSum+1		//e2 e3
 			sta (ZP0102),y		//e4 e5
-			ldx #$82			//e6 e7	Counter for Sync loop - 130 *3076 = 3998800 cycles = 2 full disk rotations before sync error is triggered
+			ldx #$41			//e6 e7	Counter for Sync loop - 65 *3076 = 199940 cycles = 1 full disk rotation before sync error is triggered
 
-			nop #$dc			//e8 e9 Skipping TabD value $dc (NOP ABS,X)
+			nop #$d2			//e8 e9 Skipping TabD value
 			
 			jsr Sync			//ea-ec	JSR overwrites $0103-$0104 or $01ff-$0100, JSR is OK, it either returns here or SP gets reset to $04 after Error code
-			sta $0103			//ed-ef	$103 must be set AFTER JSR, Y can no longer be used here 
+			clv					//ed
+			sta $0103			//ee-f0	$103 must be set AFTER JSR, Y can no longer be used here 
 
-			nop #$d6			//f0 f1	Skipping TabD value (DEC ZP,X)		
+	.byte	$d8					//f1	TabD value = CLD
 
 			nop $1c01			//f2-f4
 			ldx #$c0			//f5 f6
@@ -699,13 +705,13 @@ FetchError:	dec ErrCtr
 ToBneReFetch:
 			bne	BneReFetch
 
-TrackCorr:	lda $1c00			//Based on Krill's track correction code
+			lda $1c00			//Based on Krill's track correction code
 			and #$63
-			clc
+			clc					//Keep CLC - error code may be triggered during disk swap
 			adc #$e0			//Cycle through bitrates %11 -> %10 -> %01 -> %00 -> %11
 			adc #$03			//Half track step down on bitrate wrap around
 			ora #$0c			//Motor and LED on
-			sta Spartan+1		//Update Spartan step $1c00 value (with LED on)
+			sta ZPSpVal			//Update Spartan step $1c00 value (with LED on)
 			jsr ToggleLD2		//Update $1c00 with LED off (LED is only on during transfer), JSR is OK here, we are discarding any fetched data on the stack
 
 			lda #<ErrVal		//More than the max number of sectors per track
@@ -721,7 +727,7 @@ DT:
 Data:		ldx cT
 			cpx #$12
 			bcs SkipCSLoop  
-
+/*
 			ldy #$fc			//This loop takes 1198 cycles (46 bytes passing under R/W head in zone 3)
 CSLoop:		eor $0102,y
 			eor $0103,y
@@ -730,10 +736,10 @@ CSLoop:		eor $0102,y
 			dey
 			dey
 			bne CSLoop
-/*
-			ldy #$7e			//This loop takes 856 cycles (33 bytes passing under R/W head in zone 3) but needs 8 more bytes
+*/
+			ldy #$7e			//This loop takes 868 cycles (34 bytes passing under R/W head in zone 3) but needs 8 more bytes
 			bne CSLoopEntry
-CSLoop:		eor $0102,y
+CSLoop:		eor (ZP0102),y
 			eor $0103,y
 			dey
 			dey
@@ -747,9 +753,9 @@ CSLoopEntry:
 			dey
 			dey
 			bne CSLoop
-*/
+
 SkipCSLoop:	tay
-			bne FetchError		//Checksum mismatch, fetch header again
+			bne FetchError		//Checksum mismatch
 			
 			lda #<ErrVal
 			sta ErrCtr			//Reset Error Counter (only if both header and data are fetched correctly)
@@ -785,10 +791,9 @@ RegBlockRet:
 NoSync:		dey					//2
 			bne Sync			//3
 			dex					//2
-			beq TrackCorr		//2
+			beq FetchError		//2	Sync time out (1 full disk rotation without a sync mark)
 Sync:		bit $1c00			//4
-			bmi NoSync			//3	Sync loop takes 12 cycles * 255 + 16 cycles = 3076 cycles * 142 = 437,752 cycles
-			clv
+			bmi NoSync			//3	Sync loop: 12 * 255 + 16 (= 3076) * 65 = 199940 cycles
 			rts
 
 //--------------------------------------
@@ -917,8 +922,7 @@ DirLoop:	lda $0700,x
 
 			ldx LastS			//This is actually the first sector on the track after track change (i.e. nS), always < MaxNumSct
 			tya					//A=MaxSct
-			//sec				//Not needed, C=1 after LSR ReturnFlag
-			sbc SCtr			//Remaining sectors on track
+			sbc SCtr			//Remaining sectors on track, SEC is not needed, C=1 after LSR ReturnFlag
 			tay					//Y=already fetched sectors on track
 			dec MarkSct			//Change STA ZP,x to STY ZP,x ($95 -> $94) (A=$ff - wanted, Y>#$00 - used)
 			jsr Build			//Mark all sectors as FETCHED -before- first sector to be fetched
@@ -932,9 +936,7 @@ SkipUsed:	iny					//Mark the first sector of the new bundle as WANTED
 
 //--------------------------------------
 
-NewDiskID:	lsr					//Next Disk's ID for flip detection - LSR can be eliminated if we store DiskID x 2 and NextID x 2
-			sta NextID
-
+NewDiskID:	sta NextID			//Next Disk's ID for flip detection - we store DiskID x 2 and NextID x 2
 ToFetchBAM:	jmp FetchBAM		//Go to Track 18 to fetch Sector 0 (BAM) for Next Side Info, Y=#$00
 
 //--------------------------------------
@@ -990,7 +992,7 @@ StepTmr:	lda #$98
 			sta $1c05
 
 Seek:		lda $1c00
-PreCalc:	and #$1b			//we keep AND+CLC instead of ANC because the original 1541U no longer receives firmware updates :(
+PreCalc:	and #$1b
 			clc
 			adc StepDir			//#$03 for stepping down, #$01 for stepping up
 			ora #$04			//motor ON
@@ -1050,7 +1052,7 @@ RateDone:	sty MaxNumSct2+1
 			bcc StoreBR
 Return:		rts					//A=bitrate from both ReturnFlag checks
 
-StoreBR:	sta Spartan+1		//Store bitrate for Spartan step
+StoreBR:	sta ZPSpVal			//Store bitrate for Spartan step
 
 //--------------------------------------
 //		GCR loop patch
@@ -1077,17 +1079,17 @@ StoreBR:	sta Spartan+1		//Store bitrate for Spartan step
 StartTr:	ldy #$00			//transfer loop counter
 			ldx #Msk			//bit mask for SAX = $ef
 			lda #ready			//A=#$08, ATN=0, AA not needed
-TrSeq:		sta $1800
+TrSeq:		sta (<ZP1800-Msk,x)
 
 //--------------------------------------
 //		Transfer loop
 //--------------------------------------
 								//			Spartan Loop:		Entry:
-Loop:		lda $0100,y			//03-06			19-22			00-03
-			bit $1800			//07-10			23-26			04-07
-			bmi *-3				//11 12			27 28			08 09
-W1:			sax $1800			//13-16			29-32			10-13
-								//(17 cycles) 	(33 cycles)
+Loop:		lda $0100,y			//03-06			20-23			00-03
+			bit $1800			//07-10			24-27			04-07
+			bmi *-3				//11 12			28 29			08 09
+W1:			sax $1800			//13-16			30-33			10-13
+								//(17 cycles) 	(34 cycles)
 
 			dey					//00 01
 			asl					//02 03
@@ -1118,12 +1120,12 @@ W4:			sta $1800			//12-15
 //	SPARTAN STEPPING (TM)						<< - Uninterrupted data transfer across adjacent tracks - >>
 //--------------------------------------
 
-Spartan:	lda #$00			//02 03			Last halftrack step is taken during data transfer
-			sta $1c00			//04-07			Update bitrate and stepper with precalculated value
-			tya					//08 09			Y=#$AE or #$00 here
-			eor #$101-Sp		//10 11			#$31 bycles left for the head to take last halftrack step...
-			sta ByteCt+1		//12-15			... and settle before new data is fetched
-ChkPt:		bpl Loop			//16-18
+Spartan:	lda ZPSpVal			//02 04			Last halftrack step is taken during data transfer
+			sta $1c00			//05-08			Update bitrate and stepper with precalculated value
+			tya					//09 10			Y=#$AE or #$00 here
+			eor #$101-Sp		//11 12			#$31 bycles left for the head to take last halftrack step...
+			sta ByteCt+1		//13-16			... and settle before new data is fetched
+ChkPt:		bpl Loop			//17-19
 
 .print ""
 .print "Loop:  $0" + toHexString(Loop)
@@ -1138,12 +1140,12 @@ ChkPt:		bpl Loop			//16-18
 TrSeqRet:	lda #busy+1			//16,17			use #busy + 1 here (AA + DI = $11) for SAX Loop+2 below ($11 & $EF = $01)
 			bit $1800			//18-21		 	Last bitpair received by C64?
 			bmi *-3				//22,23
-			sta $1800			//24-29			Transfer finished, send Busy Signal to C64
+			sta (<ZP1800-Msk,x)	//24-29			Transfer finished, send Busy Signal to C64
 			
 			sax Loop+2			//A&X=$01, restore transfer loop
 
-			bit $1800			//Make sure C64 pulls ATN before continuing
-			bpl *-3				//Without this the next ATN check may fall through
+			lda (<ZP1800-Msk,x)	//Make sure C64 pulls ATN before continuing
+			bpl *-2				//Without this the next ATN check may fall through
 								//resulting in early reset of the drive
 			
 			jsr ToggleLED		//Transfer complete - turn LED off, leave motor on
@@ -1247,6 +1249,7 @@ ZPCopyLoop:	lda ZPTab,x			//Copy Tables C, E, F and GCR Loop from $0600 to ZP
 			and #$93
 			ora #$4c			//1    1*   0*   1    1*   1*   1    0
 			sta $1c00			//SYNC BITR BITR WRTP LED  MOTR STEP STEP
+			sta ZPSpVal
 
 			lda #$7a
 			sta $1802			//0  1  1  1  1  0  1  0  Set these 1800 bits to OUT (they read back as 0)
@@ -1301,9 +1304,9 @@ ZPTab:
 //		 x0  x1  x2  x3  x4  x5  x6  x7  x8  x9  xa  xb  xc  xd  xe  xf
 .byte	$12,$00,$04,$01,$f0,$60,$b0,$20,$01,$40,$80,$00,$e0,$c0,$a0,$80	//0x
 .byte	<BAM_ProdID-1,>BAM_ProdID-1
-.byte			$2e,$1e,$ae,$1f,$be,$17,$00,CSV,$6e,$1a,$ee,$1b,$fe,$13	//1x
-.byte	$01,$00,$14,$00,$8e,$1d,$9e,$15,$01,$00,$5e,$10,$ce,$19,$de,$11	//2x
-.byte	$7f,$76,$3e,$16,$0e,$1c,$1e,$14,$76,$7f,$7e,$12,$4e,$18,$00,$00	//3x	Wanted List $3e-$52 (Sector 16 = #$ff)
+.byte			$20,$1e,$a0,$1f,$b0,$17,$00,CSV,$60,$1a,$e0,$1b,$f0,$13	//1x
+.byte	$01,$00,$14,$00,$80,$1d,$90,$15,$01,$00,$50,$10,$c0,$19,$d0,$11	//2x
+.byte	$7f,$76,$30,$16,$00,$1c,$10,$14,$76,$7f,$70,$12,$40,$18,$00,$00	//3x	Wanted List $3e-$52 (Sector 16 = #$ff)
 .byte	$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$ff,$00	//4x	(0) unfetched, (+) fetched, (-) wanted
 .byte	$00,$00,$00,$0e,$80,$0f,$c5,$07,$ff,$01,$01,$0a,$1e,$0b,$00,$03	//5x	
 .byte	$fd,$fd,$fd,$00,$fc,$0d,$00,$05,$ff,$ff,XX1,$00,$02,$09,$00,$01	//6x	$60-$64 - ILTab, $63 - NextID, $68 - ZPHdrID1, $69 - ZPHdrID2

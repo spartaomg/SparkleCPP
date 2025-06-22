@@ -30,7 +30,7 @@ constexpr unsigned int VersionBuild = ((Year / 10) * 0x100000) + ((Year % 10) * 
 
 constexpr int VersionMajor = 3;
 constexpr int VersionMinor = 2;
-constexpr int VersionBuild = 250621;
+constexpr int VersionBuild = 250622;
 constexpr int FullYear = 2025;
 
 string OptionPause = "";
@@ -5739,7 +5739,7 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
     Drive[(3 * 256) + ZPILTabLoc + 0] = 256 - IL3;
     Drive[(3 * 256) + ZPILTabLoc + 1] = 256 - IL2;
     Drive[(3 * 256) + ZPILTabLoc + 2] = 256 - IL1;
-    Drive[(3 * 256) + ZPILTabLoc + 3] = idcNextID % 256;
+    Drive[(3 * 256) + ZPILTabLoc + 3] = (idcNextID * 2) % 256;
     Drive[(3 * 256) + ZPILTabLoc + 4] = 256 - IL0;
 
     /*
@@ -5779,13 +5779,13 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
     }
 
     //Add SideID
-    Disk[BAM + 255] = EORtransform(idcSideID % 256);
+    Disk[BAM + 255] = EORtransform((idcSideID * 2) % 256);
 
     //Add Custom Interleave Info and Next Side ID
     Disk[BAM + 254] = EORtransform(256 - IL3);
     Disk[BAM + 253] = EORtransform(256 - IL2);
     Disk[BAM + 252] = EORtransform(256 - IL1);
-    Disk[BAM + 251] = EORtransform(idcNextID % 256);
+    Disk[BAM + 251] = EORtransform((idcNextID * 2) % 256);
     Disk[BAM + 250] = EORtransform(256 - IL0);
 /*
     BlocksUsedByPlugin = 0;
