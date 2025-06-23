@@ -31,7 +31,7 @@ CFLAGS = -O3 -Wall -std=c++17 -fexceptions -c
 RESFLAGS = -J rc -O coff -i
 
 OBJ = $(DIR_OBJ)/ascii2dirart.o $(DIR_OBJ)/charsettab.o $(DIR_OBJ)/loader.o $(DIR_OBJ)/packer.o $(DIR_OBJ)/petscii2dirart.o $(DIR_OBJ)/pixelcnttab.o
-OBJ += $(DIR_OBJ)/sd.o $(DIR_OBJ)/sf.o $(DIR_OBJ)/sparkle.o $(DIR_OBJ)/ss.o $(DIR_OBJ)/ssio.o $(DIR_OBJ)/thirdparty/lodepng.o  $(DIR_OBJ)/thirdparty/tinyexpr.o
+OBJ += $(DIR_OBJ)/sd.o $(DIR_OBJ)/sparkle.o $(DIR_OBJ)/ss.o $(DIR_OBJ)/ssio.o $(DIR_OBJ)/thirdparty/lodepng.o  $(DIR_OBJ)/thirdparty/tinyexpr.o
 OBJ += $(DIR_OBJ)/sc.o
 
 # "mkdir" (with quotes) will force Windows to search for the executable (GNU) mkdir instead of the CMD command. Just make sure that its folder is in the system PATH.
