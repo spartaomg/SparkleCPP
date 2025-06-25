@@ -28,10 +28,17 @@ constexpr unsigned int Day = (__DATE__[4] == ' ') ? (__DATE__[5] - '0') : (__DAT
 constexpr unsigned int VersionBuild = ((Year / 10) * 0x100000) + ((Year % 10) * 0x10000) + ((Month / 10) * 0x1000) + ((Month % 10) * 0x100) + ((Day / 10) * 0x10) + (Day % 10);
 */
 
+constexpr int FullDate = 20250625;
+
 constexpr int VersionMajor = 3;
 constexpr int VersionMinor = 2;
-constexpr int VersionBuild = 0x250624;
-constexpr int FullYear = 2025;
+
+constexpr int FullYear = FullDate/10000;
+constexpr int Year = FullYear % 100;
+constexpr int Month = (FullDate % 10000) / 100;
+constexpr int Day = FullDate % 100;
+
+constexpr int VersionBuild = ((Year / 10) * 0x100000) + ((Year % 10) * 0x10000) + ((Month / 10) * 0x1000) + ((Month % 10) * 0x100) + ((Day / 10) * 0x10) + (Day % 10);
 
 string OptionPause = "";
 
@@ -5100,6 +5107,9 @@ bool InjectCustomCodePlugin(int PluginIdx)
     BufferCnt += BlocksUsedByPlugin;
     //BundleNo++;                       //Do NOT increase BundleNo!!! BundleNo remains pointing at the first plugin bundle index
 
+    TotalOrigSize += BlocksUsedByPlugin;
+    TotalCompSize += BlocksUsedByPlugin;
+
     return true;
 
 }
@@ -5193,7 +5203,7 @@ bool InjectSaverPlugin(int PluginIdx)
         }
         HSBlocks++;
     }
-
+    
     BlocksUsedByPlugin = HSBlocks + 2;
 
     if (BlocksFree < BlocksUsedByPlugin)
@@ -5355,7 +5365,7 @@ bool InjectSaverPlugin(int PluginIdx)
 
     //Mark sector off in BAM
     DeleteBit(CT, CS);  
-    
+
     //---------------------
     //  Add Hi-Score File
     //---------------------
@@ -5386,8 +5396,6 @@ bool InjectSaverPlugin(int PluginIdx)
     
     LastT = TabT[SctPtr + HSBlocks - 1];
     LastS = TabS[SctPtr + HSBlocks - 1];
-
-    TotalOrigSize += BlocksUsedByPlugin;
 
     strDirIndex = "";
 
@@ -5603,6 +5611,9 @@ bool InjectSaverPlugin(int PluginIdx)
     }
 
     BufferCnt += BlocksUsedByPlugin;
+
+    TotalOrigSize += 2 + (HSLength / 256);
+    TotalCompSize += BlocksUsedByPlugin;
 
     return true;
 

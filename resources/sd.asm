@@ -171,6 +171,10 @@
 //		- checksum error counter
 //		  if number of consecutive read errors is greater than 2 full disk rotations then
 //		  Sparkle will cycle through bitrates before taking half track steps until fetching is successful (adopted from Krill)
+//		- handling sync mark timeout
+//		  if a sync mark was previously found on the current track then Sparkle assumes the disk was removed
+//		  if sync loop times out after track change without ever finding a sync mark then Sparkle assumes wrong/bad half/track
+//		  and will continue with bitrate cycle-through & track correction code
 //		- minor GCR loop adjustment for better high rotation speed tolerance in Zone 2
 //		  loop tolerates at least 272-314 rpm in all 4 speed zones
 //
@@ -264,6 +268,7 @@
 
 .label Sp			=$52		//Spartan Stepping constant (=82*72=5904=$1710=$17 bycles delay)
 .const ErrVal		=$2a		//=42 missed consecutive sectors, two full rotations in zone 3, 2.5 full rotations in zone 0
+								//can't be more than $7f
 
 //ZP Usage:
 .label cT			=$00		//Current Track
@@ -514,7 +519,7 @@ Presync:	sty.z ModJmp+1		//de df
 			ldy #$00			//e0 e1
 			sty.z CSum+1		//e2 e3
 			sta (ZP0102),y		//e4 e5
-			ldx #$82			//e6 e7	Counter for Sync loop - 130 *3076 = 399880 cycles = 2 full disk rotation before sync error is triggered
+			ldx #$82			//e6 e7	Counter for Sync loop - 130 * 3075 = 399750 cycles = 2 full disk rotation before sync error is triggered
 
 			nop #$d2			//e8 e9 Skipping TabD value
 			
@@ -608,7 +613,7 @@ FlipDtct:	lda NextID			//49 4a	Side is done, check if there is a next side
 
 ProdIDLoop:	lda (ZPBAMPID),y	//54 55	Also compare Product ID, only continue if same ($0107 = BAMProdID-1)
 			cmp (ZPProdID),y	//56 57
-BneReFetch:	bne ReFetch			//58 59	Product ID mismatch, fetch again until same
+			bne ReFetch			//58 59	Product ID mismatch, fetch again until same
 			dey					//5a
 			bne ProdIDLoop		//5b 5c
 
@@ -629,7 +634,7 @@ CopyBAM:	lda (ZP0101),y		//64 65	($0101=DiskID), $102=IL3R, $103=IL2R, $104=IL1R
 //--------------------------------------
 //		Got Header
 //--------------------------------------
-//0473
+//046f
 HD:								//Mem	Cycles
 Header:		bne FetchError		//6f 70	33	Checksum mismatch -> fetch next sector header
 
@@ -704,18 +709,17 @@ CheckIDs:	cmp cT
 //--------------------------------------
 
 FetchError:	dec ErrCtr
-ToBneReFetch:
-			beq CheckBRT
+			beq BRTCorr			//Execute bitrate and track correction code if error counter reaches 0
 			
 CheckNTF:	lda NewTrackFlag	//Flag is cleared if at least 1 sync mark is found on the track
-			beq BplFetch		//
+			beq BplFetch		//In which case bitrate and track correction code will not be executed
 
-								//We may get here from the sync loop if no sync mark was found on a new track
-								//Or we can get here if sync mark was detected on this track but we couldn't fetch any useful data
+								//We may get here from the sync loop if no sync mark was found on a new track (sync error)
+								//Or if sync mark was detected but there was an error in the fetched data (fetch error)
 
-CheckBRT:	lda $1c00			//Based on Krill's bitrate and track correction code
+BRTCorr:	lda $1c00			//Based on Krill's bitrate and track correction code
 			and #$63
-			clc					//Keep CLC - error code may be triggered during disk swap
+			clc
 			adc #$e0			//Cycle through bitrates %11 -> %10 -> %01 -> %00 -> %11
 			adc #$03			//Half track step down on bitrate wrap around
 			ora #$0c			//Motor and LED on
@@ -725,12 +729,12 @@ CheckBRT:	lda $1c00			//Based on Krill's bitrate and track correction code
 			lda #<ErrVal		//More than the max number of sectors per track
 			sta ErrCtr
 
-			bpl BplFetch		//Refetch everything via ReFetch vector
+ToBplFetch:	bpl BplFetch		//Refetch everything via ReFetch vector
 
 //--------------------------------------
 //		Got Data
 //--------------------------------------
-//04e0
+//04e6
 DT:
 Data:		ldx cT
 			cpx #$12
@@ -801,7 +805,7 @@ NoSync:		dey					//2
 			dex					//2
 			beq CheckNTF		//2	Sync time out (1 full disk rotation without a sync mark)
 Sync:		bit $1c00			//4
-			bmi NoSync			//3	Sync loop: 12 * 255 + 16 (= 3076) * 65 = 399880 cycles
+			bmi NoSync			//3	Sync loop: 12 * 255 + 15 (= 3075) * 130 = 399750 cycles
 			lsr NewTrackFlag	//	Successful sync - clear NewTrackFlag - if a subsequent sync loop times out on this track -> disk was removed
 			rts
 
@@ -819,7 +823,7 @@ StoreLoop:	pla
 			bne StoreLoop
 
 			inc ScndBuff
-			bne ToBneReFetch	//ALWAYS back to Fetch
+			bpl ToBplFetch		//ALWAYS back to Fetch
 
 //--------------------------------------
 //		Check Last Block		//Y=#$00 here
@@ -1052,7 +1056,7 @@ RateDone:	sty MaxNumSct2+1
 
 			ldx #$01			//Extra subtraction for Zone 3
 			stx StepDir			//Reset stepper direction to Up/Inward here
-			stx NewTrackFlag	//Set New Track flag - we are on a new track - determins behavior if no sync mark is found (assume track error)
+			stx NewTrackFlag	//Set New Track flag - we are on a new track - determines behavior if no sync mark is found (assume track error)
 			cpy #$15
 			beq *+3
 			dex
