@@ -297,6 +297,7 @@
 .label ZPBAMPID		=$10		//$10/$11 = $0107
 .label ZPHdrID1		=$68
 .label ZPHdrID2		=$69
+.label NewTrackFlag	=$6a
 .label ZPILTab		=$71
 .label ZPProdID		=$78		//$78/$79 = $031a (ProdID-1)
 
@@ -436,9 +437,10 @@ RBLoop:		cpy $1800			//7f-81	4
 			ror					//89	2
 			bcc RBLoop			//8a 8b	3	17/24 cycles/bit, 18 cycles per loop on C64 is enough
 			stx $1800			//9c-9e		Drive busy
+			tax
 			rts					//9f		20 bytes total, A = Bundle Index
-//0390
-.byte	XX1,$dd
+//0391
+.byte		$dd
 
 //----------------------------------------------
 //		HERE STARTS THE FUN
@@ -512,7 +514,7 @@ Presync:	sty.z ModJmp+1		//de df
 			ldy #$00			//e0 e1
 			sty.z CSum+1		//e2 e3
 			sta (ZP0102),y		//e4 e5
-			ldx #$41			//e6 e7	Counter for Sync loop - 65 *3076 = 199940 cycles = 1 full disk rotation before sync error is triggered
+			ldx #$82			//e6 e7	Counter for Sync loop - 130 *3076 = 399880 cycles = 2 full disk rotation before sync error is triggered
 
 			nop #$d2			//e8 e9 Skipping TabD value
 			
@@ -703,9 +705,15 @@ CheckIDs:	cmp cT
 
 FetchError:	dec ErrCtr
 ToBneReFetch:
-			bne	BneReFetch
+			beq CheckBRT
+			
+CheckNTF:	lda NewTrackFlag	//Flag is cleared if at least 1 sync mark is found on the track
+			beq BplFetch		//
 
-			lda $1c00			//Based on Krill's track correction code
+								//We may get here from the sync loop if no sync mark was found on a new track
+								//Or we can get here if sync mark was detected on this track but we couldn't fetch any useful data
+
+CheckBRT:	lda $1c00			//Based on Krill's bitrate and track correction code
 			and #$63
 			clc					//Keep CLC - error code may be triggered during disk swap
 			adc #$e0			//Cycle through bitrates %11 -> %10 -> %01 -> %00 -> %11
@@ -715,9 +723,9 @@ ToBneReFetch:
 			jsr ToggleLD2		//Update $1c00 with LED off (LED is only on during transfer), JSR is OK here, we are discarding any fetched data on the stack
 
 			lda #<ErrVal		//More than the max number of sectors per track
-			sta ErrCtr	
+			sta ErrCtr
 
-			bne ToBneReFetch	//Refetch everything via ReFetch vector
+			bpl BplFetch		//Refetch everything via ReFetch vector
 
 //--------------------------------------
 //		Got Data
@@ -727,7 +735,7 @@ DT:
 Data:		ldx cT
 			cpx #$12
 			bcs SkipCSLoop  
-/*
+
 			ldy #$fc			//This loop takes 1198 cycles (46 bytes passing under R/W head in zone 3)
 CSLoop:		eor $0102,y
 			eor $0103,y
@@ -736,7 +744,7 @@ CSLoop:		eor $0102,y
 			dey
 			dey
 			bne CSLoop
-*/
+/*
 			ldy #$7e			//This loop takes 868 cycles (34 bytes passing under R/W head in zone 3) but needs 8 more bytes
 			bne CSLoopEntry
 CSLoop:		eor (ZP0102),y
@@ -753,7 +761,7 @@ CSLoopEntry:
 			dey
 			dey
 			bne CSLoop
-
+*/
 SkipCSLoop:	tay
 			bne FetchError		//Checksum mismatch
 			
@@ -791,9 +799,10 @@ RegBlockRet:
 NoSync:		dey					//2
 			bne Sync			//3
 			dex					//2
-			beq FetchError		//2	Sync time out (1 full disk rotation without a sync mark)
+			beq CheckNTF		//2	Sync time out (1 full disk rotation without a sync mark)
 Sync:		bit $1c00			//4
-			bmi NoSync			//3	Sync loop: 12 * 255 + 16 (= 3076) * 65 = 199940 cycles
+			bmi NoSync			//3	Sync loop: 12 * 255 + 16 (= 3076) * 65 = 399880 cycles
+			lsr NewTrackFlag	//	Successful sync - clear NewTrackFlag - if a subsequent sync loop times out on this track -> disk was removed
 			rts
 
 //--------------------------------------
@@ -880,7 +889,7 @@ GetByte:	lda #$80			//$dd00=#$9b, $1800=#$94
 
 TrRnd:		jsr RcvByte			//OK to use stack here
 
-TrRndRet:	cmp #$ff
+TrRndRet:	inx
 			beq Reset			//C64 requests drive reset
 
 TestRet:	ldy #$00			//Needed later (for FetchBAM if this is a flip request, and FetchDir too)
@@ -1043,6 +1052,7 @@ RateDone:	sty MaxNumSct2+1
 
 			ldx #$01			//Extra subtraction for Zone 3
 			stx StepDir			//Reset stepper direction to Up/Inward here
+			stx NewTrackFlag	//Set New Track flag - we are on a new track - determins behavior if no sync mark is found (assume track error)
 			cpy #$15
 			beq *+3
 			dex
@@ -1309,7 +1319,7 @@ ZPTab:
 .byte	$7f,$76,$30,$16,$00,$1c,$10,$14,$76,$7f,$70,$12,$40,$18,$00,$00	//3x	Wanted List $3e-$52 (Sector 16 = #$ff)
 .byte	$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$ff,$00	//4x	(0) unfetched, (+) fetched, (-) wanted
 .byte	$00,$00,$00,$0e,$80,$0f,$c5,$07,$ff,$01,$01,$0a,$1e,$0b,$00,$03	//5x	
-.byte	$fd,$fd,$fd,$00,$fc,$0d,$00,$05,$ff,$ff,XX1,$00,$02,$09,$00,$01	//6x	$60-$64 - ILTab, $63 - NextID, $68 - ZPHdrID1, $69 - ZPHdrID2
+.byte	$fd,$fd,$fd,$00,$fc,$0d,$00,$05,$ff,$ff,$01,$00,$02,$09,$00,$01	//6x	$60-$64 - ILTab, $63 - NextID, $68 - ZPHdrID1, $69 - ZPHdrID2
 .byte	XX2,<ILTab-1,>ILTab-1
 .byte				$06,$02,$0c,$00,$04,<ProductID-1,>ProductID-1
 .byte											$ff,$02					//7x

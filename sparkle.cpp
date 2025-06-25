@@ -30,7 +30,7 @@ constexpr unsigned int VersionBuild = ((Year / 10) * 0x100000) + ((Year % 10) * 
 
 constexpr int VersionMajor = 3;
 constexpr int VersionMinor = 2;
-constexpr int VersionBuild = 250622;
+constexpr int VersionBuild = 0x250624;
 constexpr int FullYear = 2025;
 
 string OptionPause = "";
