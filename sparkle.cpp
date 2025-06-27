@@ -28,7 +28,7 @@ constexpr unsigned int Day = (__DATE__[4] == ' ') ? (__DATE__[5] - '0') : (__DAT
 constexpr unsigned int VersionBuild = ((Year / 10) * 0x100000) + ((Year % 10) * 0x10000) + ((Month / 10) * 0x1000) + ((Month % 10) * 0x100) + ((Day / 10) * 0x10) + (Day % 10);
 */
 
-constexpr int FullDate = 20250625;
+constexpr int FullDate = 20250627;
 
 constexpr int VersionMajor = 3;
 constexpr int VersionMinor = 2;
@@ -7134,14 +7134,17 @@ void PrintInfo()
     cout << "<< Bundle 0 - bundles must be separated by at least one blank line!\n";
     cout << "File:\t\t\"filepath/file0.prg\"\t\t\t\t<< (default address) (default offset) (default length)\n\n";
     cout << "<< Bundle 1 - files marked with * will be loaded under I/O ($d000-$dfff)\n";
-    cout << "DirIndex:\tab\t\t\t\t\t\t<< 01-7f (hex), if used, then only bundles with dir index will be added to the internal directory!!!\n";
+    cout << "DirIndex:\tab\t\t\t\t\t\t<< 01-7f (hex), if used, only bundles with DirIndex entries will be added to the internal directory\n";
     cout << "File:\t\t\"filepath/file1.kla\" abcd\t\t\t<< (address) (default offset) (default length)\n";
     cout << "File:\t\t\"filepath/file2.bin\" abcd abcdabcd\t\t<< (address) (offset) (default length)\n";
     cout << "File:\t\t\"filepath/file3.prg*\" abcd abcdabcd abcd\t<< (address) (offset) (length)\n\n";
     cout << "<< Bundle 2\n";
     cout << "Script:\t\t\"filepath/scriptfile.sls\"\t\t\t<< this will import another script here...\n\n";
+    cout << "PlgIndex:\tab\t\t\t\t\t\t<< 01-7f (hex), must be greater than number of bundles, can be used with or without DirIndex entries\n";
     cout << "Plugin:\t\tsaver\n\n";
+    cout << "PlgIndex:\tab\t\t\t\t\t\t<< PlgIndex entries are not mandatory, if not used, plugins can be loaded using their bundle indices\n"; 
     cout << "HSFile:\t\t\"filepath/hsfile.bin\" abcd abcdabcd abcd\t<< (address) (offset) (length) can be omitted if not needed\n\n";
+    cout << "PlgIndex:\tab\n";
     cout << "Plugin:\t\tcustom\n\n";
     cout << "<< Entries can be fully omitted if they are not needed or their default value is used.\n";
     cout << "<< Use TAB(s) to separate entry types and their values.\n";
