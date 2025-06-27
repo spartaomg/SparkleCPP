@@ -481,7 +481,7 @@ CorrTrack:	sec					//a7	CorrTrack needs Y=#$01
 			nop #$d1			//b8 b9 Skipping TabD value
 			sty StepDir			//ba bb	Only store stepper direction DOWN/OUTWARD here (Y=#$03)
 SkipStepDn:	ldy #$02			//bc bd
-			sty ReturnFlag		//be bf	->#$02 - signals need for RTS 
+			sty ReturnFlag		//be bf
 			asl					//c0
 			tay					//c1	Y=Number of half-track changes
 			jsr StepTmr			//c2-c4	Move head to track and update bitrate (also stores new Track number in cT and calculates SCtr but doesn't store it)
@@ -519,7 +519,7 @@ Presync:	sty.z ModJmp+1		//de df
 			ldy #$00			//e0 e1
 			sty.z CSum+1		//e2 e3
 			sta (ZP0102),y		//e4 e5
-			ldx #$82			//e6 e7	Counter for Sync loop - 130 * 3075 = 399750 cycles = 2 full disk rotation before sync error is triggered
+			ldx #$82			//e6 e7	Counter for Sync loop - 130 * 3075 = 399750 cycles = 2 full disk rotations before sync timeout
 
 			nop #$d2			//e8 e9 Skipping TabD value
 			
@@ -785,7 +785,7 @@ RegBlockRet:
 //		Update Wanted List
 //--------------------------------------
 
-			sta WList,x			//Sector loaded successfully, mark it off on Wanted list (A=Current Track - always positive)
+			sta WList,x			//Sector loaded successfully, mark it off on Wanted list (A=Current Track - always greater than zero)
 			dec SCtr			//Update Sector Counter
 
 //--------------------------------------
@@ -803,7 +803,7 @@ RegBlockRet:
 NoSync:		dey					//2
 			bne Sync			//3
 			dex					//2
-			beq CheckNTF		//2	Sync time out (1 full disk rotation without a sync mark)
+			beq CheckNTF		//2	Sync timeout (2 full disk rotations without a sync mark)
 Sync:		bit $1c00			//4
 			bmi NoSync			//3	Sync loop: 12 * 255 + 15 (= 3075) * 130 = 399750 cycles
 			lsr NewTrackFlag	//	Successful sync - clear NewTrackFlag - if a subsequent sync loop times out on this track -> disk was removed
