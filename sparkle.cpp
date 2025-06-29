@@ -4,29 +4,9 @@
 
 //#define TESTDISK
 
-//#define NEWIO
-
-//--------------------------------------------------------
-//  COMPILE TIME VARIABLES FOR BUILD INFO 250615
-//--------------------------------------------------------
-/*
-constexpr unsigned int FullYear = ((__DATE__[7] - '0') * 1000) + ((__DATE__[8] - '0') * 100) + ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
-
-constexpr unsigned int Year = ((__DATE__[9] - '0') * 10) + (__DATE__[10] - '0');
-
-constexpr unsigned int Month = (__DATE__[0] == 'J') ? ((__DATE__[1] == 'a') ? 1 : ((__DATE__[2] == 'n') ? 6 : 7))    // Jan, Jun or Jul
-                             : (__DATE__[0] == 'F') ? 2                                                              // Feb
-                             : (__DATE__[0] == 'M') ? ((__DATE__[2] == 'r') ? 3 : 5)                                 // Mar or May
-                             : (__DATE__[0] == 'A') ? ((__DATE__[1] == 'p') ? 4 : 8)                                 // Apr or Aug
-                             : (__DATE__[0] == 'S') ? 9                                                              // Sep
-                             : (__DATE__[0] == 'O') ? 10                                                             // Oct
-                             : (__DATE__[0] == 'N') ? 11                                                             // Nov
-                             : (__DATE__[0] == 'D') ? 12                                                             // Dec
-                             : 0;
-constexpr unsigned int Day = (__DATE__[4] == ' ') ? (__DATE__[5] - '0') : (__DATE__[4] - '0') * 10 + (__DATE__[5] - '0');
-
-constexpr unsigned int VersionBuild = ((Year / 10) * 0x100000) + ((Year % 10) * 0x10000) + ((Month / 10) * 0x1000) + ((Month % 10) * 0x100) + ((Day / 10) * 0x10) + (Day % 10);
-*/
+//----------------------------------
+//  VERSION INFO
+//----------------------------------
 
 constexpr int FullDate = 20250629;
 
@@ -233,10 +213,6 @@ size_t PartialFileOffset;
 
 int PrgAdd, PrgLen;
 bool FileUnderIO = false;
-
-#ifdef NEWIO
-bool BundleUnderIO = false;
-#endif
 
 bool SaverSupportsIO = false;
 
@@ -1512,9 +1488,6 @@ bool ResetBundleVariables()
 
     BundleType = BundleTypeNone;
 
-#ifdef NEWIO
-    BundleUnderIO = false;
-#endif
     return true;
 }
 
@@ -2412,19 +2385,6 @@ bool SortBundle()
             //for (auto x : tmpPrgs)
             //    cout << x.FileName << "\t" << x.FileAddr << "\n";
        }
-#ifdef NEWIO
-
-       if (BundleUnderIO)
-       {
-           vector<unsigned char> IOOff;
-           IOOff.push_back(0x34);
-           tmpPrgs.insert(tmpPrgs.begin(), FileStruct(IOOff, "IOOff", "023bfe", "00", "01", false));
-
-           vector<unsigned char> IOOn;
-           IOOn.push_back(0x35);
-           tmpPrgs.push_back(FileStruct(IOOn, "IOOn", "02fe", "00", "01", false));
-       }
-#endif
 
         //Once Bundle is sorted, calculate the I/O status of the last byte of the first file and the number of bits that will be needed
         //to finish the last block of the previous bundle (when the I/O status of the just sorted bundle needs to be known)
@@ -2860,21 +2820,8 @@ bool AddFile()
     }
 
     //Get file variables from script, or get default values if there were none in the script entry
-/*
-    if (FN.find("*") == FN.length() - 1)
-    {
-#ifdef NEWIO
-        BundleUnderIO = true;
-#endif
-        FUIO = true;
-        FN.replace(FN.length() - 1, 1, "");
-    }
-*/
     if (FN.at(FN.length() - 1) == '*')
     {
-#ifdef NEWIO
-        BundleUnderIO = true;
-#endif
         FUIO = true;
         FN.replace(FN.length() - 1, 1, "");
     }
