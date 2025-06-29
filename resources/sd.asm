@@ -534,7 +534,7 @@ Presync:	sty.z ModJmp+1		//de df
 			
 			bvc *				//f7 f8|00-01
 			cmp $1c01			//f9-fb|05	Read1 = AAAAABBB -> H: 01010|010(01), D: 01010|101(11)
-			bne ReFetch			//fc fd|07
+			bne ToFetchError	//fc fd|07
 
 			ror					//fe   |09	C=1 before ROR -> H: 10101001|0, D: 10101010|1
 			ror					//ff   |11				   -> H: 01010100,   D: 11010101
@@ -544,7 +544,7 @@ Presync:	sty.z ModJmp+1		//de df
 			bvc *				//04 05|00-01
 			lda $1c01			//06-08|05*	*Read2 = BBCCCCCCD -> H: 01CCCCCD
 AXS:		axs #$00			//09 0a|07						  D: 11CCCCCD
-			bne ReFetch			//0b 0c|09	X = BB000000 - X1000000, if X = 0 then proper block type is fetched
+			bne ToFetchError	//0b 0c|09	X = BB000000 - X1000000, if X = 0 then proper block type is fetched
 			ldx #$3e			//0d 0e|11
 			sax.z tC+1			//0f 10|14
 
@@ -635,6 +635,7 @@ CopyBAM:	lda (ZP0101),y		//64 65	($0101=DiskID), $102=IL3R, $103=IL2R, $104=IL1R
 //		Got Header
 //--------------------------------------
 //046f
+ToFetchError:
 HD:								//Mem	Cycles
 Header:		bne FetchError		//6f 70	33	Checksum mismatch -> fetch next sector header
 
@@ -806,7 +807,7 @@ NoSync:		dey					//2
 			beq CheckNTF		//2	Sync timeout (2 full disk rotations without a sync mark)
 Sync:		bit $1c00			//4
 			bmi NoSync			//3	Sync loop: 12 * 255 + 15 (= 3075) * 130 = 399750 cycles
-			lsr NewTrackFlag	//	Successful sync - clear NewTrackFlag - if a subsequent sync loop times out on this track -> disk was removed
+			lsr NewTrackFlag	//	Successful sync - clear NewTrackFlag - if a subsequent sync loop times out on this track -> assume disk was removed
 			rts
 
 //--------------------------------------

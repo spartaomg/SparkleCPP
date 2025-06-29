@@ -28,7 +28,7 @@ constexpr unsigned int Day = (__DATE__[4] == ' ') ? (__DATE__[5] - '0') : (__DAT
 constexpr unsigned int VersionBuild = ((Year / 10) * 0x100000) + ((Year % 10) * 0x10000) + ((Month / 10) * 0x1000) + ((Month % 10) * 0x100) + ((Day / 10) * 0x10) + (Day % 10);
 */
 
-constexpr int FullDate = 20250627;
+constexpr int FullDate = 20250629;
 
 constexpr int VersionMajor = 3;
 constexpr int VersionMinor = 2;
