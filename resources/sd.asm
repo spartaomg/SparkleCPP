@@ -267,8 +267,7 @@
 .label ready		=CO			//DO=0,CO=1,AA=0	$1800=#$08	dd00=100000xx (#$83)
 
 .label Sp			=$52		//Spartan Stepping constant (=82*72=5904=$1710=$17 bycles delay)
-.const ErrVal		=$2a		//=42 missed consecutive sectors, two full rotations in zone 3, 2.5 full rotations in zone 0
-								//can't be more than $7f
+.const ErrVal		=$54		//84 missed consecutive sectors, 4 full rotations in zone 3,ErrVal can't be more than $7f
 
 //ZP Usage:
 .label cT			=$00		//Current Track
@@ -480,17 +479,17 @@ CorrTrack:	sec					//a7	CorrTrack needs Y=#$01
 			ldy #$03			//b6 b7	Y=#$03 -> Stepper moves Down/Outward
 			nop #$d1			//b8 b9 Skipping TabD value
 			sty StepDir			//ba bb	Only store stepper direction DOWN/OUTWARD here (Y=#$03)
-SkipStepDn:	ldy #$02			//bc bd
-			sty ReturnFlag		//be bf
-			asl					//c0
-			tay					//c1	Y=Number of half-track changes
-			jsr StepTmr			//c2-c4	Move head to track and update bitrate (also stores new Track number in cT and calculates SCtr but doesn't store it)
+SkipStepDn:	inc ReturnFlag		//bc bd
+			asl					//be
+			tay					//bf	Y=Number of half-track changes
+			jsr StepTmr			//c0-c2	Move head to track and update bitrate (also stores new Track number in cT and calculates SCtr but doesn't store it)
 
 //--------------------------------------
 //		Multi-track stepping	//A=bitrate, Y=SCtr here
 //--------------------------------------
 
-			sta $1c00			//c5-c7	Needed to update bitrate!!!
+			sta $1c00			//c3-c5	Needed to update bitrate!!!
+			sta ZPSpVal			//c6 c7
 			nop	#$d6			//c8 c9	Skipping TabD value
 ResetVerif:	lda #CSV			//ca cb
 			sta VerifCtr		//cc cd	Verify track after head movement
@@ -727,6 +726,9 @@ BRTCorr:	lda $1c00			//Based on Krill's bitrate and track correction code
 			sta ZPSpVal			//Update Spartan step $1c00 value (with LED on)
 			jsr ToggleLD2		//Update $1c00 with LED off (LED is only on during transfer), JSR is OK here, we are discarding any fetched data on the stack
 
+			lda #$01			//Reset New Track flag
+			sta NewTrackFlag
+
 			lda #<ErrVal		//More than the max number of sectors per track
 			sta ErrCtr
 
@@ -774,7 +776,7 @@ SkipCSLoop:	tay
 			sta ErrCtr			//Reset Error Counter (only if both header and data are fetched correctly)
 
 			lsr VerifCtr		//Checksum Verification Counter
-			bcs BplFetch		//If counter<>0, go to verification loop (use BPL Fetch as trampoline, VerifCtr is always positive)
+			bcs BplFetch		//If counter<>0, go to verification loop
 
 RegBlockRet:
 			txa
@@ -1063,12 +1065,6 @@ RateDone:	sty MaxNumSct2+1
 			dex
 			stx SubSct+1
 
-			lsr ReturnFlag
-			bcc StoreBR
-Return:		rts					//A=bitrate from both ReturnFlag checks
-
-StoreBR:	sta ZPSpVal			//Store bitrate for Spartan step
-
 //--------------------------------------
 //		GCR loop patch
 //--------------------------------------
@@ -1085,9 +1081,11 @@ StoreBR:	sta ZPSpVal			//Store bitrate for Spartan step
 			stx.z LoopMod2+1
 
 			lsr ReturnFlag
-			bcs Return
+			bcc StoreBR
+			rts					//A=bitrate
 
-			sty SCtr						//Reset Sector Counter, but only if this is not a random bundle which gets SCtr from Dir
+StoreBR:	sta ZPSpVal			//Store correct bitrate for Spartan step, but only if this is not a random bundle
+			sty SCtr			//Reset Sector Counter, but only if this is not a random bundle which gets SCtr from Dir
 
 //--------------------------------------
 
