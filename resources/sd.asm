@@ -267,7 +267,7 @@
 .label ready		=CO			//DO=0,CO=1,AA=0	$1800=#$08	dd00=100000xx (#$83)
 
 .label Sp			=$52		//Spartan Stepping constant (=82*72=5904=$1710=$17 bycles delay)
-.const ErrVal		=$54		//84 missed consecutive sectors, 4 full rotations in zone 3,ErrVal can't be more than $7f
+.const ErrVal		=$2a		//42 missed consecutive sectors, 2 full rotations in zone 3, ErrVal can't be more than $7f
 
 //ZP Usage:
 .label cT			=$00		//Current Track
@@ -533,7 +533,7 @@ Presync:	sty.z ModJmp+1		//de df
 			
 			bvc *				//f7 f8|00-01
 			cmp $1c01			//f9-fb|05	Read1 = AAAAABBB -> H: 01010|010(01), D: 01010|101(11)
-			bne ToFetchError	//fc fd|07
+			bne ReFetch			//fc fd|07
 
 			ror					//fe   |09	C=1 before ROR -> H: 10101001|0, D: 10101010|1
 			ror					//ff   |11				   -> H: 01010100,   D: 11010101
@@ -543,7 +543,7 @@ Presync:	sty.z ModJmp+1		//de df
 			bvc *				//04 05|00-01
 			lda $1c01			//06-08|05*	*Read2 = BBCCCCCCD -> H: 01CCCCCD
 AXS:		axs #$00			//09 0a|07						  D: 11CCCCCD
-			bne ToFetchError	//0b 0c|09	X = BB000000 - X1000000, if X = 0 then proper block type is fetched
+			bne ReFetch			//0b 0c|09	X = BB000000 - X1000000, if X = 0 then proper block type is fetched
 			ldx #$3e			//0d 0e|11
 			sax.z tC+1			//0f 10|14
 
