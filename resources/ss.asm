@@ -295,8 +295,9 @@ BHdrEnd:
 
 TrackChange:
 			jsr ClearList				//Y=#$00 here
-			ldy #$02					//Two half-track steps, two return checks
+			iny							//One return check
 			sty ReturnFlag
+			iny							//Two half-track steps
 			jsr NextTrkSvr				//Automatically skips track 18
 			jsr ToggleLD2				//Turns LED off and updates $1c00 with correct bitrate
 			sty SCtr					//Save SCtr
