@@ -8,7 +8,7 @@
 //  VERSION INFO
 //----------------------------------
 
-constexpr int FullDate = 20250704;
+constexpr int FullDate = 20250705;
 
 constexpr int VersionMajor = 3;
 constexpr int VersionMinor = 2;
@@ -5782,12 +5782,11 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
     }
 #endif // TESTDISK
 */
-    Disk[BAM + 249] = EORtransform(0);      //IncludeSaverCode flag is no longer used on BAM, will leave this here for compatibility
 
     //Also add Product ID to BAM, EOR-transformed
-    Disk[BAM + 248] = EORtransform((ProductID / 0x10000) & 0xff);
-    Disk[BAM + 247] = EORtransform((ProductID / 0x100) & 0xff);
-    Disk[BAM + 246] = EORtransform(ProductID & 0xff);
+    Disk[BAM + 249] = EORtransform((ProductID / 0x10000) & 0xff);
+    Disk[BAM + 248] = EORtransform((ProductID / 0x100) & 0xff);
+    Disk[BAM + 247] = EORtransform(ProductID & 0xff);
 
     return true;
 
