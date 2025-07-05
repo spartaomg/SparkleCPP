@@ -5694,10 +5694,15 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
         idcNextID = 0x00;
 #endif // TESTDISK
 
+    if (idcNextID != 0xff)
+    {
+        idcNextID = (idcNextID * 2) % 256;
+    }
+
     Drive[(3 * 256) + ZPILTabLoc + 0] = 256 - IL3;
     Drive[(3 * 256) + ZPILTabLoc + 1] = 256 - IL2;
     Drive[(3 * 256) + ZPILTabLoc + 2] = 256 - IL1;
-    Drive[(3 * 256) + ZPILTabLoc + 3] = (idcNextID * 2) % 256;
+    Drive[(3 * 256) + ZPILTabLoc + 3] = idcNextID;
     Drive[(3 * 256) + ZPILTabLoc + 4] = 256 - IL0;
 
     /*
@@ -5743,7 +5748,7 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
     Disk[BAM + 254] = EORtransform(256 - IL3);
     Disk[BAM + 253] = EORtransform(256 - IL2);
     Disk[BAM + 252] = EORtransform(256 - IL1);
-    Disk[BAM + 251] = EORtransform((idcNextID * 2) % 256);
+    Disk[BAM + 251] = EORtransform(idcNextID);
     Disk[BAM + 250] = EORtransform(256 - IL0);
 /*
     BlocksUsedByPlugin = 0;

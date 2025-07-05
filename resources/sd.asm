@@ -281,10 +281,11 @@
 .label ScndBuff		=$29		//#$01 if last block of a Bundle is fetched, otherwise $00
 .label WList		=$3e		//Wanted Sector list ($3e-$52) ([0]=unfetched, [-]=wanted, [+]=fetched)
 .label ErrCtr		=$54		//Checksum error counter
-.label DirSector	=$56		//Initial value=#$c5 (<>#$10 or #$11)
+.label DirSector	=$56		//Initial value=XX1 (<>#$10 or #$11)
 .label ZPSpVal		=$58		//Spartan step VIA 2 Port B value
 .label NBC			=$5c		//New Block Count temporary storage
-.label TrackChg		=$5e		//Indicates whether Track change is needed AFTER CATN (last block of bundle=last sector of track)
+
+//Unused: $5e
 
 .label ILTab		=$60		//Inverted Custom Interleave Table ($60-$64)
 .label NextID		=$63		//Next Side's ID - will be updated from 18:00:$fd of next side
@@ -1308,11 +1309,11 @@ CD:
 .byte	$01,$00,$14,$00,$d0,$1d,$c0,$15,$01,$00,$00,$10,$90,$19,$80,$11	//2x
 .byte	$7f,$76,$60,$16,$50,$1c,$40,$14,$76,$7f,$20,$12,$10,$18,$00,$00	//3x	Wanted List $3e-$52 (Sector 16 = #$ff)
 .byte	$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$ff,$00	//4x	(0) unfetched, (+) fetched, (-) wanted
-.byte	$00,$00,$00,$0e,$80,$0f,$c5,$07,$ff,$01,$01,$0a,$1e,$0b,$00,$03	//5x	
-.byte	$fd,$fd,$fd,$00,$fc,$0d,$00,$05,XX2
+.byte	$00,$00,$00,$0e,$80,$0f,XX1,$07,$00
 .byte										<ILTab-1
 .byte											>ILTab-1
-.byte												$00,$02,$09,$01,$01	//6x	$60-$64 - ILTab, $63 - NextID, $68 - ZPHdrID1, $69 - ZPHdrID2
+.byte												$0a,XX2,$0b,XX3,$03	//5x	
+.byte	$fd,$fd,$fd,$00,$fc,$0d,$00,$05,XX4,$ff,$ff,$00,$02,$09,$01,$01	//6x	$60-$64 - ILTab, $63 - NextID, $68 - ZPHdrID1, $69 - ZPHdrID2
 //0070
 ZPReFetch:
 		jmp ReFetch
