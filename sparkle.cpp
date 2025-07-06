@@ -5569,6 +5569,14 @@ bool InjectSaverPlugin(int PluginIdx)
 
 bool AddPluginFiles()
 {
+    string SEA[MaxNumEntries]{};
+    
+    //Save a copy of the current ScriptEntryArray
+    for (size_t i = 0; i < MaxNumEntries; i++)
+    {
+        SEA[i] = ScriptEntryArray[i];
+    }
+    
     for (size_t i = 0; i < PluginFiles.size(); i++)
     {
         if (PluginFiles.at(i).PluginType == BundleTypeCustomPlugin)
@@ -5627,6 +5635,12 @@ bool AddPluginFiles()
             cerr << "***CRITICAL***\tAn HSFile bundle must always be preceded by a Saver Plugin bundle in the script!\n";
             return false;
         }
+    }
+
+    //Restore ScriptEntryArray
+    for (size_t i = 0; i < MaxNumEntries; i++)
+    {
+        ScriptEntryArray[i] = SEA[i];
     }
 
     return true;
@@ -7170,7 +7184,7 @@ int main(int argc, char* argv[])
 
 #ifdef DEBUG
 
-        string ScriptFileName = "c:/SparkleSaveTest/SparkleSaveTest.sls";
+        string ScriptFileName = "c:/Sparkle/Example/Sparkle.sls";
         Script = ReadFileToString(ScriptFileName, true);
         SetScriptPath(ScriptFileName, AppPath);
 
