@@ -447,31 +447,32 @@ RBLoop:		cpy $1800			//7f-81	4
 //		Fetching any T:S		//A=X=wanted track, Y=#$00
 //--------------------------------------
 //0392
-CorrTrack:	sec					//92	CorrTrack needs Y=#$01
-			sbc cT				//93 94	Calculate Stepper Direction and number of Steps
-			beq ResetVerif		//95 96	We are staying on the same Track, skip track change
+CorrTrack:	sec					//92
+			sbc cT				//93 94
+			beq Fetch			//95 96
 			bne *+3				//97 98
-	.byte	$85					//99	Skipping TabD value
-			bcs SkipStepDn		//9a 9b
-			eor #$ff			//9c 9d
-			adc #$01			//9e 9f
-			ldy #$03			//a0 a1	Y=#$03 -> Stepper moves Down/Outward
-			sty StepDir			//a2 a3	Only store stepper direction DOWN/OUTWARD here (Y=#$03)
-SkipStepDn:	inc ReturnFlag		//a4 a5
-			asl					//a6
-			tay					//a7	Y=Number of half-track changes
 	
-	.byte	$82					//a8	OPC_NOP_IMM (alternative to $80, to have a different adjacent value)
-	.byte	$80					//a8 a9 Skipping TabD value
+	.byte	$85					//99	Skipping TabD value (OPC_STA_ZP)
 
-			jsr StepTmr			//aa-ac	Move head to track and update bitrate (also stores new Track number in cT and calculates SCtr but doesn't store it)
-			sta $1c00			//ad-af	Needed to update bitrate!!!
+			ldy #$02			//9a 9b
+			sty ReturnFlag		//9c 9d
+			bcs SkipStepDn		//9e 9f
+			eor #$ff			//a0 a1
+			adc #$01			//a2 a3
+			ldy #$03			//a4 a5	Y=#$03 -> Stepper moves Down/Outward (INY WOULD BE ENOUGH BUT GAINING 1 BYTE HERE DOESN'T HELP ATM)
+			sty StepDir			//a6 a7	Only store stepper direction DOWN/OUTWARD here (Y=#$03)
+
+	.byte	$82					//a8	OPC_NOP_IMM (alternative to $80, to have two different adjacent values)
+	.byte	$80					//a9	Skipping TabD value (OPC_NOP_IMM)
+
+SkipStepDn:	ldy #CSV			//aa ab
+			sty VerifCtr		//ac ad	Verify track after head movement
+			asl					//ae
+			tay					//af	Y=Number of half-track changes
 
 			nop #$89			//b0 b1	Skipping TabD value
-
-			sta ZPSpVal			//b2 b3
-ResetVerif:	lda #CSV			//b4 b5
-			sta VerifCtr		//b6 b7	Verify track after head movement
+			jsr StepTmr			//b2-b4	Move head to track and update bitrate (also stores new Track number in cT and calculates SCtr but doesn't store it)
+			sta $1c00			//b5-b7	Needed to update bitrate!!!
 
 			nop #$81			//b8 b9 Skipping TabD value
 
@@ -517,7 +518,7 @@ Presync:	sty.z ModJmp+1		//ca cb
 			bne ReFetch			//e5 e6|07
 			ror					//e7   |09	H: 10101001|0, D: 10101010|1 (C=1 before ROR)
 			
-			nop #$82			//e8 e9|11 Skipping TabD value
+			nop #$82			//e8 e9|11 Skipping TabD value (OPC_NOP_IMM)
 			
 			ror					//ea   |13	H: 01010100,   D: 11010101
 			ldx #$c0			//eb ec|15
@@ -525,7 +526,7 @@ Presync:	sty.z ModJmp+1		//ca cb
 			sax AXS+1			//ed-ef|19	H: 01000000,   D: 1100000
 			clv					//f0   |21
 
-	.byte	$88					//f1   |23	TabD (DEY) - no effect, Y is not used her
+	.byte	$88					//f1   |23	TabD (DEY) - no effect, Y is not used here
 
 			bvc *				//f2 f3|00-01
 			lda $1c01			//f4-f6|05*	Read2 = BBCCCCCCD, H: 01CCCCCD, D: 11CCCCCD
@@ -577,7 +578,7 @@ SkipSub:	dey					//2c	Any more blocks to be put in chain?
 	.byte 	$ca					//32	TabG (DEX) - this only matters in indexed calls - next call includes INX (NxtSct)
 	.byte	$4a					//33	TabG (LSR) - no effect, A is already stored
 
-			rts					//34	A=#$ff, X=next sector, Y=#$00, Z=0 here
+			rts					//34	A=#$7f, C=1, Z=0, X=next sector - 1, Y=#$00 here
 
 //--------------------------------------
 
@@ -717,11 +718,9 @@ BRTCorr:	lda $1c00			//Based on Krill's bitrate and track correction code
 			sta ZPSpVal			//Update Spartan step $1c00 value (with LED on)
 			jsr ToggleLD2		//Update $1c00 with LED off (LED is only on during transfer), JSR is OK here, we are discarding any fetched data on the stack
 
-			lda #$01			//Reset New Track flag
-			sta NewTrackFlag
-
 			lda #<ErrVal		//More than the max number of sectors per track
 			sta ErrCtr
+			sta NewTrackFlag	//Reset New Track flag - any non-zero positive number works
 
 ToBplFetch:	bpl BplFetch		//Refetch everything via ReFetch vector
 
@@ -906,7 +905,7 @@ DirLoop:	lda $0700,x
 			inc ReturnFlag
 
 			tax					//X=A=LastT
-			jsr BitRate			//Update Build loop, Y=MaxSct after this
+			jsr StoreTrack		//Update Build loop, Y=MaxSct after this
 								//Also find interleave and sector count for requested track
 
 			ldx LastS			//This is actually the first sector on the track after track change (i.e. nS), always < MaxNumSct
@@ -917,31 +916,30 @@ DirLoop:	lda $0700,x
 			jsr Build			//Mark all sectors as FETCHED -before- first sector to be fetched
 			inc MarkSct			//Restore Build loop
 
-SkipUsed:	iny					//Mark the first sector of the new bundle as WANTED
-			jsr NxtSct			//A=#$ff, X=Next Sector-1 (we jump to an INX to correct X), Y=#$00 after this call
+			iny					//Mark the first sector of the new bundle as WANTED
+			jsr NxtSct			//A=#$7f, X=Next Sector - 1 (we jump to an INX to correct X), Y=#$00 after this call
 
-			lax LastT
-			bpl GotoTrack		//X=desired Track, Y=#$00
+			bne GotoTrack		//A=#$7f, Y=#$00, C=1, Z=0 - BCS would also work
 
 //--------------------------------------
 
 NewDiskID:	sta NextID			//Next Disk's ID for flip detection - we store DiskID x 2 and NextID x 2
 
 //----------------------------------------------
-//		HERE STARTS THE FUN
-//		Fetching BAM OR Dir
+//		Fetching BAM OR Dir Block
 //----------------------------------------------
 
-FetchBAM:	sty LastS			//92 93	Y=#$00
-FetchDir:	jsr ClearList		//94-96 C=1 after this
-			ldx LastS			//9a 9b
-			dec WList,x			//9c 9d	Mark sector as wanted
-			lax ZP12			//9e 9f	Both FetchBAM and FetchDir need track 18
-			sta LastT			//a0 a1	A=X=#$12
-GotoTrack:	iny					//92
-			sty WantedCtr		//93 94	Y=#$01 here
-			sty BlockCtr		//92 93
-			jmp CorrTrack
+FetchBAM:	sty LastS			//Y=#$00
+FetchDir:	jsr ClearList		//C=1 after this
+			ldx LastS
+			dec WList,x			//Mark sector as wanted
+			lda #$12			//Both FetchBAM and FetchDir need track 18
+			sta LastT
+			sta cT
+GotoTrack:	iny
+			sty BlockCtr
+			sty WantedCtr		//Y=#$01 here
+			jmp Fetch
 
 //--------------------------------------
 //
@@ -949,10 +947,10 @@ GotoTrack:	iny					//92
 //
 //--------------------------------------
 
-SeqLoad:	tay					//A=#$00 here -> Y=#$00
-			lda BlockCtr		//End of Disk? BlockCtr can only be 0 here if the last NBC was 0 and we requested sequential loading -> EoD -> sequential flip disk request
+SeqLoad:	ldy BlockCtr		//End of Disk? BlockCtr can only be 0 here if the last NBC was 0 and we requested sequential loading -> EoD -> sequential flip disk request
 			beq FetchBAM		//If Yes, fetch BAM, otherwise start transfer
 
+			tay					//A=#$00 here -> Y=#$00
 			lda SCtr			//Skip track change if either of these is true: (1) SCtr > 0 OR
 			ora ScndBuff		//(2) SCtr = 0 but we have the last block of a bundle in the second buffer
 			bne ToStartTr
@@ -1014,6 +1012,9 @@ StepWait:	bit $1c05
 			cpy #$00
 			bne StepTmr
 
+			stx NewTrackFlag	//Set New Track flag - we are on a new track - determines behavior if no sync mark is found (assume track error)
+								//Any positive non-zero value will work, e.g. track number (1-40)
+
 StoreTrack:	stx cT
 
 //--------------------------------------
@@ -1035,45 +1036,46 @@ BitRate:	ldy #$11			//Sector count=17
 								//Tracks 01-17, speed zone 3
 			ldy #$15			//Sector count=21
 BR20:		ora #$20			//Bitrate=%11
+RateDone:	sty MaxNumSct2+1
 
 //--------------------------------------
 //		Update variables
 //--------------------------------------
-
-RateDone:	sty MaxNumSct2+1
 
 			ldx ILTab-$11,y		//Inverted Custom Interleave Tab
 			stx IL+1
 
 			ldx #$01			//Extra subtraction for Zone 3
 			stx StepDir			//Reset stepper direction to Up/Inward here
-			stx NewTrackFlag	//Set New Track flag - we are on a new track - determines behavior if no sync mark is found (assume track error)
 			cpy #$15
 			beq *+3
 			dex
 			stx SubSct+1
+
+			lsr ReturnFlag
+			bcs RTS+1
 
 //--------------------------------------
 //		GCR loop patch
 //--------------------------------------
 
 			ldx #<GCRLoop3-(GCREntry+2)
-			cpy #$15						//Y=sector count (17, 18, 19, 21 for zones 0, 1, 2, 3, respectively)
+			cpy #$15			//Y=sector count (17, 18, 19, 21 for zones 0, 1, 2, 3, respectively)
 			beq *+4
-			ldx #<GCRLoop0_2-(GCREntry+2)	//GCR Loop patch for zones 0-2
-			stx.z GCREntry+1
+			ldx #<GCRLoop0_2-(GCREntry+2)
+			stx.z GCREntry+1	//GCR Loop patch for zones 0-2
 
 			ldx Patch1-17,y
 			stx.z LoopMod2
 			ldx Patch2-17,y
 			stx.z LoopMod2+1
-
+			
+			sta ZPSpVal			//Store correct bitrate for Spartan step, but only if this is not a random bundle
+			
 			lsr ReturnFlag
-			bcc StoreBR
-			rts					//A=bitrate
+			bcs RTS+1
 
-StoreBR:	sta ZPSpVal			//Store correct bitrate for Spartan step, but only if this is not a random bundle
-			sty SCtr			//Reset Sector Counter, but only if this is not a random bundle which gets SCtr from Dir
+StoreBR:	sty SCtr			//Reset Sector Counter, but only if this is not a random bundle which gets SCtr from Dir
 
 //--------------------------------------
 
@@ -1087,7 +1089,7 @@ TrSeq:		sta (<ZP1800-Msk,x)
 //--------------------------------------
 								//			Spartan Loop:		Entry:
 Loop:		lda $0100,y			//03-06			20-23			00-03
-			bit $1800			//07-10			24-27			04-07
+RTS:		bit $1860			//07-10			24-27			04-07
 			bmi *-3				//11 12			28 29			08 09
 W1:			sax $1800			//13-16			30-33			10-13
 								//(17 cycles) 	(34 cycles)
@@ -1138,11 +1140,17 @@ ChkPt:		bpl Loop			//17-19
 
 //--------------------------------------
 
-TrSeqRet:	lda #busy+1			//16,17			use #busy + 1 here (AA + DI = $11) for SAX Loop+2 below ($11 & $EF = $01)
-			bit $1800			//18-21		 	Last bitpair received by C64?
-			bmi *-3				//22,23
-			sta (<ZP1800-Msk,x)	//24-29			Transfer finished, send Busy Signal to C64
-			
+TrSeqRet:	lda (<ZP1800-Msk,x)	//19-24
+			bmi *-2				//25,26
+			lda #busy+1			//27,28
+			sta (<ZP1800-Msk,x)	//29-34
+
+/*
+TrSeqRet:	lda #busy+1			//19,20			use #busy + 1 here (AA + DI = $11) for SAX Loop+2 below ($11 & $EF = $01)
+			bit $1800			//21-24		 	Last bitpair received by C64?
+			bmi *-3				//25,26
+			sta (<ZP1800-Msk,x)	//27-32			Transfer finished, send Busy Signal to C64
+*/			
 			sax Loop+2			//A&X=$01, restore transfer loop
 
 			lda (<ZP1800-Msk,x)	//Make sure C64 pulls ATN before continuing

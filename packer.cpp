@@ -878,10 +878,13 @@ void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
                             BestSL = CurrentMaxL; //If(L > MaxShortLen, MaxShortLen, L)   'Short matches cannot be longer than 4 bytes
                             BestSO = O;                        //Keep Offset 1-based
                         }
-                        if (BestNL < (CurrentMaxL = min(L, MaxLL)))
+                        if (L > MaxSL || O > MaxShortOffset)
                         {
-                            BestNL = CurrentMaxL;
-                            BestNO = O;
+                            if (BestNL < (CurrentMaxL = min(L, MaxLL)))
+                            {
+                                BestNL = CurrentMaxL;
+                                BestNO = O;
+                            }
                         }
                     }
                 }
@@ -1002,7 +1005,7 @@ void CalcBestSequence(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
     {
         //Start with second element, first has been initialized above
         Seq[Pos + 1].TotalBits = 0xffffff;
-        //Max block size=100 = $10000 bytes = $80000 bits, make default larger than this
+        //Make initial value greater than max block size=100 = $10000 bytes = $80000 bits
 
         if ((FL[Pos] != 0) || (FFL[Pos] != 0))
         {

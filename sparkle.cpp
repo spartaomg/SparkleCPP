@@ -8,10 +8,10 @@
 //  VERSION INFO
 //----------------------------------
 
-constexpr int FullDate = 20250705;
+constexpr int FullDate = 20250809;
 
 constexpr int VersionMajor = 3;
-constexpr int VersionMinor = 2;
+constexpr int VersionMinor = 3;
 
 constexpr int FullYear = FullDate/10000;
 constexpr int Year = FullYear % 100;
