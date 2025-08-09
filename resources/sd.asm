@@ -177,6 +177,11 @@
 //		  and will continue with bitrate cycle-through & track correction code
 //		- minor GCR loop adjustment for better high rotation speed tolerance in Zone 2
 //		  loop tolerates at least 272-314 rpm in all 4 speed zones
+//		- released with Sparkle 3.2
+//
+//	v23 - using the track error correction code to change tracks in case of bundle-index based loader calls
+//		  to skip track read error and bitrate correction code if the disk is removed between loader calls
+//		  Sparkle will create a "wrong track" condition to activate track correction if track change is needed
 //
 //----------------------------------------------------------------------------------------
 //	Memory Layout
@@ -444,33 +449,36 @@ RBLoop:		cpy $1800			//7f-81	4
 
 
 //--------------------------------------
-//		Fetching any T:S		//A=X=wanted track, Y=#$00
+//		Track correction		//A = actual track, X = wanted track
 //--------------------------------------
 //0392
-CorrTrack:	sec					//92
-			sbc cT				//93 94
-			beq Fetch			//95 96
-			bne *+3				//97 98
-	
-	.byte	$85					//99	Skipping TabD value (OPC_STA_ZP)
+CorrTrack:	sta cT				//92 93
+			txa					//94
+			sec					//95
+			sbc cT				//96 97
+			
+			nop	#$85			//98 99	Skipping TabD value (OPC_STA_ZP)
 
 			ldy #$02			//9a 9b
 			sty ReturnFlag		//9c 9d
 			bcs SkipStepDn		//9e 9f
 			eor #$ff			//a0 a1
 			adc #$01			//a2 a3
-			ldy #$03			//a4 a5	Y=#$03 -> Stepper moves Down/Outward (INY WOULD BE ENOUGH BUT GAINING 1 BYTE HERE DOESN'T HELP ATM)
-			sty StepDir			//a6 a7	Only store stepper direction DOWN/OUTWARD here (Y=#$03)
+			iny					//a4
+			sty StepDir			//a5 a6	Only store stepper direction DOWN/OUTWARD here (Y=#$03)
 
-	.byte	$82					//a8	OPC_NOP_IMM (alternative to $80, to have two different adjacent values)
-	.byte	$80					//a9	Skipping TabD value (OPC_NOP_IMM)
+SkipStepDn:	ldy #CSV			//a7 a8
 
-SkipStepDn:	ldy #CSV			//aa ab
-			sty VerifCtr		//ac ad	Verify track after head movement
-			asl					//ae
-			tay					//af	Y=Number of half-track changes
+	.byte	$80					//a9	TabD value (OPC_NOP_IMM)
+	.byte	$ea					//aa
 
-			nop #$89			//b0 b1	Skipping TabD value
+			sty VerifCtr		//ab ac	Verify track after head movement
+			asl					//ad
+			tay					//ae	Y=Number of half-track changes, never 0
+			bne *+3				//af b0
+
+	.byte	$89					//b1	Skipping TabD value (OPC_NOP_IMM)
+
 			jsr StepTmr			//b2-b4	Move head to track and update bitrate (also stores new Track number in cT and calculates SCtr but doesn't store it)
 			sta $1c00			//b5-b7	Needed to update bitrate!!!
 
@@ -632,48 +640,44 @@ Header:		bne FetchError		//5b 5c	33	Checksum mismatch
 
 			tay					//64	51	Y = ID1
 
-			lda $0103			//65-67	54	$0103 (Sector)
-			jsr ShufToRaw		//68-6a	74
-			cmp MaxNumSct2+1	//6b-6d	78
-			bcs FetchError		//6e 6f	80	Sector mismatch
-	
-	.byte	OPC_NOP_ABS			//70	84
-	.byte	$aa					//71		Skipping TabG value (TAX)
-	.byte	$8a					//72		Skipping TabG value (TXA)
+			lda.z (ZP0103,x)	//65 66	57	$0103 (Sector)
+			jsr ShufToRaw		//67-69	77
+			cmp MaxNumSct2+1	//6a-6c	80
+			bcs FetchError		//6d 6e	82	Sector mismatch
+			sta cS				//6f 70	85
 
-			sta cS				//		87
+	.byte	$aa					//71	87	Skipping TabG value (TAX)
+	.byte	$8a					//72	89	Skipping TabG value (TXA)
 
-			lda $0102			//		91	A = $0102 (Track)
-			jsr ShufToRaw		//		111
-			beq FetchError		//		113	Track mismatch
-			cmp #$29			//		115	Max track: 40 ($28)
-			bcs FetchError		//		117	Track mismatch
+			lda $0102			//		93	A = $0102 (Track)
+			jsr ShufToRaw		//		113
+			beq FetchError		//		115	Track mismatch
+			cmp #$29			//		117	Max track: 40 ($28)
+			bcs FetchError		//		119	Track mismatch
 			
-			ldx $0101			//		121 X = $0101 (ID2)
-			cpx ZPHdrID2		//		124
-			bne CheckIDs		//		126	ID2 mismatch
+			ldx $0101			//		123 X = $0101 (ID2)
+			cpx ZPHdrID2		//		126
+			bne CheckIDs		//		128	ID2 mismatch
 			
-			cpy ZPHdrID1		//		129
-			bne CheckIDs		//		131	ID1 mismatch
+			cpy ZPHdrID1		//		131
+			bne CheckIDs		//		133	ID1 mismatch
 
-			ldx cT				//		134 Everything else checked out, check if we are on the requested track
-			sta cT				//		137
-			txa					//		139
-			cmp cT				//		142
-			bne ToCorrTrack		//		144	Wrong track -> go to wanted track
+			cmp cT				//		134 Everything else checked out, check if we are on the requested track
+			bne ToCorrTrack		//		136
 						
-			ldy VerifCtr		//		147
-			bne ToFetchData		//		149	Always fetch sector data if we are verifying the checksum
+ChkVCtr:	ldy VerifCtr		//		139
+			bne ToFetchData		//		141	Always fetch sector data if we are verifying the checksum
 
-			ldy cS				//		152
-			ldx WList,y			//		156	Otherwise, only fetch sector data if this is a wanted sector
-BplFetch:	bpl ReFetch			//		158	Sector is not on wanted list -> fetch next sector header
+			ldy cS				//		144
+			ldx WList,y			//		148	Otherwise, only fetch sector data if this is a wanted sector
+BplFetch:	bpl ReFetch			//		150	Sector is not on wanted list -> fetch next sector header
 ToFetchData:
-			jmp FetchData		//		161	Sector is on wanted list -> fetch data
+			jmp FetchData		//		153	Sector is on wanted list -> fetch data
 
 //--------------------------------------
 
 ToCorrTrack:
+			ldx cT				//Wrong actual track - go to requested track
 			jmp CorrTrack		//Y can be anything
 
 //--------------------------------------
@@ -1053,7 +1057,7 @@ RateDone:	sty MaxNumSct2+1
 			stx SubSct+1
 
 			lsr ReturnFlag
-			bcs RTS+1
+			bcs RTS
 
 //--------------------------------------
 //		GCR loop patch
@@ -1070,10 +1074,10 @@ RateDone:	sty MaxNumSct2+1
 			ldx Patch2-17,y
 			stx.z LoopMod2+1
 			
-			sta ZPSpVal			//Store correct bitrate for Spartan step, but only if this is not a random bundle
+			sta ZPSpVal			//Store correct bitrate for Spartan step
 			
 			lsr ReturnFlag
-			bcs RTS+1
+			bcs RTS
 
 StoreBR:	sty SCtr			//Reset Sector Counter, but only if this is not a random bundle which gets SCtr from Dir
 
@@ -1089,7 +1093,7 @@ TrSeq:		sta (<ZP1800-Msk,x)
 //--------------------------------------
 								//			Spartan Loop:		Entry:
 Loop:		lda $0100,y			//03-06			20-23			00-03
-RTS:		bit $1860			//07-10			24-27			04-07
+			bit RTS: $1860		//07-10			24-27			04-07
 			bmi *-3				//11 12			28 29			08 09
 W1:			sax $1800			//13-16			30-33			10-13
 								//(17 cycles) 	(34 cycles)
@@ -1140,17 +1144,11 @@ ChkPt:		bpl Loop			//17-19
 
 //--------------------------------------
 
-TrSeqRet:	lda (<ZP1800-Msk,x)	//19-24
-			bmi *-2				//25,26
-			lda #busy+1			//27,28
-			sta (<ZP1800-Msk,x)	//29-34
-
-/*
 TrSeqRet:	lda #busy+1			//19,20			use #busy + 1 here (AA + DI = $11) for SAX Loop+2 below ($11 & $EF = $01)
 			bit $1800			//21-24		 	Last bitpair received by C64?
 			bmi *-3				//25,26
 			sta (<ZP1800-Msk,x)	//27-32			Transfer finished, send Busy Signal to C64
-*/			
+
 			sax Loop+2			//A&X=$01, restore transfer loop
 
 			lda (<ZP1800-Msk,x)	//Make sure C64 pulls ATN before continuing
