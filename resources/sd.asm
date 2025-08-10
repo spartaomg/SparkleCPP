@@ -1003,7 +1003,7 @@ PreCalc:	and #$1b
 			adc StepDir			//#$03 for stepping down, #$01 for stepping up
 			ora #$04			//motor ON
 			cpy #$80
-			beq StoreTrack		//This was the last half step precalc, leave Stepper Loop without updating $1c00
+			beq StepDone		//This was the last half step precalc, leave Stepper Loop without updating $1c00
 			sta $1c00
 
 			dey
@@ -1016,7 +1016,7 @@ StepWait:	bit $1c05
 			cpy #$00
 			bne StepTmr
 
-			stx NewTrackFlag	//Set New Track flag - we are on a new track - determines behavior if no sync mark is found (assume track error)
+StepDone:	stx NewTrackFlag	//Set New Track flag - we are on a new track - determines behavior if no sync mark is found (assume track error)
 								//Any positive non-zero value will work, e.g. track number (1-40)
 
 StoreTrack:	stx cT
@@ -1294,7 +1294,7 @@ CCLoop:		pla					//=lda $0100,y
 			tya					//A=#$00 - Bundle #$00 to be loaded
 			jmp CheckDir		//Load 1st Dir Sector and then first Bundle, Y=A=#$00
 
-.text "SPARKLE 3.2 BY OMG"
+.text "SPARKLE 3.3 BY OMG"
 
 CD:
 }

@@ -8,7 +8,7 @@
 //  VERSION INFO
 //----------------------------------
 
-constexpr int FullDate = 20250809;
+constexpr int FullDate = 20250810;
 
 constexpr int VersionMajor = 3;
 constexpr int VersionMinor = 3;
@@ -5682,6 +5682,11 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
     Drive[VI + 3] = VersionBuild >> 16;
     Drive[VI + 14] = (VersionBuild & 0xff00) >> 8;
     Drive[VI + 16] = VersionBuild & 0xff;
+
+    Drive[0x5fc] = (VersionMajor << 4) + VersionMinor;
+    Drive[0x5fd] = VersionBuild >> 16;
+    Drive[0x5fe] = (VersionBuild & 0xff00) >> 8;
+    Drive[0x5ff] = VersionBuild & 0xff;
 
     //-------------------
     //   ProductID
