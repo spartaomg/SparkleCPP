@@ -447,106 +447,107 @@ RBLoop:		cpy $1800			//7f-81	4
 //0391
 .byte		$8d
 
-
 //--------------------------------------
-//		Track correction		//A = actual track, X = wanted track
+//		Track correction		//A = Actual track
 //--------------------------------------
 //0392
-CorrTrack:	sta cT				//92 93
-			txa					//94
-			sec					//95
-			sbc cT				//96 97
+CorrTrack:	ldx cT				//92 93	X = Requested track	
+			sta cT				//94 95
+			txa					//96
+			sec					//97
 			
 			nop	#$85			//98 99	Skipping TabD value (OPC_STA_ZP)
 
-			ldy #$02			//9a 9b
-			sty ReturnFlag		//9c 9d
-			bcs SkipStepDn		//9e 9f
-			eor #$ff			//a0 a1
-			adc #$01			//a2 a3
-			iny					//a4
-			sty StepDir			//a5 a6	Only store stepper direction DOWN/OUTWARD here (Y=#$03)
-
-SkipStepDn:	ldy #CSV			//a7 a8
+			sbc cT				//9a 9b
+			ldy #$02			//9c 9d
+			sty ReturnFlag		//9e 9f
+			bcs SkipStepDn		//a0 a1
+			eor #$ff			//a2 a3
+			adc #$01			//a4 a5
+			iny					//a6
+			sty StepDir			//a7 a8	Only store stepper direction DOWN/OUTWARD here (Y=#$03)
 
 	.byte	$80					//a9	TabD value (OPC_NOP_IMM)
 	.byte	$ea					//aa
 
-			sty VerifCtr		//ab ac	Verify track after head movement
-			asl					//ad
-			tay					//ae	Y=Number of half-track changes, never 0
-			bne *+3				//af b0
+SkipStepDn:	asl					//ab
+			tay					//ac
+			jsr StepTmr			//ad-af	Move head to track and update bitrate (also stores new Track number in cT and calculates SCtr but doesn't store it)
+			
+			nop #$89			//b0 b1
 
-	.byte	$89					//b1	Skipping TabD value (OPC_NOP_IMM)
+			sta $1c00			//b2-b4	Needed to update bitrate!!!
+			
+			ldy #CSV			//b5 b6
+			bne *+3				//b7 b8
+	
+	.byte	$81					//b9
 
-			jsr StepTmr			//b2-b4	Move head to track and update bitrate (also stores new Track number in cT and calculates SCtr but doesn't store it)
-			sta $1c00			//b5-b7	Needed to update bitrate!!!
-
-			nop #$81			//b8 b9 Skipping TabD value
+			sty VerifCtr		//ba bb	Verify track after head movement			
 
 //--------------------------------------
 //		Fetch Code
 //--------------------------------------
-//03ba
+//03bc
 FT:
 Fetch:
 FetchHeader:
-			ldy #<HeaderJmp		//ba bb	Checksum verification after GCR loop will jump to Header Code
+			ldy #<HeaderJmp		//bc bd	Checksum verification after GCR loop will jump to Header Code
 FetchSHeader:
-			lda #$52			//bc bd	First 8 bits of Header ID (01010010)
-			ldx #$04			//be bf	4 bytes to stack
-			txs					//c0	Header: $0104,$0103..$0101
-			bne Presync			//c1 c2 Skip Data Block fetch
+			lda #$52			//be bf	First 8 bits of Header ID (01010010)
+			ldx #$04			//c0 c1	4 bytes to stack
+			txs					//c2	Header: $0104,$0103..$0101
+			bne Presync			//c3 c4 Skip Data Block fetch
 				
-FetchData:	ldy #<DataJmp		//c3 c4	Checksum verification after GCR loop will jump to Data Code
-			lda #$55			//c5 c6	First 8 bits of Data ID (01010101)
-								//SP = $00 here (LDX #$00; TXS not needed)
-			bne Presync			//c7 c8
+FetchData:	ldy #<DataJmp		//c5 c6	Checksum verification after GCR loop will jump to Data Code - SP = $00 here (LDX #$00; TXS not needed)
+			bne *+3				//c7 c8
+
 	.byte	$86					//c9	Skipping TabD value
 
-Presync:	sty.z ModJmp+1		//ca cb
-			ldy #$00			//cc cd
-			sty.z CSum+1		//ce cf
+			lda #$55			//ca cb	First 8 bits of Data ID (01010101)
 
-			ldx #$8c			//d0 d1 using TabD value in X for sync loop countdown
-			
+Presync:	sty.z ModJmp+1		//cc cd
+			ldy #$00			//ce cf		
+
+			ldx #$8c			//d0 d1 using TabD value in X for sync loop countdown						
+
 			sta (ZP0102),y		//d2 d3
-						
 			jsr Sync			//d4-d6	JSR overwrites $0103-$0104 or $01ff-$0100, JSR returns either here or SP gets reset to $04 after Error handling
 			clv					//d7
 			
 			nop #$84			//d8 d9 Skipping TabD value
 			
 			sta $0103			//da-dc	$103 must be set AFTER JSR, Y can no longer be used here
-
 			nop $1c01			//dd-df
-			
-			bvc *				//e0 e1|00-01
-			cmp $1c01			//e2-e4|05	Read1 = AAAAABBB -> H: 01010|010(01), D: 01010|101(11)
-			bne ReFetch			//e5 e6|07
-			ror					//e7   |09	H: 10101001|0, D: 10101010|1 (C=1 before ROR)
-			
-			nop #$82			//e8 e9|11 Skipping TabD value (OPC_NOP_IMM)
-			
-			ror					//ea   |13	H: 01010100,   D: 11010101
-			ldx #$c0			//eb ec|15
+			ldx #$c0			//e0 e1			
 
-			sax AXS+1			//ed-ef|19	H: 01000000,   D: 1100000
-			clv					//f0   |21
+			bvc *				//e2 e3|00-01
+			cmp $1c01			//e4-e6|05	Read1 = AAAAABBB -> H: 01010|010(01), D: 01010|101(11)
+			bne ReFetch			//e7 e8|07
+			
+	.byte	$82					//e9   |09 Skipping TabD value (OPC_NOP_IMM)
+	.byte	$ea					//ea   |
 
-	.byte	$88					//f1   |23	TabD (DEY) - no effect, Y is not used here
+			ror					//eb   |11	H: 10101001|0, D: 10101010|1 (C=1 before ROR)
+			ror					//ec   |13	H: 01010100,   D: 11010101
+
+			sax AXS+1			//ed-ef|17	H: 01000000,   D: 11000000
+			clv					//f0   |19
+
+	.byte	$88					//f1   |21	TabD (DEY) - no effect, Y is not used here
 
 			bvc *				//f2 f3|00-01
 			lda $1c01			//f4-f6|05*	Read2 = BBCCCCCCD, H: 01CCCCCD, D: 11CCCCCD
 AXS:		axs #$00			//f7 f8|07
 			bne ReFetch			//f9 fa|09	X = BB000000 - X1000000, if X = 0 then proper block type is fetched
 			ldx #$3e			//fb fc|11
-			sax.z tC+1			//fe ff|14
-			lsr					//00   |16
-			ldx ZP00			//01 02|19
-			stx NewTrackFlag	//03 04|22	Clear New Track flag after proper block type is verified
-			lda #$7f			//05 06|24	Z=0, needed for BNE in GCR loop
-			jmp GCREntry		//07-08|27	Same cycle count as in GCR loop before BNE, Y can be any value here
+			sax.z tC+1			//fd fe|14
+			lsr					//ff   |16
+			ldx ZP00			//00 01|19
+			stx.z CSum+1		//02 03|22
+			lda #$7f			//04 05|24	Z=0, needed for BNE in GCR loop
+			jmp GCREntry		//06-08|27	Same cycle count as in GCR loop before BNE, Y can be any value here
+
 			
 //--------------------------------------
 //		Mark wanted sectors
@@ -668,16 +669,17 @@ Header:		bne FetchError		//5b 5c	33	Checksum mismatch
 ChkVCtr:	ldy VerifCtr		//		139
 			bne ToFetchData		//		141	Always fetch sector data if we are verifying the checksum
 
-			ldy cS				//		144
-			ldx WList,y			//		148	Otherwise, only fetch sector data if this is a wanted sector
-BplFetch:	bpl ReFetch			//		150	Sector is not on wanted list -> fetch next sector header
+			sty NewTrackFlag	//		144	Clear NewTrackFlag only after header block is successfully fetched and verified
+
+			ldy cS				//		147
+			ldx WList,y			//		151	Otherwise, only fetch sector data if this is a wanted sector
+BplFetch:	bpl ReFetch			//		153	Sector is not on wanted list -> fetch next sector header
 ToFetchData:
-			jmp FetchData		//		153	Sector is on wanted list -> fetch data
+			jmp FetchData		//		156	Sector is on wanted list -> fetch data
 
 //--------------------------------------
 
 ToCorrTrack:
-			ldx cT				//Wrong actual track - go to requested track
 			jmp CorrTrack		//Y can be anything
 
 //--------------------------------------
