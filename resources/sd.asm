@@ -707,13 +707,7 @@ CheckIDs:	cmp cT
 //--------------------------------------
 
 FetchError:	dec ErrCtr
-			beq BRTCorr			//Execute bitrate and track correction code if error counter reaches 0
-			
-CheckNTF:	lda NewTrackFlag	//Flag is cleared if at least 1 sync mark is found on the track AND correct block type is verified
-			beq BplFetch		//In which case bitrate and track correction code will not be executed
-
-								//We may get here from the sync loop if no sync mark was found on a new track (sync error)
-								//Or if sync mark was detected but there was an error in the fetched data (fetch error)
+			bne BplFetch		//Execute bitrate and track correction code if error counter reaches $ff, otherwise refetch everything via ReFetch vector
 
 BRTCorr:	lda $1c00			//Based on Krill's bitrate and track correction code
 			and #$63
@@ -739,11 +733,15 @@ Data:		ldx cT
 			cpx #$12
 			bcs SkipCSLoop  
 
-			ldy #$fc			//This loop takes 1198 cycles (46 bytes passing under R/W head in zone 3)
+			ldy #$7e			//CSLoop takes 851 cycles (33 bytes passing under R/W head in zone 3)
+			bne CSLoopEntry
 CSLoop:		eor $0102,y
 			eor $0103,y
 			dey
 			dey
+CSLoopEntry:
+			eor $0180,y
+			eor $0181,y
 			dey
 			dey
 			bne CSLoop
@@ -755,7 +753,7 @@ SkipCSLoop:	tay
 			sta ErrCtr			//Reset Error Counter (only if both header and data are fetched correctly)
 
 			lsr VerifCtr		//Checksum Verification Counter
-			bcs BplFetch		//If counter<>0, go to verification loop
+			bcs BplFetch		//If C=1, go to verification loop
 
 RegBlockRet:
 			txa
@@ -785,9 +783,11 @@ RegBlockRet:
 NoSync:		dey					//2
 			bne Sync			//3
 			dex					//2
-			beq CheckNTF		//2	Sync timeout (2 full disk rotations without a sync mark)
+			bne Sync			//3	Sync timeout (2 full disk rotations without a sync mark)
+			ldx NewTrackFlag	//	NT Flag is cleared if at least 1 block header is successfully loaded (after block verification)
+			bne BRTCorr			//	In which case bitrate and track correction code will NOT be executed
 Sync:		bit $1c00			//4
-			bmi NoSync			//3	Sync loop: 140 * 3075 = 430500 cycles (little over 2 full disk rotations before sync timeout)
+			bmi NoSync			//3	Sync loop: (12 * 256 + 5) * $8c = 430780 cycles (little over 2 full disk rotations before sync timeout)
 			rts
 
 //--------------------------------------
@@ -892,7 +892,7 @@ CheckDir:	asl
 			beq DirFetchReturn	//Is the needed Dir block fetched?
 
 			sta DirSector		//No, store new Dir block index and fetch directory sector
-			sta LastS			//Also store it in LastS to be fetched
+			//sta LastS			//Also store it in LastS to be fetched
 			bne FetchDir		//Fetch directory sector, Y=#$00 here
 
 DirFetchReturn:
@@ -935,12 +935,14 @@ NewDiskID:	sta NextID			//Next Disk's ID for flip detection - we store DiskID x 
 //		Fetching BAM OR Dir Block
 //----------------------------------------------
 
-FetchBAM:	sty LastS			//Y=#$00
+FetchBAM:	//sty LastS			//Y=#$00
+			tya
 FetchDir:	jsr ClearList		//C=1 after this
-			ldx LastS
+			//ldx LastS
+			tax
 			dec WList,x			//Mark sector as wanted
 			lda #$12			//Both FetchBAM and FetchDir need track 18
-			sta LastT
+			//sta LastT
 			sta cT
 GotoTrack:	iny
 			sty BlockCtr
