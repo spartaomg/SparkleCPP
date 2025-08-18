@@ -182,7 +182,7 @@
 //	v23 - using the track error correction code to change tracks in case of bundle-index based loader calls
 //		  to skip track read error and bitrate correction code if the disk is removed between loader calls
 //		  Sparkle will create a "wrong track" condition to activate track correction if track change is needed
-//		- improved read error handling (wrong/bad helf/track vs. removed disk)
+//		- improved read error handling (wrong/bad half/track vs. removed disk)
 //		- re-added optimized checksum verification for zone 3
 //
 //----------------------------------------------------------------------------------------
