@@ -549,7 +549,6 @@ AXS:		axs #$00			//f7 f8|07
 			stx.z CSum+1		//02 03|22
 			lda #$7f			//04 05|24	Z=0, needed for BNE in GCR loop
 			jmp GCREntry		//06-08|27	Same cycle count as in GCR loop before BNE, Y can be any value here
-
 			
 //--------------------------------------
 //		Mark wanted sectors
@@ -1092,7 +1091,7 @@ StoreBR:	sty SCtr			//Reset Sector Counter, but only if this is not a random bun
 StartTr:	ldy #$00			//transfer loop counter
 			ldx #Msk			//bit mask for SAX = $ef
 			lda #ready			//A=#$08, ATN=0, AA not needed
-TrSeq:		sta (<ZP1800-Msk,x)
+TrSeq:		sta (ZP1800),y
 
 //--------------------------------------
 //		Transfer loop
@@ -1153,13 +1152,12 @@ ChkPt:		bpl Loop			//17-19
 TrSeqRet:	lda #busy+1			//19,20			use #busy + 1 here (AA + DI = $11) for SAX Loop+2 below ($11 & $EF = $01)
 			bit $1800			//21-24		 	Last bitpair received by C64?
 			bmi *-3				//25,26
-			sta (<ZP1800-Msk,x)	//27-32			Transfer finished, send Busy Signal to C64
+			sta $1800			//27-30			Transfer finished, send Busy Signal to C64 (sta (<ZP1800-Msk,x) can be used here if needed)
 
 			sax Loop+2			//A&X=$01, restore transfer loop
 
-			lda (<ZP1800-Msk,x)	//Make sure C64 pulls ATN before continuing
-			bpl *-2				//Without this the next ATN check may fall through
-								//resulting in early reset of the drive
+			bit $1800			//Make sure C64 pulls ATN before continuing (lda (<ZP1800-Msk,x); bpl *-2 can be used here if needed)
+			bpl *-3				//Without this the next ATN check may fall through resulting in early reset of the drive
 			
 			jsr ToggleLED		//Transfer complete - turn LED off, leave motor on
 
