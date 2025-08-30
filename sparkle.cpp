@@ -4,11 +4,13 @@
 
 //#define TESTDISK
 
+//#define HEXBUNDLEIDX
+
 //----------------------------------
 //  VERSION INFO
 //----------------------------------
 
-constexpr int FullDate = 20250818;
+constexpr int FullDate = 20250830;
 
 constexpr int VersionMajor = 3;
 constexpr int VersionMinor = 3;
@@ -2036,8 +2038,12 @@ bool CompressBundle()             //NEEDS PackFile() and CloseFile()
     {
         cout << "\t\t\t\t  Original\tCompressed\t Ratio\t\t T:S  -  T:S\n";
     }
-
+#ifdef HEXBUNDLEIDX
+    cout << "Compressing   bundle #$" << ((BundleNo - 1) < 16 ? "0" : "") << hex << (BundleNo - 1) << dec << "...\t";
+#else
     cout << "Compressing   bundle #" << (BundleNo - 1) << "...\t";
+#endif // HEXBUNDLEIDX
+
 
     for (size_t i = 0; i < Prgs.size(); i++)
     {
@@ -4969,7 +4975,13 @@ bool InjectCustomCodePlugin(int PluginIdx)
     }
 
     cout << "---------------------------------------------------------------------------------------------\n";
+
+#ifdef HEXBUNDLEIDX
+    cout << "Custom Plugin bundle #$" << ((BundleNo + PluginIdx) < 16 ? "0" : "") << hex << (BundleNo + PluginIdx) << dec << "...\t\t    ->    2 blocks\t\t\t";
+#else
     cout << "Custom Plugin bundle #" << (BundleNo + PluginIdx) << "...\t\t    ->    2 blocks\t\t\t";
+#endif // HEXBUNDLEIDX
+    
     cout << ((FirstT < 10) ? "0" : "") << FirstT << ":" << ((FirstS < 10) ? "0" : "") << FirstS << " - " << ((LastT < 10) ? "0" : "") << LastT << ":" << ((LastS < 10) ? "0" : "") << LastS << strDirIndex <<"\n";
 
     //Copy first block of custom code plugin to disk (reverse byte order)
@@ -5230,7 +5242,13 @@ bool InjectSaverPlugin(int PluginIdx)
         strDirIndex = "\tDir Index: $" + ConvertIntToHextString(DirIdx, 2);
     }
     cout << "---------------------------------------------------------------------------------------------\n";
+
+#ifdef HEXBUNDLEIDX
+    cout << "Saver Plugin  bundle #$" << ((BundleNo + PluginIdx) < 16 ? "0" : "") << hex << (BundleNo + PluginIdx) << dec << "...\t\t    ->    2 blocks\t\t\t";
+#else
     cout << "Saver Plugin  bundle #" << (BundleNo + PluginIdx) << "...\t\t    ->    2 blocks\t\t\t";
+#endif // HEXBUNDLEIDX
+
     cout << ((FirstT < 10) ? "0" : "") << FirstT << ":" << ((FirstS < 10) ? "0" : "") << FirstS << " - " << ((LastT < 10) ? "0" : "") << LastT << ":" << ((LastS < 10) ? "0" : "") << LastS << strDirIndex << "\n";
 
     //Copy first block of saver plugin to disk (reverse byte order)
@@ -5351,7 +5369,12 @@ bool InjectSaverPlugin(int PluginIdx)
         strDirIndex = "\tDir Index: $" + ConvertIntToHextString(DirIdx, 2);
     }
 
+#ifdef HEXBUNDLEIDX
+    cout << "Hi-score File bundle #$" << ((BundleNo + HSFileIdx) < 16 ? "0" : "") << hex << (BundleNo + HSFileIdx) << dec << "...\t\t    ->   " << (HSBlocks < 10 ? " " : "") << HSBlocks << " block" << ((HSBlocks == 1) ? " \t\t\t" : "s\t\t\t");
+#else
     cout << "Hi-score File bundle #" << (BundleNo + HSFileIdx) << "...\t\t    ->   " << (HSBlocks < 10 ? " " : "") << HSBlocks << " block" << ((HSBlocks == 1) ? " \t\t\t" : "s\t\t\t");
+#endif // HEXBUNDLEIDX
+
     cout << ((FirstT < 10) ? "0" : "") << FirstT << ":" << ((FirstS < 10) ? "0" : "") << FirstS << " - " << ((LastT < 10) ? "0" : "") << LastT << ":" << ((LastS < 10) ? "0" : "") << LastS << strDirIndex << "\n";
 
     DeleteBit(CT, CS);

@@ -514,29 +514,26 @@ Presync:	sty.z ModJmp+1		//cc cd
 			ldx #$8c			//d0 d1 using TabD value in X for sync loop countdown						
 
 			sta (ZP0102),y		//d2 d3
-			jsr Sync			//d4-d6	JSR overwrites $0103-$0104 or $01ff-$0100, JSR returns either here or SP gets reset to $04 after Error handling
+			jsr Sync			//d4-d6	JSR clobbers $0103-$0104 or $01ff-$0100 and either returns either here or SP gets reset to $04 after Error handling
 			clv					//d7
 			
 			nop #$84			//d8 d9 Skipping TabD value
 			
 			sta $0103			//da-dc	$103 must be set AFTER JSR, Y can no longer be used here
 			nop $1c01			//dd-df
-			ldx #$c0			//e0 e1			
 
-			bvc *				//e2 e3|00-01
-			cmp $1c01			//e4-e6|05	Read1 = AAAAABBB -> H: 01010|010(01), D: 01010|101(11)
-			bne ReFetch			//e7 e8|07
-			
-	.byte	$82					//e9   |09 Skipping TabD value (OPC_NOP_IMM)
-	.byte	$ea					//ea   |
+			bvc *				//e0 e1|00-01
+			cmp $1c01			//e2-e4|05	Read1 = AAAAABBB -> H: 01010|010(01), D: 01010|101(11)
+			bne ReFetch			//e5 e6|07
 
-			ror					//eb   |11	H: 10101001|0, D: 10101010|1 (C=1 before ROR)
-			ror					//ec   |13	H: 01010100,   D: 11010101
+			ror					//e7   |09	H: 10101001|0, D: 10101010|1 (C=1 before ROR)
+			arr #$82			//e8 e9|11	H: 01000000,   D: 11000001 - PLUS Skipping TabD value (OPC_NOP_IMM - may be unstable)
 
-			sax AXS+1			//ed-ef|17	H: 01000000,   D: 11000000
-			clv					//f0   |19
+			ldx #$c0			//ea eb|13
+			sax AXS+1			//ec-ee|17	H: 01000000,   D: 11000000
+			clv					//ef   |19
 
-	.byte	$88					//f1   |21	TabD (DEY) - no effect, Y is not used here
+			nop #$88			//f0 f1|21	Skipping TabD value (DEY) - would have no effect, Y is not used here, but this saves 2 cycles
 
 			bvc *				//f2 f3|00-01
 			lda $1c01			//f4-f6|05*	Read2 = BBCCCCCCD, H: 01CCCCCD, D: 11CCCCCD
@@ -1149,7 +1146,7 @@ ChkPt:		bpl Loop			//17-19
 
 //--------------------------------------
 
-TrSeqRet:	lda #busy+1			//19,20			use #busy + 1 here (AA + DI = $11) for SAX Loop+2 below ($11 & $EF = $01)
+TrSeqRet:	lda #busy+1			//19,20			Use #busy + 1 here (AA + DI = $11) for SAX Loop+2 below ($11 & $EF = $01)
 			bit $1800			//21-24		 	Last bitpair received by C64?
 			bmi *-3				//25,26
 			sta $1800			//27-30			Transfer finished, send Busy Signal to C64 (sta (<ZP1800-Msk,x) can be used here if needed)
