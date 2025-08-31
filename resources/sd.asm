@@ -515,11 +515,11 @@ FetchData:	ldy #<DataJmp		//c5 c6	Checksum verification after GCR loop will jump
 			lda #$55			//ca cb	First 8 bits of Data ID (01010101)
 
 Presync:	sty.z ModJmp+1		//cc cd
-			ldy #$00			//ce cf		
+			ldx #$83			//ce cf		
 
-			ldx #$8c			//d0 d1 using TabD value in X for sync loop countdown						
+			ldy #$8c			//d0 d1 using TabD value in Y for sync loop countdown						
 
-			sta (ZP0102),y		//d2 d3
+			sta.z (ZP0102-$83,x)//d2 d3
 			jsr Sync			//d4-d6	JSR clobbers $0103-$0104 or $01ff-$0100 and either returns either here or SP gets reset to $04 after Error handling
 			clv					//d7
 			
@@ -670,8 +670,8 @@ Header:		bne FetchError		//5b 5c	33	Checksum mismatch
 			cmp cT				//		134 Everything else checked out, check if we are on the requested track
 			bne ToCorrTrack		//		136
 						
-			ldy #$00			//		138
-			sty NewTrackFlag	//		142	Clear NewTrackFlag only after header block is successfully fetched and verified
+			tsx					//		138	SP=0 here
+			stx NewTrackFlag	//		142	Clear NewTrackFlag only after header block is successfully fetched and verified
 
 			ldy cS				//		145
 			ldx WList,y			//		149	Otherwise, only fetch sector data if this is a wanted sector
@@ -712,7 +712,8 @@ FetchError:	dec ErrCtr
 			bne BplFetch		//Execute bitrate and track correction code if error counter reaches $ff, otherwise refetch everything via ReFetch vector
 
 BRTCorr:	lda $1c00			//Based on Krill's bitrate and track correction code
-			anc #$63			//This code is never executed on the Ultimate, ANC should be OK
+			and #$63
+			clc					//Could remove this and use ANC instead of AND (this code is never executed on the Ultimate)
 			adc #$e0			//Cycle through bitrates %11 -> %10 -> %01 -> %00 -> %11
 			adc #$03			//Half track step down on bitrate wrap around
 			ora #$0c			//Motor and LED on
@@ -796,7 +797,7 @@ NoSync:		dey					//2
 			ldx NewTrackFlag	//	NT Flag is cleared if at least 1 block header is successfully loaded (after block verification)
 			bne BRTCorr			//	In which case bitrate and track correction code will NOT be executed
 Sync:		bit $1c00			//4
-			bmi NoSync			//3	Sync loop: (12 * 256 + 5) * $8c = 430780 cycles (little over 2 full disk rotations before sync timeout)
+			bmi NoSync			//3	Sync loop: ((12 * 256 + 5) * $82) + (12 * 140 + 5) = 401695 cycles (a little over 2 full disk rotations before sync timeout)
 			rts
 
 //--------------------------------------
