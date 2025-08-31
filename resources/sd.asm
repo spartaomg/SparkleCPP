@@ -331,7 +331,8 @@
 .label SF			=$0139		//SS drive code Fetch vector
 .label SH			=$013e		//SS drive code Got Header vector
 
-.label ZPCode		=$0600
+.label InitCodeLoc	=$0146		//$0146 - $01b9 is unused by the drive - we load our init code here
+.label ZPCode		=$0700		//ZP code is initially loaded to $0700-$07ff
 
 .label OPC_ALR		=$4b
 .label OPC_BNE		=$d0
@@ -453,39 +454,44 @@ RBLoop:		cpy $1800			//7f-81	4
 //		Track correction		//A = Actual track
 //--------------------------------------
 //0392
-CorrTrack:	ldx cT				//92 93	X = Requested track	
-			sta cT				//94 95
-			txa					//96
-			sec					//97
-			
-			nop	#$85			//98 99	Skipping TabD value (OPC_STA_ZP)
+CorrTrack:	ldx cT				//92 93	X = Requested track			
+			sec					//94
+			ldy #$02			//95 96
+			sty ReturnFlag		//97 98
+			sta cT				//99 9a TabD value ($85 = OPC_STA_ZP)	
+			txa					//9b6
+			sbc cT				//9c 9d
+			bcs SkipStepDn		//9e 9f
+			eor #$ff			//a0 a1
+			adc #$01			//a2 a3
+			iny					//a4
+			sty StepDir			//a5 a6	Only store stepper direction DOWN/OUTWARD here (Y=#$03)
 
-			sbc cT				//9a 9b
-			ldy #$02			//9c 9d
-			sty ReturnFlag		//9e 9f
-			bcs SkipStepDn		//a0 a1
-			eor #$ff			//a2 a3
-			adc #$01			//a4 a5
-			iny					//a6
-			sty StepDir			//a7 a8	Only store stepper direction DOWN/OUTWARD here (Y=#$03)
+SkipStepDn:	asl					//a7
+			tay					//a8
 
 	.byte	$80					//a9	TabD value (OPC_NOP_IMM)
-	.byte	$ea					//aa
+	.byte	XX3					//aa
 
-SkipStepDn:	asl					//ab
-			tay					//ac
-			jsr StepTmr			//ad-af	Move head to track and update bitrate (also stores new Track number in cT and calculates SCtr but doesn't store it)
+			jsr StepTmr			//ab-ad	Move head to track and update bitrate (also stores new Track number in cT and calculates SCtr but doesn't store it)
+			sta $1c00			//ae-b0	Needed to update bitrate!!!
 			
-			nop #$89			//b0 b1
+	.byte	$89					//b1
+	.byte	XX4					//b2
+			
+			bcs Fetch			//b3 b4
 
-			sta $1c00			//b2-b4	Needed to update bitrate!!!
-			
-			ldy #CSV			//b5 b6
-			bne *+3				//b7 b8
+	.byte	XX1					//b5
+
+Patch0:
+	.byte	<GCRLoop0_2-(GCREntry + 2)	//b6
+	.byte	<GCRLoop0_2-(GCREntry + 2)	//b7	
+	.byte	<GCRLoop0_2-(GCREntry + 2)	//b8
 	
 	.byte	$81					//b9
-
-			sty VerifCtr		//ba bb	Verify track after head movement			
+		
+	.byte	<GCRLoop3-(GCREntry + 2)	//ba		
+	.byte	XX2					//bb
 
 //--------------------------------------
 //		Fetch Code
@@ -664,16 +670,14 @@ Header:		bne FetchError		//5b 5c	33	Checksum mismatch
 			cmp cT				//		134 Everything else checked out, check if we are on the requested track
 			bne ToCorrTrack		//		136
 						
-ChkVCtr:	ldy VerifCtr		//		139
-			bne ToFetchData		//		141	Always fetch sector data if we are verifying the checksum
+			ldy #$00			//		138
+			sty NewTrackFlag	//		142	Clear NewTrackFlag only after header block is successfully fetched and verified
 
-			sty NewTrackFlag	//		144	Clear NewTrackFlag only after header block is successfully fetched and verified
-
-			ldy cS				//		147
-			ldx WList,y			//		151	Otherwise, only fetch sector data if this is a wanted sector
-BplFetch:	bpl ReFetch			//		153	Sector is not on wanted list -> fetch next sector header
+			ldy cS				//		145
+			ldx WList,y			//		149	Otherwise, only fetch sector data if this is a wanted sector
+BplFetch:	bpl ReFetch			//		151	Sector is not on wanted list -> fetch next sector header
 ToFetchData:
-			jmp FetchData		//		156	Sector is on wanted list -> fetch data
+			jmp FetchData		//		154	Sector is on wanted list -> fetch data
 
 //--------------------------------------
 
@@ -686,7 +690,7 @@ ToCorrTrack:
 
 Track18:	txa					//BAM (Sector 0) or Drive Code Block 3 (Sector 16) or Dir Block (Sectors 17-18)?
 			beq FlipDtct		//X=$00 (BAM)
-ToCD:		jmp CopyCode		//Sector 16 (Block 3) - copy it from the Buffer to its place, will be changed to JMP CopyDir after Block 3 copied
+			jmp CopyDir
 
 //--------------------------------------
 //		Check Disk IDs
@@ -708,13 +712,23 @@ FetchError:	dec ErrCtr
 			bne BplFetch		//Execute bitrate and track correction code if error counter reaches $ff, otherwise refetch everything via ReFetch vector
 
 BRTCorr:	lda $1c00			//Based on Krill's bitrate and track correction code
-			and #$63
-			clc
+			anc #$63			//This code is never executed on the Ultimate, ANC should be OK
 			adc #$e0			//Cycle through bitrates %11 -> %10 -> %01 -> %00 -> %11
 			adc #$03			//Half track step down on bitrate wrap around
 			ora #$0c			//Motor and LED on
 			sta ZPSpVal			//Update Spartan step $1c00 value (with LED on)
 			jsr ToggleLD2		//Update $1c00 with LED off (LED is only on during transfer), JSR is OK here, we are discarding any fetched data on the stack
+
+			alr #$60
+			lsr
+			lsr
+			lsr
+			lsr
+			cmp #$03
+			adc #$11
+			tay
+			inc ReturnFlag
+			jsr GCRLoopPatch
 
 			lda #<ErrVal		//More than the max number of sectors per track
 			sta ErrCtr
@@ -749,9 +763,6 @@ SkipCSLoop:	tay
 			
 			lda #<ErrVal
 			sta ErrCtr			//Reset Error Counter (only if both header and data are fetched correctly)
-
-			lsr VerifCtr		//Checksum Verification Counter
-			bcs BplFetch		//If C=1, go to verification loop
 
 RegBlockRet:
 			txa
@@ -847,10 +858,8 @@ DelayIn:	lda $1c05
 			dey
 			bne DelayOut
 			lda #$73			//Timer finished, turn motor off
-			sta ErrCtr			//Reset Error Counter for motor spinup - allows 5.5 full rotations in zone 3 during spin-up before Error code is triggered
 			sax $1c00
-			lda #<CSV			//Reset Checksum Verification Counter
-			sta VerifCtr		//When motor restarts, first we verify proper read
+			sta ErrCtr			//Reset Error Counter for motor spinup - allows 5.5 full rotations in zone 3 during spin-up before Error code is triggered
 			
 ChkLines:	lda $1800
 			bpl Reset			//ATN released - C64 got reset, reset the drive too
@@ -872,6 +881,7 @@ GetByte:	lda #$80			//$dd00=#$9b, $1800=#$94
 
 TrRnd:		jsr RcvByte			//OK to use stack here
 
+LoadStart:
 TrRndRet:	inx
 			beq Reset			//C64 requests drive reset
 
@@ -890,7 +900,6 @@ CheckDir:	asl
 			beq DirFetchReturn	//Is the needed Dir block fetched?
 
 			sta DirSector		//No, store new Dir block index and fetch directory sector
-			//sta LastS			//Also store it in LastS to be fetched
 			bne FetchDir		//Fetch directory sector, Y=#$00 here
 
 DirFetchReturn:
@@ -933,14 +942,11 @@ NewDiskID:	sta NextID			//Next Disk's ID for flip detection - we store DiskID x 
 //		Fetching BAM OR Dir Block
 //----------------------------------------------
 
-FetchBAM:	//sty LastS			//Y=#$00
-			tya
+FetchBAM:	tya					//Y=#$00
 FetchDir:	jsr ClearList		//C=1 after this
-			//ldx LastS
 			tax
 			dec WList,x			//Mark sector as wanted
 			lda #$12			//Both FetchBAM and FetchDir need track 18
-			//sta LastT
 			sta cT
 GotoTrack:	iny
 			sty BlockCtr
@@ -1060,23 +1066,20 @@ RateDone:	sty MaxNumSct2+1
 
 			lsr ReturnFlag
 			bcs RTS
+			
+			sta ZPSpVal			//Store correct bitrate for Spartan step
 
 //--------------------------------------
 //		GCR loop patch
 //--------------------------------------
 
-			ldx #<GCRLoop3-(GCREntry+2)
-			cpy #$15			//Y=sector count (17, 18, 19, 21 for zones 0, 1, 2, 3, respectively)
-			beq *+4
-			ldx #<GCRLoop0_2-(GCREntry+2)
-			stx.z GCREntry+1	//GCR Loop patch for zones 0-2
-
-			ldx Patch1-17,y
+GCRLoopPatch:
+			ldx Patch0-$11,y
+			stx.z GCREntry + 1
+			ldx Patch1-$11,y
 			stx.z LoopMod2
-			ldx Patch2-17,y
+			ldx Patch2-$11,y
 			stx.z LoopMod2+1
-			
-			sta ZPSpVal			//Store correct bitrate for Spartan step
 			
 			lsr ReturnFlag
 			bcs RTS
@@ -1214,27 +1217,55 @@ EndOfDriveCode:
 
 *=$2800 "Installer"
 
-.pseudopc $0700 {
+.pseudopc $0600 {
 
 //--------------------------------------
 //		Initialization
 //--------------------------------------
 
-CodeStart:	ldx #$06
+CodeStart:	ldx #$04
 			lda #$12			//Track 18
-			ldy #$0e			//Sectors 14,13,12,11
+			ldy #$0e			//Sectors 14 (b4), 13 (b2), 12 (b1), 11 (b0)
+			sta $0e
+			sty $0f
+			dey
 !:			sta $06,x
 			sty $07,x
 			dey
 			dex
 			dex
 			bpl !-
-			dec $f9				//Buffer pointer, it was #$04 before DEC
-!:			jsr $d586			//Load 4 blocks to buffers 03,02,01,00
+			inc $f9				//Buffer pointer: -> $04
+!:			jsr $d586			//Load block to buffer $04 ($0700)
+			and #$fe
+			bne !-				//Error? -> try again
+			dec $f9				//
+			dec $f9				//Buffer pointer: -> $02 -> $01 -> $00
+!:			jsr $d586			//Load 3 blocks to buffers 02 ($0500), 01 ($0400), 00 ($0300)
 			and #$fe
 			bne !-				//Error? -> try again
 			dec $f9
 			bpl !-
+
+			ldx #<InitCodeEnd-InitCode - 1
+!:			lda InitCode,x
+			sta InitCodeLoc,x
+			dex
+			bpl !-
+
+			jmp InitCodeLoc
+
+//--------------------------------------
+
+InitCode:	lda #$12
+			sta $0c
+			lda #$10			//Sector 16 to buffer 3
+			sta $0d
+			lda #$03
+			sta $f9
+!:			jsr $d586			//Load block 3 (sector 16) to buffer 3
+			and #$fe
+			bne !-				//Error? -> try again
 
 			sei
 
@@ -1243,7 +1274,7 @@ CodeStart:	ldx #$06
 //--------------------------------------
 
 			ldx #$00
-ZPCopyLoop:	lda ZPCode,x			//Copy Tables C, E, F and GCR Loop from $0600 to ZP
+ZPCopyLoop:	lda ZPCode,x		//Copy Tables C, E, F and GCR Loop from $0600 to ZP
 			sta $00,x
 			inx
 			bne ZPCopyLoop
@@ -1277,23 +1308,10 @@ ZPCopyLoop:	lda ZPCode,x			//Copy Tables C, E, F and GCR Loop from $0600 to ZP
 			lda $180d			//Acknowledge pending interrupts
 			lda $1c0d
 
-			jmp Fetch			//Fetching block 3 (track 18, sector 16) WList+$10=#$ff, WantedCtr=1
-								//A, X, Y can be anything here
-//--------------------------------------
-//		Copy block 3 to $0600
-//--------------------------------------
+			txa					//Bundle index #$00
+			jmp LoadStart		//Load first bundle on disk (dir sector will be also fetched)
 
-CopyCode:
-CCLoop:		pla					//=lda $0100,y
-			iny					//Y=00 at start
-			sta $0600,y			//Block 3 is EOR transformed and rearranged, just copy it
-			bne CCLoop
-			lda #<CopyDir		//Change JMP CopyCode to JMP CopyDir
-			sta ToCD+1
-			lda #>CopyDir
-			sta ToCD+2
-			tya					//A=#$00 - Bundle #$00 to be loaded
-			jmp CheckDir		//Load 1st Dir Sector and then first Bundle, Y=A=#$00
+InitCodeEnd:
 
 .text "SPARKLE 3.3 BY OMG"
 
@@ -1315,7 +1333,7 @@ CD:
 .byte			$70,$1e,$f0,$1f,$e0,$17,$00,CSV,$30,$1a,$b0,$1b,$a0,$13	//1x
 .byte	$01,$00,$14,$00,$d0,$1d,$c0,$15,$01,$00,$00,$10,$90,$19,$80,$11	//2x
 .byte	$7f,$76,$60,$16,$50,$1c,$40,$14,$76,$7f,$20,$12,$10,$18,$00,$00	//3x	Wanted List $3e-$52 (Sector 16 = #$ff)
-.byte	$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$ff,$00	//4x	(0) unfetched, (+) fetched, (-) wanted
+.byte	$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00	//4x	(0) unfetched, (+) fetched, (-) wanted
 .byte	$00,$00,$00,$0e,$80,$0f,XX1,$07,$00
 .byte										<ILTab-1
 .byte											>ILTab-1

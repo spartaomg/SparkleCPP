@@ -216,10 +216,10 @@ Cmd:
 
 .byte	'M','-','E',$05,$02			//-0204 Command buffer: $0200-$0228
 			
-!:			jsr $c647				//-0207 always start on track 18 by loading BAM - this will also initialize ZP variables (disk ID, current track)...
+!:			jsr $c647				//-0207 always start on track 18 by loading BAM - this will also initialize ZP variables (disk ID, current track)
 			bne !-					//-0209 if error then try again
-			lda #$04				//-020b
-			sta $f9					//-020d buffer #4
+			lda #$03				//-020b
+			sta $f9					//-020d buffer #3
 			ldx #$0f				//-020f
 			stx $81					//-0211
 			inx						//-0212
@@ -227,11 +227,11 @@ Cmd:
 			and #$fe				//-0217
 			bne !-					//-0219 if error then start over
 			lda #$12				//-021b
-			sta $0e					//-021d success, back to track 18
-!:			jsr $d586				//-0220 load track 18 sector 15 (init code) to buffer #4
+			sta $0c					//-021d success, back to track 18
+!:			jsr $d586				//-0220 load track 18 sector 15 (init code) to buffer #3 ($0600)
 			and #$fe				//-0222
 			bne !-					//-0224 if error then try block again
-			jmp $0700				//-0227
+			jmp $0600				//-0227
 CmdEnd:
 
 //-----------------------------------------------------------------------------------

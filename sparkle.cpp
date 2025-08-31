@@ -10,7 +10,7 @@
 //  VERSION INFO
 //----------------------------------
 
-constexpr int FullDate = 20250830;
+constexpr int FullDate = 20250831;
 
 constexpr int VersionMajor = 3;
 constexpr int VersionMinor = 3;
@@ -5684,15 +5684,16 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
     }
 
     unsigned char B3[256]{};
-    int B = 0;
+    //int B = 0;
 
     //Resort and EOR transform Block 3
     for (int i = 0; i < 256; i++)
     {
-        B3[B] = EORtransform(Drive[(256 * 3) + i]);
-        B--;
-        if (B < 0)
-            B += 256;
+        B3[i] = Drive[(256 * 3) + i];
+        //B3[B] = EORtransform(Drive[(256 * 3) + i]);
+        //B--;
+        //if (B < 0)
+            //B += 256;
     }
 
     //-------------------
