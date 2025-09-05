@@ -71,7 +71,7 @@
 //		  new 16-byte H2STab moved from $0200 to $0600
 //		- $0200-$02ff is now used as a secondary buffer
 //		  last block of a Bundle is fetched OOO and stored here until all other blocks are transferred
-//		  thus, the last block (which also contains the beginning of the next Bundle) is always transferred last 
+//		  thus, the last block (which also contains the beginning of the next Bundle) is always transferred last
 //		  results in even faster loading across all CPU loads
 //		- simplified wanted list preparations
 //		- end-of-disk detection
@@ -128,7 +128,7 @@
 //	v18	- new GCR loop patch
 //		  better speed tolerance in zones 0-2
 //		  zone 3 remains 282-312 at 0 wobble in VICE
-//		- checking trailing zeros after fetching data block to improve reliability 
+//		- checking trailing zeros after fetching data block to improve reliability
 //		- bits of high nibble of fetched data are no longer shuffled, only EOR'd
 //		  BitShufTab is now reduced to 4 bytes only
 //		- more free memory
@@ -454,12 +454,12 @@ RBLoop:		cpy $1800			//7f-81	4
 //		Track correction		//A = Actual track
 //--------------------------------------
 //0392
-CorrTrack:	ldx cT				//92 93	X = Requested track			
-			sec					//94
-			ldy #$02			//95 96
-			sty ReturnFlag		//97 98
-			sta cT				//99 9a TabD value ($85 = OPC_STA_ZP)	
-			txa					//9b6
+CorrTrack:	ldy #$02			//92 93
+			sty ReturnFlag		//94 95
+			sec					//96
+			ldx cT				//97 98	X = Requested track
+			sta cT				//99 9a TabD value ($85 = OPC_STA_ZP)
+			txa					//9b
 			sbc cT				//9c 9d
 			bcs SkipStepDn		//9e 9f
 			eor #$ff			//a0 a1
@@ -476,21 +476,21 @@ SkipStepDn:	asl					//a7
 			jsr StepTmr			//ab-ad	Move head to track and update bitrate (also stores new Track number in cT and calculates SCtr but doesn't store it)
 			sta $1c00			//ae-b0	Needed to update bitrate!!!
 			
-	.byte	$89					//b1
+	.byte	$89					//b1	TabD value (OPC_NOP_IMM)
 	.byte	XX4					//b2
 			
-			bcs Fetch			//b3 b4
+			bcs Fetch			//b3 b4	BRA
 
 	.byte	XX1					//b5
 
 Patch0:
 	.byte	<GCRLoop0_2-(GCREntry + 2)	//b6
-	.byte	<GCRLoop0_2-(GCREntry + 2)	//b7	
+	.byte	<GCRLoop0_2-(GCREntry + 2)	//b7
 	.byte	<GCRLoop0_2-(GCREntry + 2)	//b8
 	
-	.byte	$81					//b9
+	.byte	$81					//b9	TabD value (OPC_STA_IZX)
 		
-	.byte	<GCRLoop3-(GCREntry + 2)	//ba		
+	.byte	<GCRLoop3-(GCREntry + 2)	//ba
 	.byte	XX2					//bb
 
 //--------------------------------------
@@ -510,14 +510,14 @@ FetchSHeader:
 FetchData:	ldy #<DataJmp		//c5 c6	Checksum verification after GCR loop will jump to Data Code - SP = $00 here (LDX #$00; TXS not needed)
 			bne *+3				//c7 c8
 
-	.byte	$86					//c9	Skipping TabD value
+	.byte	$86					//c9	Skipping TabD value (OPC_STX_ZP)
 
 			lda #$55			//ca cb	First 8 bits of Data ID (01010101)
 
 Presync:	sty.z ModJmp+1		//cc cd
 			ldx #$83			//ce cf		
 
-			ldy #$8c			//d0 d1 using TabD value in Y for sync loop countdown						
+			ldy #$8c			//d0 d1 using TabD value in Y for sync loop countdown
 
 			sta.z (ZP0102-$83,x)//d2 d3
 			jsr Sync			//d4-d6	JSR clobbers $0103-$0104 or $01ff-$0100 and either returns either here or SP gets reset to $04 after Error handling
@@ -552,7 +552,7 @@ AXS:		axs #$00			//f7 f8|07
 			stx.z CSum+1		//02 03|22
 			lda #$7f			//04 05|24	Z=0, needed for BNE in GCR loop
 			jmp GCREntry		//06-08|27	Same cycle count as in GCR loop before BNE, Y can be any value here
-			
+
 //--------------------------------------
 //		Mark wanted sectors
 //--------------------------------------
@@ -572,7 +572,7 @@ ChainLoop:	lda WList,x			//0f 10	Check if sector is unfetched (=00)
 			lda #$ff			//16 17
 MarkSct:	sta WList,x			//18 19	Mark Sector as wanted (or used in the case of random bundle, STA <=> STY)
 			stx LastS			//1a 1b	Save Last Sector
-IL:			axs #$00			//1c 1d	Calculate Next Sector using inverted interleave			
+IL:			axs #$00			//1c 1d	Calculate Next Sector using inverted interleave
 MaxNumSct1:	cpx MaxNumSct2+1	//1e-20	Reached Max?
 
 	.byte	$fa					//21	TabG (NOP)
@@ -1151,7 +1151,7 @@ ChkPt:		bpl Loop			//17-19
 //--------------------------------------
 
 TrSeqRet:	lda #busy+1			//19,20			Use #busy + 1 here (AA + DI = $11) for SAX Loop+2 below ($11 & $EF = $01)
-			bit $1800			//21-24		 	Last bitpair received by C64?
+			bit $1800			//21-24			Last bitpair received by C64?
 			bmi *-3				//25,26
 			sta $1800			//27-30			Transfer finished, send Busy Signal to C64 (sta (<ZP1800-Msk,x) can be used here if needed)
 
@@ -1224,29 +1224,29 @@ EndOfDriveCode:
 //		Initialization
 //--------------------------------------
 
-CodeStart:	ldx #$04
-			lda #$12			//Track 18
-			ldy #$0e			//Sectors 14 (b4), 13 (b2), 12 (b1), 11 (b0)
+CodeStart:	lda #$12			//Track 18
 			sta $0e
+			sta $0c
+			ldy #$10			//Sectors 14 (b4), 16 (b3), 13 (b2), 12 (b1), 11 (b0)
+			sty $0d
+			dey
+			dey
 			sty $0f
-			dey
-!:			sta $06,x
-			sty $07,x
-			dey
+			ldx #$04
+			stx $f9				//Buffer pointer: -> $04
+!:			dey
+			sta $06,x			//$0a, $08, $06
+			sty $07,x			//$0b, $09, $07
 			dex
 			dex
 			bpl !-
-			inc $f9				//Buffer pointer: -> $04
-!:			jsr $d586			//Load block to buffer $04 ($0700)
+
+LoadSector:	jsr $d586			//Load blocks to buffers 4 ($0700), 2 ($0500), 1 ($0400), 0 ($0300)
 			and #$fe
-			bne !-				//Error? -> try again
-			dec $f9				//
-			dec $f9				//Buffer pointer: -> $02 -> $01 -> $00
-!:			jsr $d586			//Load 3 blocks to buffers 02 ($0500), 01 ($0400), 00 ($0300)
-			and #$fe
-			bne !-				//Error? -> try again
-			dec $f9
-			bpl !-
+			bne LoadSector		//Error? -> try again
+			lsr $f9				//Buffer pointer: -> $02 -> $01 -> $00
+			bne LoadSector
+			bcs LoadSector
 
 			ldx #<InitCodeEnd-InitCode - 1
 !:			lda InitCode,x
@@ -1254,33 +1254,20 @@ CodeStart:	ldx #$04
 			dex
 			bpl !-
 
+			lda #$03
+			sta $f9
+
 			jmp InitCodeLoc
 
 //--------------------------------------
 
-InitCode:	lda #$12
-			sta $0c
-			lda #$10			//Sector 16 to buffer 3
-			sta $0d
-			lda #$03
-			sta $f9
-!:			jsr $d586			//Load block 3 (sector 16) to buffer 3
+InitCode:	jsr $d586			//Load block 3 (sector 16) to buffer 3
 			and #$fe
-			bne !-				//Error? -> try again
+			bne InitCode		//Error? -> try again
+
+//--------------------------------------
 
 			sei
-
-//--------------------------------------
-//		Copy ZP code and tabs
-//--------------------------------------
-
-			ldx #$00
-ZPCopyLoop:	lda ZPCode,x		//Copy Tables C, E, F and GCR Loop from $0600 to ZP
-			sta $00,x
-			inx
-			bne ZPCopyLoop
-
-//--------------------------------------
 
 			lda #$ee			//Read mode, Set Overflow enabled
 			sta $1c0c			//could use JSR $fe00 here...
@@ -1308,6 +1295,16 @@ ZPCopyLoop:	lda ZPCode,x		//Copy Tables C, E, F and GCR Loop from $0600 to ZP
 			sta $1c0e
 			lda $180d			//Acknowledge pending interrupts
 			lda $1c0d
+
+//--------------------------------------
+//		Copy ZP code and tabs
+//--------------------------------------
+
+			ldx #$00
+ZPCopyLoop:	lda ZPCode,x		//Copy Tables C, E, F and GCR Loop from $0600 to ZP
+			sta $00,x
+			inx
+			bne ZPCopyLoop
 
 			txa					//Bundle index #$00
 			jmp LoadStart		//Load first bundle on disk (dir sector will be also fetched)
@@ -1393,7 +1390,7 @@ PartialCSum:
 			eor #$7f			//						58		66		66		66		9d 9e
 CSum:		eor #$00			//						60		68		68		68		9f a0
 			sta.z CSum+1		//						63		71		71		71		a1 a2
-								//				       [52-77	56-83	60-89	64-95]
+								//					   [52-77	56-83	60-89	64-95]
 			lda $1c01			//EFFFFFGG				67/-10	75/-8	75/-14	75/+11	a3-a5
 								//						233-344	224-332	240-356	256-380
 			ldx #$03			//						69		77		77		77		a6 a7
@@ -1405,7 +1402,7 @@ tE:			lda TabE			//0000EEEE (ZP)			79		87		97		105		ad ae
 tF:			adc TabF,x			//00000001,0EFFFFF0 (ZP)83		91		101		109		af b0
 			pha					//$0103/$01ff			86		94		104		112		b1
 								//$0103 = Sector
-								//				       [78-103	84-111	90-119	96-127]
+								//					   [78-103	84-111	90-119	96-127]
 			lax $1c01			//GGGHHHHH				90/-13	98/-13	108/-11	116/-11	b2-b4
 								//						260-343	257-339	250-330	249-328
 			alr #$e0			//A=0GGG0000			92		100		110		118		b5 b6
