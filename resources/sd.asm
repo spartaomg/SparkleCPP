@@ -335,7 +335,7 @@
 .label ZPCode		=$0700		//ZP code is initially loaded to $0700-$07ff
 
 .label OPC_ALR		=$4b
-.label OPC_BNE		=$d0
+.const OPC_BNE		=$d0
 .const OPC_NOP_ABS	=$0c
 
 .const Msk			=$ef		//bit mask value in X for SAX in the transfer loop
@@ -1027,7 +1027,6 @@ StepWait:	bit $1c05
 
 StepDone:	stx NewTrackFlag	//Set New Track flag - we are on a new track - determines behavior if no sync mark is found (assume track error)
 								//Any positive non-zero value will work, e.g. track number (1-40)
-
 StoreTrack:	stx cT
 
 //--------------------------------------
@@ -1049,13 +1048,14 @@ BitRate:	ldy #$11			//Sector count=17
 								//Tracks 01-17, speed zone 3
 			ldy #$15			//Sector count=21
 BR20:		ora #$20			//Bitrate=%11
+
 RateDone:	sty MaxNumSct2+1
 
 //--------------------------------------
 //		Update variables
 //--------------------------------------
 
-			ldx ILTab-$11,y		//Inverted Custom Interleave Tab
+			ldx ILTab-$11,y		//Inverted Custom Interleave Table
 			stx IL+1
 
 			ldx #$01			//Extra subtraction for Zone 3
@@ -1076,7 +1076,7 @@ RateDone:	sty MaxNumSct2+1
 
 GCRLoopPatch:
 			ldx Patch0-$11,y
-			stx.z GCREntry + 1
+			stx.z GCREntry+1
 			ldx Patch1-$11,y
 			stx.z LoopMod2
 			ldx Patch2-$11,y
@@ -1085,7 +1085,7 @@ GCRLoopPatch:
 			lsr ReturnFlag
 			bcs RTS
 
-StoreBR:	sty SCtr			//Reset Sector Counter, but only if this is not a random bundle which gets SCtr from Dir
+			sty SCtr			//Reset Sector Counter, but only if this is not a random bundle which gets SCtr from Dir
 
 //--------------------------------------
 
@@ -1140,9 +1140,9 @@ Spartan:	lda ZPSpVal			//02 04			Last halftrack step is taken during data transf
 			sta ByteCt+1		//13-16			... and settle before new data is fetched
 ChkPt:		bpl Loop			//17-19
 
-.print ""
-.print "Loop:  $0" + toHexString(Loop)
-.print "ChkPt: $0" + toHexString(ChkPt)
+//.print ""
+//.print "Loop:  $0" + toHexString(Loop)
+//.print "ChkPt: $0" + toHexString(ChkPt)
 
 .if ([>Loop] != [>ChkPt]) {
 .error "Transfer loop crosses pages!!!"
@@ -1297,7 +1297,7 @@ InitCode:	jsr $d586			//Load block 3 (sector 16) to buffer 3
 			lda $1c0d
 
 //--------------------------------------
-//		Copy ZP code and tabs
+//		Copy ZP code and tables
 //--------------------------------------
 
 			ldx #$00
