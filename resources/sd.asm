@@ -270,7 +270,7 @@
 .label ready		=CO			//DO=0,CO=1,AA=0	$1800=#$08	dd00=100000xx (#$83)
 
 .label Sp			=$52		//Spartan Stepping constant (=82*72=5904=$1710=$17 bycles delay)
-.const ErrVal		=$2a		//42 missed consecutive sectors, 2 full rotations in zone 3, ErrVal can't be more than $7f
+.label ErrVal		=$2a		//42 missed consecutive sectors, 2 full rotations in zone 3, ErrVal can't be more than $7f
 
 //ZP Usage:
 .label cT			=$00		//Current Track
@@ -288,25 +288,22 @@
 .label ScndBuff		=$29		//#$01 if last block of a Bundle is fetched, otherwise $00
 .label WList		=$3e		//Wanted Sector list ($3e-$52) ([0]=unfetched, [-]=wanted, [+]=fetched)
 .label ErrCtr		=$54		//Checksum error counter
-.label DirSector	=$56		//Initial value=XX1 (<>#$10 or #$11)
 .label ZPSpVal		=$58		//Spartan step VIA 2 Port B value
 .label NBC			=$5c		//New Block Count temporary storage
-
-//Unused: $5e
-
+.label DirSector	=$5e		//Initial value=XX1 (<>#$10 or #$11)
 .label ILTab		=$60		//Inverted Custom Interleave Table ($60-$64)
 .label NextID		=$63		//Next Side's ID - will be updated from 18:00:$fd of next side
 
+//UNUSED: $59-$5a
+
 .label ReturnFlag	=$66		//Indicates whether StepTimer code is called in subroutine
 
+.label NewTrackFlag	=$74		//Gets set after stepping to a new track and cleared once sync mark is found and correct block type is verified
 .label Plugin		=$76		//Indicates whether fetch block is a plugin
 
-.label ZPBAMPID		=$10		//$10/$11 = $0107
-.label ZPILTab		=$59		//$59/$5a = $0060
+.label ZPILTab		=$6a		//$59/$5a = $0060
 .label ZPHdrID1		=$68
 .label ZPHdrID2		=$69
-.label NewTrackFlag	=$6a		//Gets set after stepping to a new track and cleared once sync mark is found and correct block type is verified
-.label ZPProdID		=$78		//$78/$79 = $036a (ProdID-1)
 
 .label ZP7f			=$30		//BitShufTab
 .label ZP12			=$3b		//TabF value
@@ -318,8 +315,11 @@
 .label ZP1c00		=$34		//$34/$35 = $1c50 (VIA 2 Port B)
 .label ZP1800		=$3c		//$3c/$3d = $1810 (VIA 1 Port B)
 .label ZP0200		=$6b		//$6b/$6c = $0200
-.label ZP0101		=$6e		//$6e/$6f = $0101
+.label ZP0100		=$6e		//$6e/$6f = $0100
+.label ZP0101		=$10		//$10/$11 = $0101
+.label ZP01ff		=$78		//$78/$79 = $01ff
 .label ZP02ff		=$7a		//$7a/$7b = $02ff
+.label ZP0700		=$56		//$56/$57 = $0700
 .label ZPTabDm2		=ZP02ff		//$7a/$7b = $02ff = TabD-2
 
 //BAM constants:
@@ -450,67 +450,68 @@ RBLoop:		cpy $1800			//7f-81	4
 //0391
 .byte		$8d
 
+.byte		XX3
+.byte		XX4
+
 //--------------------------------------
 //		Track correction		//A = Actual track
 //--------------------------------------
-//0392
-CorrTrack:	ldy #$02			//92 93
-			sty ReturnFlag		//94 95
+//0394
+CorrTrack:	ldy #$02			//94 95
 			sec					//96
 			ldx cT				//97 98	X = Requested track
 			sta cT				//99 9a TabD value ($85 = OPC_STA_ZP)
-			txa					//9b
-			sbc cT				//9c 9d
-			bcs SkipStepDn		//9e 9f
-			eor #$ff			//a0 a1
-			adc #$01			//a2 a3
-			iny					//a4
-			sty StepDir			//a5 a6	Only store stepper direction DOWN/OUTWARD here (Y=#$03)
-
-SkipStepDn:	asl					//a7
-			tay					//a8
+			sty ReturnFlag		//9b 9c
+			txa					//9d
+			sbc cT				//9e 9f
+			bcs SkipStepDn		//a0 a1
+			eor #$ff			//a2 a3
+			adc #$01			//a4 a5
+			iny					//a6
+			sty StepDir			//a7 a8	Only store stepper direction DOWN/OUTWARD here (Y=#$03)
 
 	.byte	$80					//a9	TabD value (OPC_NOP_IMM)
 	.byte	XX3					//aa
 
-			jsr StepTmr			//ab-ad	Move head to track and update bitrate (also stores new Track number in cT and calculates SCtr but doesn't store it)
-			sta $1c00			//ae-b0	Needed to update bitrate!!!
-			
-	.byte	$89					//b1	TabD value (OPC_NOP_IMM)
-	.byte	XX4					//b2
-			
-			bcs Fetch			//b3 b4	BRA
+SkipStepDn:	asl					//ab
+			tay					//ac
 
-	.byte	XX1					//b5
+			jsr StepTmr			//ad-af	Move head to track and update bitrate (also stores new Track number in cT and calculates SCtr but doesn't store it)
+			
+			ldx	#$89			//b0 b1	Using TabD value (OPC_NOP_IMM)
+
+			sta (ZP1c00-$89,x)	//b2 b3	Needed to update bitrate!!!
+
+			lda #<CSV			//b4 b5
 
 Patch0:
-	.byte	<GCRLoop0_2-(GCREntry + 2)	//b6
-	.byte	<GCRLoop0_2-(GCREntry + 2)	//b7
-	.byte	<GCRLoop0_2-(GCREntry + 2)	//b8
+	.byte	<GCRLoop0_2-(GCREntry + 2)	//b6 ($a2)	= LDX #$a2	- no effect
+	.byte	<GCRLoop0_2-(GCREntry + 2)	//b7 ($a2)
+	.byte	<GCRLoop0_2-(GCREntry + 2)	//b8 ($a2)	= LDX #$81	- no effect
 	
 	.byte	$81					//b9	TabD value (OPC_STA_IZX)
 		
-	.byte	<GCRLoop3-(GCREntry + 2)	//ba
-	.byte	XX2					//bb
+	.byte	<GCRLoop3-(GCREntry + 2)	//ba ($a8)	= TAY		- no effect
+
+			sta VerifCtr		//bb bc
 
 //--------------------------------------
 //		Fetch Code
 //--------------------------------------
-//03bc
+//03bd
 FT:
 Fetch:
 FetchHeader:
-			ldy #<HeaderJmp		//bc bd	Checksum verification after GCR loop will jump to Header Code
+			ldy #<HeaderJmp		//bd be	Checksum verification after GCR loop will jump to Header Code
 FetchSHeader:
-			lda #$52			//be bf	First 8 bits of Header ID (01010010)
-			ldx #$04			//c0 c1	4 bytes to stack
-			txs					//c2	Header: $0104,$0103..$0101
-			bne Presync			//c3 c4 Skip Data Block fetch
+			lda #$52			//bf c0	First 8 bits of Header ID (01010010)
+			ldx #$04			//c1 c2	4 bytes to stack
+			txs					//c3	Header: $0104,$0103..$0101
+			bne Presync			//c4 c5 Skip Data Block fetch
 				
-FetchData:	ldy #<DataJmp		//c5 c6	Checksum verification after GCR loop will jump to Data Code - SP = $00 here (LDX #$00; TXS not needed)
-			bne *+3				//c7 c8
+FetchData:	ldy #<DataJmp		//c6 c7	Checksum verification after GCR loop will jump to Data Code - SP = $00 here (LDX #$00; TXS not needed)
 
-	.byte	$86					//c9	Skipping TabD value (OPC_STX_ZP)
+			nop #$86			//c8 c9	Skipping TabD value (OPC_STX_ZP)
 
 			lda #$55			//ca cb	First 8 bits of Data ID (01010101)
 
@@ -594,39 +595,38 @@ SkipSub:	dey					//2c	Any more blocks to be put in chain?
 			rts					//34	A=#$7f, C=1, Z=0, X=next sector - 1, Y=#$00 here
 
 //--------------------------------------
-
-ReFetch:	jmp (FetchJmp)		//35-37	Refetch everything, vector is modified from SS!!!
-
-//--------------------------------------
 //		Flip Detection			//A/X/Y=#$00 here
 //--------------------------------------
-//0438
-FlipDtct:	lda NextID			//38 39	Side is done, check if there is a next side
-			cmp (ZP0101),y		//3a 3b	DiskID, compare it to NextID
-			bne ReFetch			//3c 3d ID mismatch, fetch again until flip detected
+//0435
+FlipDtct:	lda NextID			//35 36	Side is done, check if there is a next side
+			cmp (ZP0101),y		//37 38	DiskID, compare it to NextID
+			bne ReFetch			//39 3a ID mismatch, fetch again until flip detected
+			
+ProdIDLoop:	iny					//3b
+			cpy #$04			//3c 3d
+			beq UpdtDirSct		//3e 3f
+			lda BAM_ProdID-1,y	//40-42
+			cmp ProductID-1,y	//43-45
+			beq ProdIDLoop		//46 47
 
-			ldy #$03			//3e 3f
+//--------------------------------------
 
-ProdIDLoop:	lda (ZPBAMPID),y	//40 41	Also compare Product ID, only continue if same ($0106 = BAMProdID-1)
-			cmp (ZPProdID),y	//42 43
-			bne ReFetch			//44 45	Product ID mismatch, fetch again until same
-			dey					//46
-			bne ProdIDLoop		//47 48
+ReFetch:	jmp (FetchJmp)		//48-4a	Refetch everything, vector is modified from SS!!!
 
-			ldy #$05			//49 4a
-			sty DirSector		//4b 4c	Invalid value to trigger reload of the directory of the new disk side
+//--------------------------------------
 
-CopyBAM:	lda (ZP0101),y		//4d 4e	($0101=DiskID), $102=IL3R, $103=IL2R, $104=IL1R, $0105=NextID, $106=IL0R
+UpdtDirSct:	sty DirSector		//4b 4c	Invalid value to trigger reload of the directory of the new disk side
+
+CopyBAM:	lda (ZP0102),y		//4d 4e	($0101=DiskID), $102=IL3R, $103=IL2R, $104=IL1R, $0105=NextID, $106=IL0R
 			sta (ZPILTab),y		//4f 50
 
 	.byte	$3a					//51	TabG (NOP)
 	.byte	$0a					//52	TabG (ASL) - no effect, A is already stored
 	.byte	$2a					//53	TabG (ROL) - no effect, A is already stored
-
-			dey					//54		
-			bne CopyBAM			//55 56
-			tya					//57
-			jmp CheckDir		//58-5a	Y=A=#$00 - Reload first directory sector
+			dey					//54
+			bpl CopyBAM			//55 56
+			txa					//57
+			jmp FlipRet			//58-5a	A=#$00 - Reload first directory sector
 
 //--------------------------------------
 //		Got Header
@@ -670,14 +670,16 @@ Header:		bne FetchError		//5b 5c	33	Checksum mismatch
 			cmp cT				//		134 Everything else checked out, check if we are on the requested track
 			bne ToCorrTrack		//		136
 						
-			tsx					//		138	SP=0 here
-			stx NewTrackFlag	//		142	Clear NewTrackFlag only after header block is successfully fetched and verified
+			ldy VerifCtr		//		139
+			bne ToFetchData		//		141
 
-			ldy cS				//		145
-			ldx WList,y			//		149	Otherwise, only fetch sector data if this is a wanted sector
-BplFetch:	bpl ReFetch			//		151	Sector is not on wanted list -> fetch next sector header
+			sty NewTrackFlag	//		144	Clear NewTrackFlag only after header block is successfully fetched and verified
+
+			ldy cS				//		147
+			ldx WList,y			//		151	Otherwise, only fetch sector data if this is a wanted sector
+BplFetch:	bpl ReFetch			//		153	Sector is not on wanted list -> fetch next sector header
 ToFetchData:
-			jmp FetchData		//		154	Sector is on wanted list -> fetch data
+			jmp FetchData		//		156	Sector is on wanted list -> fetch data
 
 //--------------------------------------
 
@@ -711,7 +713,8 @@ CheckIDs:	cmp cT
 FetchError:	dec ErrCtr
 			bne BplFetch		//Execute bitrate and track correction code if error counter reaches $ff, otherwise refetch everything via ReFetch vector
 
-BRTCorr:	lda $1c00			//Based on Krill's bitrate and track correction code
+BRTCorr:	ldx #<ErrVal		//More than the max number of sectors per track
+			lda (<ZP1c00-ErrVal,x)	//Based on Krill's bitrate and track correction code
 			and #$63
 			clc					//Could remove this and use ANC instead of AND (this code is never executed on the Ultimate)
 			adc #$e0			//Cycle through bitrates %11 -> %10 -> %01 -> %00 -> %11
@@ -720,7 +723,10 @@ BRTCorr:	lda $1c00			//Based on Krill's bitrate and track correction code
 			sta ZPSpVal			//Update Spartan step $1c00 value (with LED on)
 			jsr ToggleLD2		//Update $1c00 with LED off (LED is only on during transfer), JSR is OK here, we are discarding any fetched data on the stack
 
-			alr #$60
+			stx ErrCtr
+			stx NewTrackFlag	//Reset New Track flag - any non-zero positive number works
+
+/*			alr #$60
 			lsr
 			lsr
 			lsr
@@ -730,10 +736,7 @@ BRTCorr:	lda $1c00			//Based on Krill's bitrate and track correction code
 			tay
 			inc ReturnFlag
 			jsr GCRLoopPatch
-
-			lda #<ErrVal		//More than the max number of sectors per track
-			sta ErrCtr
-			sta NewTrackFlag	//Reset New Track flag - any non-zero positive number works
+*/
 
 ToBplFetch:	bpl BplFetch		//Refetch everything via ReFetch vector
 
@@ -746,6 +749,15 @@ Data:		ldx cT
 			cpx #$12
 			bcs SkipCSLoop  
 
+/*			ldy #$fc
+CSLoop:		eor $0102,y
+			eor $0103,y
+			dey
+			dey
+			dey
+			dey
+			bne CSLoop
+*/
 			ldy #$7e			//CSLoop takes 851 cycles (33 bytes passing under R/W head in zone 3)
 			bne CSLoopEntry
 CSLoop:		eor $0102,y
@@ -765,6 +777,9 @@ SkipCSLoop:	tay
 			lda #<ErrVal
 			sta ErrCtr			//Reset Error Counter (only if both header and data are fetched correctly)
 
+			lsr VerifCtr		//Checksum Verification Counter
+			bcs BplFetch		//If C=1, go to verification loop
+
 RegBlockRet:
 			txa
 			ldx cS				//Current Sector in Buffer
@@ -779,7 +794,7 @@ RegBlockRet:
 			dec SCtr			//Update Sector Counter
 
 //--------------------------------------
-//		Check Saver Code
+//		Check Plugin Code
 //--------------------------------------
 
 			asl Plugin
@@ -836,9 +851,9 @@ NOP1:		sta (ZP0101),y		//So that it does not confuse the depacker...
 			lsr Random			//Check if this is also the first block of a randomly accessed bundle
 			bcc ChkScnd
 
-NOP2:		sta $0100,y			//This is the first block of a random bundle, delete first byte
+NOP2:		sta (ZP0100),y		//This is the first block of a random bundle, delete first byte
 			lda BPtr			//Last byte of bundle will be pointer to first byte of new Bundle
-NOP3:		sta $01ff,y
+NOP3:		sta (ZP01ff),y
 
 ChkScnd:	lda WantedCtr
 			bne StoreLoop
@@ -851,9 +866,17 @@ CheckATN:	lda $1c00			//Fetch Motor and LED status
 			ora #$0c			//Make sure LED will be on when we restart
 			tax					//This needs to be done here, so that we do not affect Z flag at Restart
 
-Frames:		ldy #$64			//100 frames (2 seconds) delay before turning motor off (#$fa for 5 sec)
-DelayOut:	lda #$4f			//Approx. 1 frame delay (20000 cycles = $4e20 -> $4e+$01=$4f)
-			sta $1c05			//Start timer, wait 2 seconds before turning motor off
+.const DelayInSec = 2			//Motor spin down delay in seconds
+
+.var Delay = sqrt(2 * (DelayInSec * 1000000) / 256) + 1
+
+.if (Delay>255)
+{
+	.error "Delay cannot be more than 255 (about 8.25 seconds)!"
+}
+
+Frames:		ldy #<Delay			//100 frames (2 seconds) delay before turning motor off (#$c7 for 5 sec) = SQR((NumCycles/$100)*2)
+DelayOut:	sty $1c05			//Start timer, wait 2 seconds before turning motor off
 DelayIn:	lda $1c05
 			bne ChkLines
 			dey
@@ -861,6 +884,8 @@ DelayIn:	lda $1c05
 			lda #$73			//Timer finished, turn motor off
 			sax $1c00
 			sta ErrCtr			//Reset Error Counter for motor spinup - allows 5.5 full rotations in zone 3 during spin-up before Error code is triggered
+			lda #<CSV			//Reset Checksum Verification Counter
+			sta VerifCtr		//When motor restarts, first we verify proper read
 			
 ChkLines:	lda $1800
 			bpl Reset			//ATN released - C64 got reset, reset the drive too
@@ -886,6 +911,7 @@ LoadStart:
 TrRndRet:	inx
 			beq Reset			//C64 requests drive reset
 
+FlipRet:
 TestRet:	ldy #$00			//Needed later (for FetchBAM if this is a flip request, and FetchDir too)
 			sty	ScndBuff		//Clear Second Buffer flag, in case we prefetched the last block of the next bundle
 
@@ -1326,23 +1352,16 @@ CD:
 .pseudopc $00 {
 //		 x0  x1  x2  x3  x4  x5  x6  x7  x8  x9  xa  xb  xc  xd  xe  xf
 .byte	$12,$00,$04,$01,$f0,$60,$b0,$20,$01,$40,$80,$00,$e0,$c0,$a0,$80	//0x
-.byte	<BAM_ProdID-1
-.byte		>BAM_ProdID-1
-.byte			$70,$1e,$f0,$1f,$e0,$17,$00,CSV,$30,$1a,$b0,$1b,$a0,$13	//1x
+.byte	$01,$01,$70,$1e,$f0,$1f,$e0,$17,$00,CSV,$30,$1a,$b0,$1b,$a0,$13	//1x
 .byte	$01,$00,$14,$00,$d0,$1d,$c0,$15,$01,$00,$00,$10,$90,$19,$80,$11	//2x
 .byte	$7f,$76,$60,$16,$50,$1c,$40,$14,$76,$7f,$20,$12,$10,$18,$00,$00	//3x	Wanted List $3e-$52 (Sector 16 = #$ff)
 .byte	$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00	//4x	(0) unfetched, (+) fetched, (-) wanted
-.byte	$00,$00,$00,$0e,$80,$0f,XX1,$07,$00
-.byte										<ILTab-1
-.byte											>ILTab-1
-.byte												$0a,XX2,$0b,XX3,$03	//5x	
-.byte	$fd,$fd,$fd,$00,$fc,$0d,$00,$05,XX4,$ff,$ff,$00,$02,$09,$01,$01	//6x	$60-$64 - ILTab, $63 - NextID, $68 - ZPHdrID1, $69 - ZPHdrID2
+.byte	$00,$00,$00,$0e,$80,$0f,XX4,$07,$00,XX1,XX2,$0a,XX3,$0b,XX4,$03	//5x	
+.byte	$fd,$fd,$fd,$00,$fc,$0d,$00,$05,XX1,XX2,$60,$00,$02,$09,$00,$01	//6x	$60-$64 - ILTab, $63 - NextID, $68 - ZPHdrID1, $69 - ZPHdrID2, $6a/$6b = ZPILTab
 //0070
 ZPReFetch:
 		jmp ReFetch
-.byte				$06,$02,$0c,$00,$04,<ProductID-1
-.byte										>ProductID-1
-.byte											$ff,$02					//7x
+.byte				$06,$00,$0c,$00,$04,$ff,$01,$ff,$02					//7x
 
 GCRLoop:
 //--------------------------------------

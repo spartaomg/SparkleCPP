@@ -10,7 +10,7 @@
 //  VERSION INFO
 //----------------------------------
 
-constexpr int FullDate = 20250906;
+constexpr int FullDate = 20251005;
 
 constexpr int VersionMajor = 3;
 constexpr int VersionMinor = 3;
@@ -94,6 +94,9 @@ unsigned char BundleTypeScript = 2;
 unsigned char BundleTypeSaverPlugin = 3;
 unsigned char BundleTypeHSFile = 4;
 unsigned char BundleTypeCustomPlugin = 5;
+#ifdef TESTDISK
+unsigned char BundleTypeTestPlugin = 6;
+#endif
 
 unsigned char BundleType = BundleTypeNone;
 
@@ -2432,6 +2435,20 @@ bool BundleDone()
 
         PluginFiles.push_back(PluginStruct(HasDirIdx, DI, BundleType, "", "", "", ""));
     }
+#ifdef TESTDISK
+    else if (BundleType == BundleTypeTestPlugin)
+    {
+        int DI = 0;
+        bool HasDirIdx = false;
+        if (TmpDirEntryIndex != 0)
+        {
+            DI = TmpDirEntryIndex;
+            HasDirIdx = true;
+        }
+
+        PluginFiles.push_back(PluginStruct(HasDirIdx, DI, BundleType, "", "", "", ""));
+    }
+#endif
     else if (BundleType == BundleTypeHSFile)
     {
         int DI = 0;
@@ -4778,7 +4795,7 @@ void AddHeaderAndID()
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 #ifdef TESTDISK
 
-bool InjectTestPlugin()
+bool InjectTestPlugin(int PlgIdx)
 {
     //Calculate sector pointer on disk (FT.cpp takes one block)
 
@@ -4812,7 +4829,6 @@ bool InjectTestPlugin()
 
     for (int i = 1; i <= NumTestBundles; i++)
     {
-
         DirBlocks[(BundleNo * 4) + 3] = 0;
         DirPtr[BundleNo] = BufferCnt;
         BundleNo++;
@@ -4823,19 +4839,20 @@ bool InjectTestPlugin()
             {
                 if (i != NumTestBundles)
                 {
-                    Buffer[1] = EORtransform(TestBundleSize);
+                    Buffer[255] = EORtransform(TestBundleSize);
                 }
                 else
                 {
-                    Buffer[1] = EORtransform(TestBundleSize-1);
+                    Buffer[255] = EORtransform(TestBundleSize-1);
                 }
             }
             else
             {
-                Buffer[1] = EORtransform(255);
+                Buffer[255] = EORtransform(1);
             }
 
             Buffer[0] = EORtransform(TabS[BufferCnt]);
+            Buffer[1] = EORtransform(TabT[BufferCnt]);
 
             memcpy(&ByteSt[BufferCnt * 256], &Buffer[0], 256 * sizeof(Buffer[0]));
             BufferCnt++;
@@ -4882,7 +4899,7 @@ bool InjectTestPlugin()
 
     int SctPtr = SectorsPerDisk - 1;
 
-    //Identify first T/S of the saver plugin
+    //Identify first T/S of the test plugin
     CT = TabT[SctPtr];
     CS = TabS[SctPtr];
 
@@ -5606,6 +5623,12 @@ bool AddPluginFiles()
         {
             InjectCustomCodePlugin(i);
         }
+#ifdef TESTDISK
+        else if (PluginFiles.at(i).PluginType == BundleTypeTestPlugin)
+        {
+            InjectTestPlugin(i);
+        }
+#endif
         else if (PluginFiles.at(i).PluginType == BundleTypeSaverPlugin)
         {
             if (i + 1 < PluginFiles.size())
@@ -6830,9 +6853,9 @@ bool Build()
                         {
                             BundleType = BundleTypeSaverPlugin;
                         }
-                        else if (BundleType == BundleTypeCustomPlugin)
+                        else if (BundleType == BundleTypeSaverPlugin)
                         {
-                            cerr << "***CRITICAL***\tCan't have more than one Saver Plugin in the bundle!\n";
+                            cerr << "***CRITICAL***\tMultiple Saver Plugins must be in separate bundles!\n";
                             return false;
                         }
                         else
@@ -6845,6 +6868,10 @@ bool Build()
                     else if ((PluginParam == "testdisk") || (PluginParam == "test"))
                     {
                         bTestDisk = true;
+                        if (BundleType == BundleTypeNone)
+                        {
+                            BundleType = BundleTypeTestPlugin;
+                        }
                     }
 #endif //TESTDISK
                     else
@@ -7213,7 +7240,7 @@ int main(int argc, char* argv[])
 
 #ifdef DEBUG
 
-        string ScriptFileName = "c:/Sparkle/Example/Sparkle.sls";
+        string ScriptFileName = "c:/Users/Tamas/OneDrive/C64/Coding/SparkleFetchTest/TestDisk.sls";
         Script = ReadFileToString(ScriptFileName, true);
         SetScriptPath(ScriptFileName, AppPath);
 
