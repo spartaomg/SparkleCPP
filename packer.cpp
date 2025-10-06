@@ -149,7 +149,7 @@ int CheckIO(int Offset, int NextFileUnderIO) {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void ResetBuffer()
+void ResetBuffer(bool FirstBlock)
 {
     //Buffer.fill(0);     //Reset Buffer
 
@@ -163,11 +163,26 @@ void ResetBuffer()
 
     BitPos = 7;             //Reset Bit Position Counter (counts 8 bits backwards: 7 -> 0)
 
-    BitPtr = 0;
-    Buffer[BitPtr] = 0x01;
-    BitsLeft = 7;
-    NibblePtr = 0;
-    BytePtr = 255;
+    if (FirstBlock)
+    {
+        BytePtr = 255;
+        Buffer[BytePtr--] = 0xfe;
+        BitPtr = 254;
+        Buffer[BitPtr] = 0x01;
+        BitsLeft = 7;
+        NibblePtr = 0;
+        BytePtr--;
+    }
+    else
+    {
+        BitPtr = 0;
+        Buffer[BitPtr] = 0x01;
+        BitsLeft = 7;
+        NibblePtr = 0;
+        BytePtr = 255;
+    }
+
+
 
     //DO NOT RESET LitCnt HERE!!! It is needed for match tag check
 }
@@ -2045,7 +2060,7 @@ bool PackFile(int Index) {
 
     FirstLitOfBlock = true;                                     //First block of next file in same buffer, Lit Selector Bit NOT NEEEDED
 
-    if (BytePtr == 255)
+    if (BytePtr >= 253)
     {
         NextFileInBuffer = false;                               //This is the first file that is being added to an empty buffer
     }

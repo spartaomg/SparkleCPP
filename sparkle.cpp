@@ -1627,7 +1627,7 @@ bool ResetDiskVariables()
 
     //ReDim ByteSt(-1);
     std::fill_n(ByteSt, ExtBytesPerDisk, 0);
-    ResetBuffer();
+    ResetBuffer(true);
 
     D64Name = "";
     DiskHeader = ""; //'"demo disk " + Year(Now).ToString
@@ -1970,7 +1970,7 @@ bool CompressBundle()             //NEEDS PackFile() and CloseFile()
 
     //DO NOT RESET ByteSt AND BUFFER VARIABLES HERE!!!
 
-    if ((BufferCnt == 0) && (BytePtr == 255))
+    if ((BufferCnt == 0) && (BytePtr >= 253))
     {
         NewBlock = SetNewBlock;
         SetNewBlock = false;

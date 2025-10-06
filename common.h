@@ -141,7 +141,7 @@ extern const unsigned char EndOfBundleTag;      //= 0x00;
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 bool PackFile(int Index);
-void ResetBuffer();
+void ResetBuffer(bool FirstBlock = false);
 bool CloseBuffer();
 bool CloseFile();
 bool CloseBundle(int NextFileIO, bool LastPartOnDisk);

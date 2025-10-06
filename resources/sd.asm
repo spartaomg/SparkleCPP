@@ -179,10 +179,11 @@
 //		  loop tolerates at least 272-314 rpm in all 4 speed zones
 //		- released with Sparkle 3.2
 //
-//	v23 - using the track error correction code to change tracks in case of bundle-index based loader calls
-//		  to skip track read error and bitrate correction code if the disk is removed between loader calls
-//		  Sparkle will create a "wrong track" condition to activate track correction if track change is needed
-//		- improved read error handling (wrong/bad half/track vs. removed disk)
+//	v23	- new and improved read error handling which now also includes GCR loop adjustment
+//		  freed 16 bytes for this update while keeping every feature, including the three-good-sector verification before anything gets transferred
+//	    - the track mismatch correction code is now utilized to change tracks for bundle-index based loader calls
+//		  this allows to differentiate between wrong/bad half/track vs. removed disk and skip read error handling if the disk is removed between loader calls
+//		  Sparkle will create a "track mismatch" condition to activate track correction if track change is needed
 //		- re-added optimized checksum verification for zone 3
 //
 //----------------------------------------------------------------------------------------
@@ -200,16 +201,16 @@
 //	Layout at Start
 //
 //	0300	05ff	Code + GCR tables			blocks 0-2
-//	0600	06ff	ZP GCR tables and GCR loop	block 3
-//	0700	0781	Installer					block 4
+//	0600	0781	Installer					block 4
+//	0700	06ff	ZP GCR tables and GCR loop	block 3
 //
 //	Layout in PRG
 //
 //	2300	23f1	GCR tables					block 0
 //	2411	2472	GCR table					block 1
 //	2300	26ff	Drive Code					blocks 0-3 3 -> block 5
-//	2700	27ff	ZP GCR tables and GCR loop	block 	   4 -> block 3
-//	2800	28xx	Installer					block 	   5 -> block 4
+//	2700	27ff	ZP GCR tables and GCR loop	block 4
+//	2800	28xx	Installer					block 	   5 -> block 3
 //
 //----------------------------------------------------------------------------------------
 //	Track 18
@@ -270,7 +271,7 @@
 .label ready		=CO			//DO=0,CO=1,AA=0	$1800=#$08	dd00=100000xx (#$83)
 
 .label Sp			=$52		//Spartan Stepping constant (=82*72=5904=$1710=$17 bycles delay)
-.label ErrVal		=$2a		//42 missed consecutive sectors, 2 full rotations in zone 3, ErrVal can't be more than $7f
+.label ErrVal		=$2c		//44 missed consecutive sectors, 2 full rotations in zone 3, ErrVal can't be more than $7f, also used to resetn vT
 
 //ZP Usage:
 .label cT			=$00		//Current Track
@@ -287,14 +288,15 @@
 .label StepDir		=$28		//Stepping  Direction
 .label ScndBuff		=$29		//#$01 if last block of a Bundle is fetched, otherwise $00
 .label WList		=$3e		//Wanted Sector list ($3e-$52) ([0]=unfetched, [-]=wanted, [+]=fetched)
-.label ErrCtr		=$54		//Checksum error counter
+.label vT			=$56		//Start value: 44 ($2c) -> 36 -> 28 -> 20 -> 12 -> 36
 .label ZPSpVal		=$58		//Spartan step VIA 2 Port B value
+.label ErrCtr		=$59		//Checksum error counter
 .label NBC			=$5c		//New Block Count temporary storage
 .label DirSector	=$5e		//Initial value=XX1 (<>#$10 or #$11)
 .label ILTab		=$60		//Inverted Custom Interleave Table ($60-$64)
 .label NextID		=$63		//Next Side's ID - will be updated from 18:00:$fd of next side
 
-//UNUSED: $59-$5a
+//UNUSED: $5a
 
 .label ReturnFlag	=$66		//Indicates whether StepTimer code is called in subroutine
 
@@ -312,14 +314,14 @@
 .label ZP01			=$6f		//TabF value
 .label ZP02			=$7b		//TabF value
 
+.label ZP0101		=$10		//$10/$11 = $0101
 .label ZP1c00		=$34		//$34/$35 = $1c50 (VIA 2 Port B)
 .label ZP1800		=$3c		//$3c/$3d = $1810 (VIA 1 Port B)
+.label ZP1c0e		=$53		//$53/$54 = $1c0e (VIA 2 Port B), Y=#$02, ZPY
 .label ZP0200		=$6b		//$6b/$6c = $0200
 .label ZP0100		=$6e		//$6e/$6f = $0100
-.label ZP0101		=$10		//$10/$11 = $0101
 .label ZP01ff		=$78		//$78/$79 = $01ff
 .label ZP02ff		=$7a		//$7a/$7b = $02ff
-.label ZP0700		=$56		//$56/$57 = $0700
 .label ZPTabDm2		=ZP02ff		//$7a/$7b = $02ff = TabD-2
 
 //BAM constants:
@@ -711,34 +713,27 @@ CheckIDs:	cmp cT
 //--------------------------------------
 
 FetchError:	dec ErrCtr
-			bne BplFetch		//Execute bitrate and track correction code if error counter reaches $ff, otherwise refetch everything via ReFetch vector
+			bne BplFetch
 
-BRTCorr:	ldx #<ErrVal		//More than the max number of sectors per track
-			lda (<ZP1c00-ErrVal,x)	//Based on Krill's bitrate and track correction code
-			and #$63
-			clc					//Could remove this and use ANC instead of AND (this code is never executed on the Ultimate)
-			adc #$e0			//Cycle through bitrates %11 -> %10 -> %01 -> %00 -> %11
-			adc #$03			//Half track step down on bitrate wrap around
-			ora #$0c			//Motor and LED on
-			sta ZPSpVal			//Update Spartan step $1c00 value (with LED on)
-			jsr ToggleLD2		//Update $1c00 with LED off (LED is only on during transfer), JSR is OK here, we are discarding any fetched data on the stack
+BRTCorr:	ldy #$02			//Max. number or consecutive read errors reached
+			sty ReturnFlag
+			lax vT				//Cycle through speed zones (0 -> 1 -> 2 -> 3) using a virtual track number (36 -> 28 -> 20 -> 18)
+			axs #$08
+			lda (ZP1c0e),y
+			and #$13
+			cpx #$0c
+			bcs !+
+			ldx #$24			//wrap around -> reset virtual track number and...
+			adc #$03			//...step one halftrack down (halftracks are handled from Sync code)
+!:			stx vT				//
+			ora #$0c			//Keep motor running and LED on
+			jsr BitRate			//Update bitrate here using the virtual track number, adjust GCR loop and sector chain builder, and save Spartan step value
+			sta $1c00			//Update $1c00
 
-			stx ErrCtr
-			stx NewTrackFlag	//Reset New Track flag - any non-zero positive number works
+			lda #<ErrVal		//Reset error counter (44 consecutive sectors)
+			sta	ErrCtr
 
-/*			alr #$60
-			lsr
-			lsr
-			lsr
-			lsr
-			cmp #$03
-			adc #$11
-			tay
-			inc ReturnFlag
-			jsr GCRLoopPatch
-*/
-
-ToBplFetch:	bpl BplFetch		//Refetch everything via ReFetch vector
+ToBplFetch:	bpl BplFetch
 
 //--------------------------------------
 //		Got Data
@@ -749,15 +744,6 @@ Data:		ldx cT
 			cpx #$12
 			bcs SkipCSLoop  
 
-/*			ldy #$fc
-CSLoop:		eor $0102,y
-			eor $0103,y
-			dey
-			dey
-			dey
-			dey
-			bne CSLoop
-*/
 			ldy #$7e			//CSLoop takes 851 cycles (33 bytes passing under R/W head in zone 3)
 			bne CSLoopEntry
 CSLoop:		eor $0102,y
@@ -776,6 +762,7 @@ SkipCSLoop:	tay
 			
 			lda #<ErrVal
 			sta ErrCtr			//Reset Error Counter (only if both header and data are fetched correctly)
+			sta vT				//Reset virtual track to 44 ($2c)
 
 			lsr VerifCtr		//Checksum Verification Counter
 			bcs BplFetch		//If C=1, go to verification loop
@@ -883,7 +870,7 @@ DelayIn:	lda $1c05
 			bne DelayOut
 			lda #$73			//Timer finished, turn motor off
 			sax $1c00
-			sta ErrCtr			//Reset Error Counter for motor spinup - allows 5.5 full rotations in zone 3 during spin-up before Error code is triggered
+			sta ErrCtr			//Reset Error Counter for motor spinup - allows 5.5 full rotations in zone 3 during motor spin-up before Error code is triggered
 			lda #<CSV			//Reset Checksum Verification Counter
 			sta VerifCtr		//When motor restarts, first we verify proper read
 			
@@ -917,9 +904,7 @@ TestRet:	ldy #$00			//Needed later (for FetchBAM if this is a flip request, and 
 
 			asl
 			bcs NewDiskID		//A=#$80-#$fe, Y=#$00 - flip disk
-			beq CheckDir		//A=#$00, skip Random flag (first bundle on disk)
-			inc Random
-CheckDir:	asl
+			asl
 			sta DirLoop+1		//Dir entry offset within dir block
 			tya					//DirIndex=#$00-#$3f -> C=0 -> A will be $11 (dir sector 17)
 			adc #$11			//DirIndex=#$40-#$7f -> C=1 -> A will be $12 (dir sector 18)
@@ -943,6 +928,7 @@ DirLoop:	lda $0700,x
 			jsr ClearList		//Clear Wanted List, Y=00 here
 
 			inc ReturnFlag
+			inc Random
 
 			tax					//X=A=LastT
 			jsr StoreTrack		//Update Build loop, Y=MaxSct after this
@@ -1038,7 +1024,7 @@ PreCalc:	and #$1b
 			adc StepDir			//#$03 for stepping down, #$01 for stepping up
 			ora #$04			//motor ON
 			cpy #$80
-			beq StepDone		//This was the last half step precalc, leave Stepper Loop without updating $1c00
+			beq StoreTrack		//This was the last half step precalc, leave Stepper Loop without updating $1c00
 			sta $1c00
 
 			dey
@@ -1051,8 +1037,6 @@ StepWait:	bit $1c05
 			cpy #$00
 			bne StepTmr
 
-StepDone:	stx NewTrackFlag	//Set New Track flag - we are on a new track - determines behavior if no sync mark is found (assume track error)
-								//Any positive non-zero value will work, e.g. track number (1-40)
 StoreTrack:	stx cT
 
 //--------------------------------------
@@ -1107,7 +1091,9 @@ GCRLoopPatch:
 			stx.z LoopMod2
 			ldx Patch2-$11,y
 			stx.z LoopMod2+1
-			
+
+			sty NewTrackFlag	//Set New Track flag - we are on a new track - determines behavior if no sync mark is found (assume track error)
+								//Any positive non-zero value will work, e.g. sector count (17-21)
 			lsr ReturnFlag
 			bcs RTS
 
@@ -1179,12 +1165,12 @@ ChkPt:		bpl Loop			//17-19
 TrSeqRet:	lda #busy+1			//19,20			Use #busy + 1 here (AA + DI = $11) for SAX Loop+2 below ($11 & $EF = $01)
 			bit $1800			//21-24			Last bitpair received by C64?
 			bmi *-3				//25,26
-			sta $1800			//27-30			Transfer finished, send Busy Signal to C64 (sta (<ZP1800-Msk,x) can be used here if needed)
+			sta (ZP1800-Msk,x)	//27-30			Transfer finished, send Busy Signal to C64 (sta (<ZP1800-Msk,x) can be used here if needed)
 
 			sax Loop+2			//A&X=$01, restore transfer loop
 
-			bit $1800			//Make sure C64 pulls ATN before continuing (lda (<ZP1800-Msk,x); bpl *-2 can be used here if needed)
-			bpl *-3				//Without this the next ATN check may fall through resulting in early reset of the drive
+			lda (ZP1800-Msk,x)	//Make sure C64 pulls ATN before continuing (lda (<ZP1800-Msk,x); bpl *-2 can be used here if needed)
+			bpl *-2				//Without this the next ATN check may fall through resulting in early reset of the drive
 			
 			jsr ToggleLED		//Transfer complete - turn LED off, leave motor on
 
@@ -1356,7 +1342,7 @@ CD:
 .byte	$01,$00,$14,$00,$d0,$1d,$c0,$15,$01,$00,$00,$10,$90,$19,$80,$11	//2x
 .byte	$7f,$76,$60,$16,$50,$1c,$40,$14,$76,$7f,$20,$12,$10,$18,$00,$00	//3x	Wanted List $3e-$52 (Sector 16 = #$ff)
 .byte	$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00	//4x	(0) unfetched, (+) fetched, (-) wanted
-.byte	$00,$00,$00,$0e,$80,$0f,XX4,$07,$00,XX1,XX2,$0a,XX3,$0b,XX4,$03	//5x	
+.byte	$00,$00,$00,$0e,$1c,$0f,$2c,$07,$00,$80,XX2,$0a,XX3,$0b,XX4,$03	//5x	
 .byte	$fd,$fd,$fd,$00,$fc,$0d,$00,$05,XX1,XX2,$60,$00,$02,$09,$00,$01	//6x	$60-$64 - ILTab, $63 - NextID, $68 - ZPHdrID1, $69 - ZPHdrID2, $6a/$6b = ZPILTab
 //0070
 ZPReFetch:
