@@ -728,10 +728,11 @@ BRTCorr:	ldy #$02			//Max. number or consecutive read errors reached
 !:			stx vT				//
 			ora #$0c			//Keep motor running and LED on
 			jsr BitRate			//Update bitrate here using the virtual track number, adjust GCR loop and sector chain builder, and save Spartan step value
-			sta $1c00			//Update $1c00
 
-			lda #<ErrVal		//Reset error counter (44 consecutive sectors)
-			sta	ErrCtr
+			ldx #<ErrVal		//Reset error counter (44 consecutive sectors)
+			stx	ErrCtr
+
+			sta (ZP1c00-ErrVal,x) //Update $1c00
 
 ToBplFetch:	bpl BplFetch
 
@@ -1162,15 +1163,15 @@ ChkPt:		bpl Loop			//17-19
 
 //--------------------------------------
 
-TrSeqRet:	lda #busy+1			//19,20			Use #busy + 1 here (AA + DI = $11) for SAX Loop+2 below ($11 & $EF = $01)
+TrSeqRet:	lda #(busy | $01)	//19,20			Use #busy + 1 here (AA + DI = $11) for SAX Loop+2 below ($11 & $EF = $01)
 			bit $1800			//21-24			Last bitpair received by C64?
 			bmi *-3				//25,26
-			sta (ZP1800-Msk,x)	//27-30			Transfer finished, send Busy Signal to C64 (sta (<ZP1800-Msk,x) can be used here if needed)
+			sta (ZP1800-Msk,x)	//27-32			Transfer finished, send Busy Signal to C64 (sta (<ZP1800-Msk,x) can be used here if needed)
 
 			sax Loop+2			//A&X=$01, restore transfer loop
 
-			lda (ZP1800-Msk,x)	//Make sure C64 pulls ATN before continuing (lda (<ZP1800-Msk,x); bpl *-2 can be used here if needed)
-			bpl *-2				//Without this the next ATN check may fall through resulting in early reset of the drive
+			bit $1800			//Make sure C64 pulls ATN before continuing (lda (<ZP1800-Msk,x); bpl *-2 can be used here if needed)
+			bpl *-3				//Without this the next ATN check may fall through resulting in early reset of the drive
 			
 			jsr ToggleLED		//Transfer complete - turn LED off, leave motor on
 
