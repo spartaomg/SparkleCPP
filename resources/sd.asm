@@ -264,15 +264,19 @@
 
 .label CSV			=$07		//Checksum Verification Counter Default Value (3 1-bits, 3 data blocks to be verified)
 
+.const vT0			=$24		//virtual track value in speed zone 0 (36)
+.const vT3			=$0c		//virtual track value in speed zone 3 (12)
+.const vTStep		=$08		//distance between virtual track values
+.label ErrVal		=vT0+vTStep	//44 missed consecutive sectors, 2 full rotations in zone 3 (+ 2 more sectors)
+
+.label SpVal		=$52		//Spartan Stepping constant (=82*72=5904=$1710=$17 bycles delay)
+
 .label DO			=$02
 .label CO			=$08
 .label AA			=$10
 .label busy			=AA			//DO=0,CO=0,AA=1	$1800=#$10	dd00=010010xx (#$43)
 .label ready		=CO			//DO=0,CO=1,AA=0	$1800=#$08	dd00=100000xx (#$83)
-
-.label Sp			=$52		//Spartan Stepping constant (=82*72=5904=$1710=$17 bycles delay)
-.label ErrVal		=$2c		//44 missed consecutive sectors, 2 full rotations in zone 3, ErrVal can't be more than $7f, also used to resetn vT
-
+								//Also serves to reset vT to vT0 + vTStep
 //ZP Usage:
 .label cT			=$00		//Current Track
 .label cS			=$01		//Current Sector
@@ -715,24 +719,24 @@ CheckIDs:	cmp cT
 FetchError:	dec ErrCtr
 			bne BplFetch
 
-BRTCorr:	ldy #$02			//Max. number or consecutive read errors reached
+BRTCorr:	ldy #$02			//Max. number of consecutive read errors reached or sync timed out
 			sty ReturnFlag
 			lax vT				//Cycle through speed zones (0 -> 1 -> 2 -> 3) using a virtual track number (36 -> 28 -> 20 -> 18)
-			axs #$08
-			lda (ZP1c0e),y
+			axs #<vTStep		//=#$08
+			lda (ZP1c0e),y		//Update bitrate bits according to virtual track speed zone
 			and #$13
-			cpx #$0c
+			cpx #<vT3			//=#$0c
 			bcs !+
-			ldx #$24			//wrap around -> reset virtual track number and...
+			ldx #<vT0			//wrap around -> reset virtual track number to #$24 and...
 			adc #$03			//...step one halftrack down (halftracks are handled from Sync code)
-!:			stx vT				//
+!:			stx vT
 			ora #$0c			//Keep motor running and LED on
 			jsr BitRate			//Update bitrate here using the virtual track number, adjust GCR loop and sector chain builder, and save Spartan step value
 
-			ldx #<ErrVal		//Reset error counter (44 consecutive sectors)
+			ldx #<ErrVal		//Reset error counter (44 consecutive sector read errors)
 			stx	ErrCtr
 
-			sta (ZP1c00-ErrVal,x) //Update $1c00
+			sta (ZP1c00-ErrVal,x)	//Update $1c00
 
 ToBplFetch:	bpl BplFetch
 
@@ -1134,7 +1138,7 @@ W3:			sta $1800			//10-13
 
 			lsr					//00 01
 			alr #$30			//02 03
-ByteCt:		cpy #$101-Sp		//04 05			Sending #$52 bytes before Spartan Stepping (#$59 for $19 bycles) CPY #$AF/#$01
+ByteCt:		cpy #$101-SpVal		//04 05			Sending #$52 bytes before Spartan Stepping (#$59 for $19 bycles) CPY #$AF/#$01
 			bit $1800			//06-09			#$52 x 72 = #$17 bycles - actual time is #$18+ bycles, and can be much longer
 			bpl *-3				//10 11			
 W4:			sta $1800			//12-15
@@ -1149,7 +1153,7 @@ W4:			sta $1800			//12-15
 Spartan:	lda ZPSpVal			//02 04			Last halftrack step is taken during data transfer
 			sta $1c00			//05-08			Update bitrate and stepper with precalculated value
 			tya					//09 10			Y=#$AE or #$00 here
-			eor #$101-Sp		//11 12			#$31 bycles left for the head to take last halftrack step...
+			eor #$101-SpVal		//11 12			#$31 bycles left for the head to take last halftrack step...
 			sta ByteCt+1		//13-16			... and settle before new data is fetched
 ChkPt:		bpl Loop			//17-19
 
@@ -1343,7 +1347,9 @@ CD:
 .byte	$01,$00,$14,$00,$d0,$1d,$c0,$15,$01,$00,$00,$10,$90,$19,$80,$11	//2x
 .byte	$7f,$76,$60,$16,$50,$1c,$40,$14,$76,$7f,$20,$12,$10,$18,$00,$00	//3x	Wanted List $3e-$52 (Sector 16 = #$ff)
 .byte	$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00	//4x	(0) unfetched, (+) fetched, (-) wanted
-.byte	$00,$00,$00,$0e,$1c,$0f,$2c,$07,$00,$80,XX2,$0a,XX3,$0b,XX4,$03	//5x	
+.byte	$00,$00,$00,$0e,$1c,$0f
+.byte							<ErrVal									//		$56 - vT (start value #$2c)
+.byte								$07,$00,$80,XX2,$0a,XX3,$0b,XX4,$03	//5x	
 .byte	$fd,$fd,$fd,$00,$fc,$0d,$00,$05,XX1,XX2,$60,$00,$02,$09,$00,$01	//6x	$60-$64 - ILTab, $63 - NextID, $68 - ZPHdrID1, $69 - ZPHdrID2, $6a/$6b = ZPILTab
 //0070
 ZPReFetch:
