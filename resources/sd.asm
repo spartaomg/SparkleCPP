@@ -264,10 +264,11 @@
 
 .label CSV			=$07		//Checksum Verification Counter Default Value (3 1-bits, 3 data blocks to be verified)
 
-.const vT0			=$24		//virtual track value in speed zone 0 (36)
-.const vT3			=$0c		//virtual track value in speed zone 3 (12)
-.const vTStep		=$08		//distance between virtual track values
-.label ErrVal		=vT0+vTStep	//44 missed consecutive sectors, 2 full rotations in zone 3 (+ 2 more sectors)
+.const vTStep		=$07					//Distance between virtual track values
+.const vT3			=$0e					//Virtual track value in speed zone 3 (14)
+.const vT0			=vT3 + (3 * vTStep)		//Virtual track value in speed zone 0 (35)
+.label ErrVal		=vT0+vTStep				//42 missed consecutive sectors, 2 full rotations in zone 3
+											//Also used to reset vT
 
 .label SpVal		=$52		//Spartan Stepping constant (=82*72=5904=$1710=$17 bycles delay)
 
@@ -721,19 +722,19 @@ FetchError:	dec ErrCtr
 
 BRTCorr:	ldy #$02			//Max. number of consecutive read errors reached or sync timed out
 			sty ReturnFlag
-			lax vT				//Cycle through speed zones (0 -> 1 -> 2 -> 3) using a virtual track number (36 -> 28 -> 20 -> 18)
-			axs #<vTStep		//=#$08
+			lax vT				//Cycle through speed zones (0 -> 1 -> 2 -> 3) using a virtual track number (35 -> 27 -> 21 -> 14)
+			axs #<vTStep		//= 7
 			lda (ZP1c0e),y		//Update bitrate bits according to virtual track speed zone
 			and #$13
-			cpx #<vT3			//=#$0c
+			cpx #<vT3			//= 14
 			bcs !+
-			ldx #<vT0			//wrap around -> reset virtual track number to #$24 and...
+			ldx #<vT0			//wrap around -> reset virtual track number to 35 and...
 			adc #$03			//...step one halftrack down (halftracks are handled from Sync code)
 !:			stx vT
 			ora #$0c			//Keep motor running and LED on
 			jsr BitRate			//Update bitrate here using the virtual track number, adjust GCR loop and sector chain builder, and save Spartan step value
 
-			ldx #<ErrVal		//Reset error counter (44 consecutive sector read errors)
+			ldx #<ErrVal		//Reset error counter (42 consecutive sector read errors)
 			stx	ErrCtr
 
 			sta (ZP1c00-ErrVal,x)	//Update $1c00
@@ -767,7 +768,7 @@ SkipCSLoop:	tay
 			
 			lda #<ErrVal
 			sta ErrCtr			//Reset Error Counter (only if both header and data are fetched correctly)
-			sta vT				//Reset virtual track to 44 ($2c)
+			sta vT				//Reset virtual track to 42 ($2a)
 
 			lsr VerifCtr		//Checksum Verification Counter
 			bcs BplFetch		//If C=1, go to verification loop
@@ -776,14 +777,14 @@ RegBlockRet:
 			txa
 			ldx cS				//Current Sector in Buffer
 			cmp #$12			//If this is Track 18 then we are fetching Block 3 of the drive code or a Dir Block or checking Flip Info
-			beq Track18			//We are on Track 18
+			beq Track18
 
 //--------------------------------------
 //		Update Wanted List
 //--------------------------------------
 
 			sta WList,x			//Sector loaded successfully, mark it off on Wanted list (A=Current Track - always greater than zero)
-			dec SCtr			//Update Sector Counter
+			dec SCtr			//Decrement Sector Counter
 
 //--------------------------------------
 //		Check Plugin Code
@@ -801,8 +802,8 @@ NoSync:		dey					//2
 			bne Sync			//3
 			dex					//2
 			bne Sync			//3	Sync timeout (2 full disk rotations without a sync mark)
-			ldx NewTrackFlag	//	NT Flag is cleared if at least 1 block header is successfully loaded (after block verification)
-			bne BRTCorr			//	In which case bitrate and track correction code will NOT be executed
+			ldx NewTrackFlag	//	NT Flag is cleared if at least 1 block header was successfully loaded on the current track (after block verification)
+			bne BRTCorr			//	In which case bitrate and track correction code will NOT be executed (assume disk was removed)
 Sync:		bit $1c00			//4
 			bmi NoSync			//3	Sync loop: ((12 * 256 + 5) * $82) + (12 * 140 + 5) = 401695 cycles (a little over 2 full disk rotations before sync timeout)
 			rts
@@ -844,7 +845,7 @@ NOP1:		sta (ZP0101),y		//So that it does not confuse the depacker...
 			bcc ChkScnd
 
 NOP2:		sta (ZP0100),y		//This is the first block of a random bundle, delete first byte
-			lda BPtr			//Last byte of bundle will be pointer to first byte of new Bundle
+			lda BPtr			//Last byte of block will point to first byte of new bundle
 NOP3:		sta (ZP01ff),y
 
 ChkScnd:	lda WantedCtr
@@ -858,9 +859,9 @@ CheckATN:	lda $1c00			//Fetch Motor and LED status
 			ora #$0c			//Make sure LED will be on when we restart
 			tax					//This needs to be done here, so that we do not affect Z flag at Restart
 
-.const DelayInSec = 2			//Motor spin down delay in seconds
+.const DelayInSec = 2			//Motor spindown delay in seconds
 
-.var Delay = sqrt(2 * (DelayInSec * 1000000) / 256) + 1
+.var Delay = floor(sqrt(2 * (DelayInSec * 1000000) / 256)) + 1
 
 .if (Delay>255)
 {
@@ -875,7 +876,7 @@ DelayIn:	lda $1c05
 			bne DelayOut
 			lda #$73			//Timer finished, turn motor off
 			sax $1c00
-			sta ErrCtr			//Reset Error Counter for motor spinup - allows 5.5 full rotations in zone 3 during motor spin-up before Error code is triggered
+			sta ErrCtr			//Reset Error Counter for motor spinup - allows 5.5 full revolutions with consecutive read errors in zone 3 before Error code is activated
 			lda #<CSV			//Reset Checksum Verification Counter
 			sta VerifCtr		//When motor restarts, first we verify proper read
 			
@@ -1348,7 +1349,7 @@ CD:
 .byte	$7f,$76,$60,$16,$50,$1c,$40,$14,$76,$7f,$20,$12,$10,$18,$00,$00	//3x	Wanted List $3e-$52 (Sector 16 = #$ff)
 .byte	$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00	//4x	(0) unfetched, (+) fetched, (-) wanted
 .byte	$00,$00,$00,$0e,$1c,$0f
-.byte							<ErrVal									//		$56 - vT (start value #$2c)
+.byte							<ErrVal									//		$56 - vT (start value #$2a)
 .byte								$07,$00,$80,XX2,$0a,XX3,$0b,XX4,$03	//5x	
 .byte	$fd,$fd,$fd,$00,$fc,$0d,$00,$05,XX1,XX2,$60,$00,$02,$09,$00,$01	//6x	$60-$64 - ILTab, $63 - NextID, $68 - ZPHdrID1, $69 - ZPHdrID2, $6a/$6b = ZPILTab
 //0070
