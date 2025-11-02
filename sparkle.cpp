@@ -10,7 +10,7 @@
 //  VERSION INFO
 //----------------------------------
 
-constexpr int FullDate = 20251018;
+constexpr int FullDate = 20251102;
 
 constexpr int VersionMajor = 3;
 constexpr int VersionMinor = 3;
@@ -712,7 +712,7 @@ void InjectDirBlocks()
         DirBlocks[0] = EORtransform(TabT[0]);
         DirBlocks[1] = EORtransform(TabStartS[TabT[0]]);
         DirBlocks[2] = EORtransform(TabSCnt[0]);
-        DirBlocks[3] = 0;
+        DirBlocks[3] = 0xfe;
         
         //Fill the whole directory with Bundle #0's values
         for (int i = 4; i < 512; i++)
@@ -7240,7 +7240,7 @@ int main(int argc, char* argv[])
 
 #ifdef DEBUG
 
-        string ScriptFileName = "c:/Users/Tamas/OneDrive/C64/Coding/SparkleFetchTest/TestDisk.sls";
+        string ScriptFileName = "c:/Users/Tamas/source/repos/X2024/Parts/FastTransfer/FastTransfer.sls";
         Script = ReadFileToString(ScriptFileName, true);
         SetScriptPath(ScriptFileName, AppPath);
 
