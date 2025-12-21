@@ -709,11 +709,11 @@ Track18:	txa					//BAM (Sector 0) or Drive Code Block 3 (Sector 16) or Dir Block
 //--------------------------------------
 			
 CheckIDs:	cmp cT
-			bne ChkTrk18
+			bne ChkTrk18		//Requested track - actual track mismatch
 			cmp #$12
-			bne ChkTrk18
+			bne FetchError		//Requested track = actual track, but not track 18
 
-			sty ZPHdrID1		//Update disk ID1 and ID2 if we are on Track 18 (i.e. after disk flip)
+			sty ZPHdrID1		//Update disk ID1 and ID2 if we are on track 18 (i.e. after disk flip)
 			stx ZPHdrID2
 
 //--------------------------------------
