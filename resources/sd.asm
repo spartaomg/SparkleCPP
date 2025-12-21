@@ -572,7 +572,7 @@ BuildSvr:	lda #$ff			//0b 0c	Needed if nS = last sector of track and it is alrea
 
 ChainLoop:	lda WList,x			//0f 10	Check if sector is unfetched (=00)
 
-	.byte	$7a					//11	TagG (NOP)
+	.byte	$7a					//11	TabG (NOP)
 			nop #$6a			//12 13	Skipping TabG value (ROR)
 
 			bne NxtSct			//14 15	If sector is not unfetched (it is either fetched or wanted), go to next sector
@@ -690,6 +690,9 @@ ToFetchData:
 
 //--------------------------------------
 
+ChkTrk18:	ldx cT				//ID mismatch - did the user replaced disk before disk flip was requested? if yes, then go to track 18
+			cpx #$12
+			bne FetchError		//No, we did not request track 18 - this is a read error
 ToCorrTrack:
 			jmp CorrTrack		//Y can be anything
 
@@ -706,15 +709,15 @@ Track18:	txa					//BAM (Sector 0) or Drive Code Block 3 (Sector 16) or Dir Block
 //--------------------------------------
 			
 CheckIDs:	cmp cT
-			bne FetchError
+			bne ChkTrk18
 			cmp #$12
-			bne FetchError
+			bne ChkTrk18
 
 			sty ZPHdrID1		//Update disk ID1 and ID2 if we are on Track 18 (i.e. after disk flip)
 			stx ZPHdrID2
 
 //--------------------------------------
-//		Fetch error
+//		Fetch Error Handling
 //--------------------------------------
 
 FetchError:	dec ErrCtr
@@ -748,7 +751,7 @@ ToBplFetch:	bpl BplFetch
 DT:
 Data:		ldx cT
 			cpx #$12
-			bcs SkipCSLoop  
+			bcs SkipCSLoop
 
 			ldy #$7e			//CSLoop takes 851 cycles (33 bytes passing under R/W head in zone 3)
 			bne CSLoopEntry
@@ -970,6 +973,7 @@ FetchDir:	jsr ClearList		//C=1 after this
 GotoTrack:	iny
 			sty BlockCtr
 			sty WantedCtr		//Y=#$01 here
+			
 			jmp Fetch
 
 //--------------------------------------
@@ -1025,7 +1029,7 @@ StepTmr:	lda #$98
 			sta $1c05
 
 Seek:		lda $1c00
-PreCalc:	and #$1b
+			and #$1b
 			clc
 			adc StepDir			//#$03 for stepping down, #$01 for stepping up
 			ora #$04			//motor ON
@@ -1033,14 +1037,13 @@ PreCalc:	and #$1b
 			beq StoreTrack		//This was the last half step precalc, leave Stepper Loop without updating $1c00
 			sta $1c00
 
-			dey
-			cpy #$80
-			beq PreCalc			//Ignore timer, precalculate last half step and leave Stepper Loop (after 0.5/1.5 track changes)
+			cpy #$81
+			beq SkipTmr			//Ignore timer, precalculate last half step and leave Stepper Loop (after 0.5/1.5 track changes)
 
 StepWait:	bit $1c05
 			bmi StepWait
 
-			cpy #$00
+SkipTmr:	dey
 			bne StepTmr
 
 StoreTrack:	stx cT
@@ -1076,10 +1079,6 @@ RateDone:	sty MaxNumSct2+1
 
 			ldx #$01			//Extra subtraction for Zone 3
 			stx StepDir			//Reset stepper direction to Up/Inward here
-			cpy #$15
-			beq *+3
-			dex
-			stx SubSct+1
 
 			lsr ReturnFlag
 			bcs RTS
@@ -1171,7 +1170,7 @@ ChkPt:		bpl Loop			//17-19
 TrSeqRet:	lda #(busy | $01)	//19,20			Use #busy + 1 here (AA + DI = $11) for SAX Loop+2 below ($11 & $EF = $01)
 			bit $1800			//21-24			Last bitpair received by C64?
 			bmi *-3				//25,26
-			sta (ZP1800-Msk,x)	//27-32			Transfer finished, send Busy Signal to C64 (sta (<ZP1800-Msk,x) can be used here if needed)
+			sta $1800			//27-30			Transfer finished, send Busy Signal to C64 (sta (<ZP1800-Msk,x) can be used here if needed)
 
 			sax Loop+2			//A&X=$01, restore transfer loop
 

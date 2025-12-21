@@ -10,7 +10,7 @@
 //  VERSION INFO
 //----------------------------------
 
-constexpr int FullDate = 20251102;
+constexpr int FullDate = 20251221;
 
 constexpr int VersionMajor = 3;
 constexpr int VersionMinor = 3;
@@ -6144,7 +6144,7 @@ void CalcTabs()
         if (S >= SMax)
         {
             S -= SMax;
-            if ((T < 18) && (S > 0))    //Wrap around: Subtract 1 if S>0 for tracks 1-17
+            if (S > 0)    //Wrap around: Subtract 1 if S>0 (in all zones)
                 S--;
         }
         TabStartS[T] = S;
@@ -6166,7 +6166,7 @@ void CalcTabs()
                 if (S >= SMax)
                 {
                     S -= SMax;
-                    if ((T < 18) && (S > 0))    //Wrap around: Subtract 1 if S>0 for tracks 1-17
+                    if (S > 0)    //Wrap around: Subtract 1 if S>0 (in all zones)
                         S--;
                 }
             }
