@@ -224,14 +224,14 @@ Cmd:
 			stx $81					//-0211
 			inx						//-0212
 			jsr $d038				//-0215 find track 16 sector 15, to make sure stepper bits are aligned
-			and #$fe				//-0217
-			bne !-					//-0219 if error then start over
-			lda #$12				//-021b
-			sta $0c					//-021d success, back to track 18
-!:			jsr $d586				//-0220 load track 18 sector 15 (init code) to buffer #3 ($0600)
-			and #$fe				//-0222
-			bne !-					//-0224 if error then try block again
-			jmp $0600				//-0227
+			lsr						//-0216
+			bne !-					//-0218 if error then start over
+			lda #$12				//-021a
+			sta $0c					//-021c success, back to track 18
+!:			jsr $d586				//-021f load track 18 sector 15 (init code) to buffer #3 ($0600)
+			lsr						//-0220
+			bne !-					//-0222 if error then try block again
+			jmp $0600				//-0225
 CmdEnd:
 
 //-----------------------------------------------------------------------------------

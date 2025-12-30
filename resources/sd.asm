@@ -338,7 +338,7 @@
 .label SF			=$0139		//SS drive code Fetch vector
 .label SH			=$013e		//SS drive code Got Header vector
 
-.label InitCodeLoc	=$0146		//$0146 - $01b9 is unused by the drive - we load our init code here
+.label InitCodeLoc	=$0146		//$0146 - $01b9 ($73 bytes) are not used by the drive - we copy our init code here
 .label ZPCode		=$0700		//ZP code is initially loaded to $0700-$07ff
 
 .label OPC_ALR		=$4b
@@ -690,11 +690,11 @@ ToFetchData:
 
 //--------------------------------------
 
-ChkTrk18:	ldx cT				//ID mismatch - did the user replaced disk before disk flip was requested? if yes, then go to track 18
+ChkTrk18:	ldx cT				//ID mismatch right before disk flip request? If yes, assume premature disk flip, ignore ID mismatch and go to track 18
 			cpx #$12
 			bne FetchError		//No, we did not request track 18 - this is a read error
 ToCorrTrack:
-			jmp CorrTrack		//Y can be anything
+			jmp CorrTrack		//A = actual track, X & Y can be anything
 
 //--------------------------------------
 //		Disk ID Check			//Y=#$00 here
@@ -709,7 +709,7 @@ Track18:	txa					//BAM (Sector 0) or Drive Code Block 3 (Sector 16) or Dir Block
 //--------------------------------------
 			
 CheckIDs:	cmp cT
-			bne ChkTrk18		//Requested track - actual track mismatch
+			bne ChkTrk18		//Requested track vs. actual track mismatch
 			cmp #$12
 			bne FetchError		//Requested track = actual track, but not track 18
 
@@ -1259,7 +1259,7 @@ CodeStart:	lda #$12			//Track 18
 			bpl !-
 
 LoadSector:	jsr $d586			//Load blocks to buffers 4 ($0700), 2 ($0500), 1 ($0400), 0 ($0300)
-			and #$fe
+			lsr
 			bne LoadSector		//Error? -> try again
 			lsr $f9				//Buffer pointer: -> $02 -> $01 -> $00
 			bne LoadSector
@@ -1279,7 +1279,7 @@ LoadSector:	jsr $d586			//Load blocks to buffers 4 ($0700), 2 ($0500), 1 ($0400)
 //--------------------------------------
 
 InitCode:	jsr $d586			//Load block 3 (sector 16) to buffer 3
-			and #$fe
+			lsr
 			bne InitCode		//Error? -> try again
 
 //--------------------------------------
