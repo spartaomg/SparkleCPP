@@ -10,7 +10,7 @@
 //  VERSION INFO
 //----------------------------------
 
-constexpr int FullDate = 20251230;
+constexpr int FullDate = 20260208;
 
 constexpr int VersionMajor = 3;
 constexpr int VersionMinor = 3;
@@ -78,6 +78,7 @@ const string EntryTypeIL2 = "il2:";
 const string EntryTypeIL3 = "il3:";
 const string EntryTypeProdID = "prodid:";
 const string EntryTypeTracks = "tracks:";
+const string EntryTypeConfig = "config:";
 const string EntryTypeHSFile = "hsfile:";
 const string EntryTypePlugin = "plugin:";
 const string EntryTypeScript = "script:";
@@ -99,6 +100,17 @@ unsigned char BundleTypeTestPlugin = 6;
 #endif
 
 unsigned char BundleType = BundleTypeNone;
+
+enum class LoaderConfigs
+{
+	LoaderConfigFull = 0,
+	LoaderConfigNoIRQ = 1,
+	LoaderConfigBasic = 2
+};
+
+LoaderConfigs LoaderConfig = LoaderConfigs::LoaderConfigFull;
+
+bool LoaderConfigSet = false;
 
 int ProductID = 0;
 size_t LineStart, LineEnd;
@@ -6008,7 +6020,6 @@ bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL)
     AdLo = (B - 1) % 256;
     AdHi = (B - 1) / 256;
 
-
     if (!UpdateZP())
         return false;
 
@@ -6025,9 +6036,50 @@ bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL)
         }
     }
 
+	unsigned char Stack = 0x5f;				//Default stack pointer value, loader uses $0160-$02ff (LoaderConfig = LoaderConfigs::LoaderConfigFull)
+
+	unsigned char PLA = 0x68;
+	unsigned char RTI = 0x40;
+	unsigned char LDX_IMM = 0xa2;
+
+	int loadersize = loader_size;
+	int loaderstart = loadersize - 0x01a0;
+
+	if (LoaderConfig == LoaderConfigs::LoaderConfigNoIRQ)
+	{
+		for (int i = 0; i < 0xa0; i++)
+		{
+			if (loader[loaderstart + i] == PLA && loader[loaderstart + i + 1] == RTI)
+			{
+				Stack += i + 2;				//SP = $79, loader uses $017a-$02ff
+				break;
+			}
+		}
+	}
+	else if (LoaderConfig == LoaderConfigs::LoaderConfigBasic)
+	{
+		for (int i = 0; i < 0xa0; i++)
+		{
+			if (loader[loaderstart + i] == LDA_IMM && loader[loaderstart + i + 1] == 0xf8)		//Find LDA #$f8
+			{
+				Stack += i + 9;				//SP = $9e, loader uses $019f-$02ff
+				break;
+			}
+		}
+	}
+
+	for (int i = 0; i < loaderstart; i++)      //Find LDX #$5f instruction that updates stack pointer
+	{
+		if (loader[i] == LDX_IMM && loader[i + 1] == 0x5f)
+		{
+			loader[i + 1] = Stack;						//Update stack pointer value depending on loader configuration
+			break;
+		}
+	}
+
     //Number of blocks in Loader
-    LoaderBlockCount = loader_size / 254;
-    if (loader_size % 254 != 0)
+    LoaderBlockCount = loadersize / 254;
+    if (loadersize % 254 != 0)
     {
         LoaderBlockCount += 1;
     }
@@ -6041,7 +6093,7 @@ bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL)
         SS = CS;
         for (int c = 0; c < 254; c++)
         {
-            if ((i * 254) + c < loader_size)
+            if ((i * 254) + c < loadersize)
             {
                 Disk[Track[CT] + (CS * 256) + 2 + c] = loader[(i * 254) + c];
             }
@@ -6058,13 +6110,13 @@ bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL)
         else
         {
             Disk[Track[ST] + (SS * 256) + 0] = 0;
-            if (loader_size % 254 == 0)
+            if (loadersize % 254 == 0)
             {
                 Disk[Track[ST] + (SS * 256) + 1] = 255;     //254+1
             }
             else
             {
-                Disk[Track[ST] + (SS * 256) + 1] = ((loader_size) % 254) + 1;
+                Disk[Track[ST] + (SS * 256) + 1] = ((loadersize) % 254) + 1;
             }
         }
     }
@@ -6537,7 +6589,57 @@ bool Build()
 
                 NewBundle = true;
             }
-            else if (ScriptEntryType == EntryTypeIL0)
+			else if (ScriptEntryType == EntryTypeConfig)
+			{
+				if (!NewD)
+				{
+					NewD = true;
+					if ((!FinishDisk(false)) || (!ResetDiskVariables()))
+						return false;
+				}
+
+				if (DiskCnt == 0)
+				{
+					if (NumScriptEntries > -1)
+					{
+						string loaderconfig = "";
+
+						for (size_t i = 0; i < ScriptEntryArray[0].length(); i++)
+						{
+							loaderconfig += tolower(ScriptEntryArray[0][i]);
+
+						}
+
+						if (loaderconfig == "full" || loaderconfig == "0")
+						{
+							LoaderConfig = LoaderConfigs::LoaderConfigFull;
+						}
+						else if (loaderconfig == "noirq" || loaderconfig == "1")
+						{
+							LoaderConfig = LoaderConfigs::LoaderConfigNoIRQ;
+						}
+						else if (loaderconfig == "basic" || loaderconfig == "2")
+						{
+							LoaderConfig = LoaderConfigs::LoaderConfigBasic;
+						}
+						else
+						{
+							cerr << "***CRITICAL***\tUnrecognized loader config value!\n";
+							return false;
+						}
+					}
+				}
+				else
+				{
+					cerr << "***CRITICAL***\tLoader config can only be set in the first disk!\n";
+					return false;
+
+				}
+
+				NewBundle = true;
+
+			}
+			else if (ScriptEntryType == EntryTypeIL0)
             {
                 if (!NewD)
                 {
@@ -7240,7 +7342,7 @@ int main(int argc, char* argv[])
 
 #ifdef DEBUG
 
-        string ScriptFileName = "c:/Users/Tamas/source/repos/X2024/Parts/FastTransfer/FastTransfer.sls";
+        string ScriptFileName = "c:/SparkleTestProjects/Aloft/Parts/AirplaneCloseup/AirplaneCloseup.sls";
         Script = ReadFileToString(ScriptFileName, true);
         SetScriptPath(ScriptFileName, AppPath);
 

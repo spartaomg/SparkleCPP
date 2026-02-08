@@ -130,13 +130,23 @@ ChkDone:	ldx #<Cmd
 			ldx #$5f
 			txs						//Loader starts @ $160, so reduce stack to $100-$15f
 
+			inx
+			stx LTo+1
+			txa
+			clc
+			adc #<LoaderCode - $60
+			sta LCopyLoop+1
+			lda #>LoaderCode - $60
+			adc #$00
+			sta LCopyLoop+2
+
 			lda #$3c				// 0  0  1  1  1  1  0  0
 			sta $dd02				//DI|CI|DO|CO|AO|RS|VC|VC
 			ldx #$00				//Clear the lines
 			stx $dd00
 
 LCopyLoop:	lda LoaderCode,x
-			sta $0160,x
+LTo:		sta $0160,x
 			lda LoaderCode+$a0,x
 			sta $0200,x
 			inx
@@ -175,11 +185,6 @@ NTSCLoop:	sta Read1,x
 SkipNTSC:
 //----------------------------------
 
-			//lda #<Sparkle_IRQ_RTI	//Install NMI vector
-			//sta $fffa
-			//lda #>Sparkle_IRQ_RTI
-			//sta $fffb
-
 			lda #busy				//=#$f8
 			bit $dd00				//Wait for "drive busy" signal (DI=0 CI=1 dd00=#$4b)
 			bmi *-3
@@ -212,7 +217,7 @@ NDWEnd:
 //-----------------------------------------------------------------------------------
 
 Cmd:
-//Load all 5 drive code blocks into buffers 0-4 at $300-$7ff on drive in one command
+//Load drive code blocks into buffers 0-4
 
 .byte	'M','-','E',$05,$02			//-0204 Command buffer: $0200-$0228
 			
