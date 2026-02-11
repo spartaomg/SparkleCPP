@@ -588,7 +588,7 @@ MaxNumSct1:	cpx MaxNumSct2+1	//1e-20	Reached Max?
 			bcc SkipSub			//24 25	Has not reached Max yet, so skip adjustments
 MaxNumSct2:	axs #$13			//26 27	Reached Max, so subtract Max
 			beq SkipSub			//28 29
-SubSct:		axs #$01			//2a 2b	Decrease if sector > 0
+SubSct:		axs #$00			//2a 2b	Decrease if sector > 0, start value = 0, we are on track 18 at start
 SkipSub:	dey					//2c	Any more blocks to be put in chain?
 			bne ChainLoop		//2d 2e
 			stx nS				//2f 30
@@ -1075,7 +1075,7 @@ RateDone:	sty MaxNumSct2+1
 			ldx ILTab-$11,y		//Inverted Custom Interleave Table
 			stx IL+1
 
-			lsr SubSct+1
+			lsr SubSct+1		//Set SubSct to 1 if MaxNumSct = 21 (tracks 1-17)
 			cpy #$15
 			rol SubSct+1
 
