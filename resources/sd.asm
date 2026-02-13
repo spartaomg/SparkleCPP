@@ -594,8 +594,8 @@ SkipSub:	dey					//2c	Any more blocks to be put in chain?
 			stx nS				//2f 30
 
 	.byte	$ea					//31 	TabG (NOP)
-	.byte 	$ca					//32	TabG (DEX) - this only matters in indexed calls - next call includes INX (NxtSct)
-	.byte	$4a					//33	TabG (LSR) - no effect, A is already stored
+	.byte 	$ca					//32	TabG (DEX) - this only matters in indexed calls - next call includes INX (NxtSct) -> Z=0/1 depending on X
+	.byte	$4a					//33	TabG (LSR) - no effect, A is already stored -> A = #$7f, C=1
 
 			rts					//34	A=#$7f, C=1, Z=0, X=next sector - 1, Y=#$00 here
 
@@ -948,11 +948,13 @@ DirLoop:	lda $0700,x
 			dec MarkSct			//Change STA ZP,x to STY ZP,x ($95 -> $94) (A=$ff - wanted, Y>#$00 - used)
 			jsr Build			//Mark all sectors preceding the first sector of the new bundle as FETCHED
 			inc MarkSct			//Restore Build loop
+			inx					//Compensate for the unwanted DEX at the end of Build
 
-			iny					//Mark the first sector of the new bundle as WANTED
-			jsr NxtSct			//A=#$7f, X=Next Sector - 1 (we jump to an INX to correct X), Y=#$00 after this call
-
-			bne GotoTrack		//A=#$7f, Y=#$00, C=1, Z=0 - BCS would also work
+SetSct:		iny					//Mark the first sector of the new bundle as WANTED
+			sty BlockCtr
+			sty WantedCtr		//Y=#$01 here
+			jsr Build			//A=#$7f, X=Next Sector - 1, Y=#$00 after this call
+			jmp Fetch
 
 //--------------------------------------
 
@@ -965,14 +967,9 @@ NewDiskID:	sta NextID			//Next Disk's ID for flip detection - we store DiskID x 
 FetchBAM:	tya					//Y=#$00
 FetchDir:	jsr ClearList		//C=1 after this
 			tax
-			dec WList,x			//Mark sector as wanted
 			lda #$12			//Both FetchBAM and FetchDir need track 18
 			sta cT
-GotoTrack:	iny
-			sty BlockCtr
-			sty WantedCtr		//Y=#$01 here
-			
-			jmp Fetch
+			bne SetSct
 
 //--------------------------------------
 //
@@ -1173,8 +1170,8 @@ TrSeqRet:	lda #(busy | $01)	//19,20			Use #busy + 1 here (AA + DI = $11) for SAX
 
 			sax Loop+2			//A&X=$01, restore transfer loop
 
-			lda (<ZP1800-Msk,x)	//Make sure C64 pulls ATN before continuing (lda (<ZP1800-Msk,x); bpl *-2 can be used here if needed)
-			bpl *-2				//Without this the next ATN check may fall through resulting in early reset of the drive
+			bit $1800			//Make sure C64 pulls ATN before continuing (lda (<ZP1800-Msk,x); bpl *-2 can be used here if needed)
+			bpl *-3				//Without this the next ATN check may fall through resulting in early reset of the drive
 
 			jsr ToggleLED		//Transfer complete - turn LED off, leave motor on
 
