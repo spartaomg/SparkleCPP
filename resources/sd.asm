@@ -914,12 +914,11 @@ TestRet:	ldy #$00			//Needed later (for FetchBAM if this is a flip request, and 
 			asl
 			sta DirLoop+1		//Dir entry offset within dir block
 			tya					//DirIndex=#$00-#$3f -> C=0 -> A will be $11 (dir sector 17)
-			adc #$11			//DirIndex=#$40-#$7f -> C=1 -> A will be $12 (dir sector 18)
-			cmp DirSector
-			beq DirFetchReturn	//Is the needed Dir block fetched?
+			adc #$11			//DirIndex=#$40-#$7f -> C=1 -> A will be $12 (dir sector 18)	
+			cmp DirSector		//Is the needed Dir block fetched?
 
-			sta DirSector		//No, store new Dir block index and fetch directory sector
-			bne FetchDir		//Fetch directory sector, Y=#$00 here
+			sta DirSector		//Store Dir block index
+			bne FetchDir		//No, fetch directory sector, Y=#$00 here
 
 DirFetchReturn:
 			ldx #$03
@@ -942,19 +941,16 @@ DirLoop:	lda $0700,x
 								//Also find interleave and sector count for requested track
 
 			ldx LastS			//This is actually the first sector on the track after track change (i.e. nS), always < MaxNumSct
-			tya					//A=MaxSct
+			tya					//A=MaxNumSct
 			sbc SCtr			//Remaining sectors on track, SEC is not needed, C=1 after LSR ReturnFlag
-			tay					//Y=already fetched sectors on track
+			tay					//Y=number of sectors on track preceding the first sector of the new bundle
 			dec MarkSct			//Change STA ZP,x to STY ZP,x ($95 -> $94) (A=$ff - wanted, Y>#$00 - used)
 			jsr Build			//Mark all sectors preceding the first sector of the new bundle as FETCHED
 			inc MarkSct			//Restore Build loop
-			inx					//Compensate for the unwanted DEX at the end of Build
+			iny					//Mark the first sector of the new bundle as WANTED
+			jsr NxtSct			//A=#$7f, X=Next Sector - 1 (we jump to an INX to correct X), Y=#$00 after this call
 
-SetSct:		iny					//Mark the first sector of the new bundle as WANTED
-			sty BlockCtr
-			sty WantedCtr		//Y=#$01 here
-			jsr Build			//A=#$7f, X=Next Sector - 1, Y=#$00 after this call
-			jmp Fetch
+			bcs GotoTrack		//A=#$7f, C=1, Y=#$00, Z=0/1 depending on the result of DEX - BCS always works
 
 //--------------------------------------
 
@@ -967,9 +963,14 @@ NewDiskID:	sta NextID			//Next Disk's ID for flip detection - we store DiskID x 
 FetchBAM:	tya					//Y=#$00
 FetchDir:	jsr ClearList		//C=1 after this
 			tax
+			dec WList,x			//Mark sector as wanted
 			lda #$12			//Both FetchBAM and FetchDir need track 18
 			sta cT
-			bne SetSct
+GotoTrack:	iny
+			sty BlockCtr
+			sty WantedCtr		//Y=#$01 here
+			
+			jmp Fetch
 
 //--------------------------------------
 //
@@ -1105,7 +1106,7 @@ GCRLoopPatch:
 StartTr:	ldy #$00			//transfer loop counter
 			ldx #Msk			//bit mask for SAX = $ef
 			lda #ready			//A=#$08, ATN=0, AA not needed
-TrSeq:		sta (ZP1800),y
+TrSeq:		sta $1800			//sta (ZP1800),y if needed
 
 //--------------------------------------
 //		Transfer loop
