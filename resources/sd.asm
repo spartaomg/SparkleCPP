@@ -235,18 +235,6 @@
 //	18:00:$f8	$0108	BAM_ProdID (1)
 //	18:00:$f7	$0109	BAM_ProdID (2)
 //
-//	TODO (wound save 4 bytes in code but needs 4 bytes for ProdID and DiskID and we only have 3 ATM...)
-//	18:00:$ff	$0101	IL3R		(will be copied to $20)
-//	18:00:$fe	$0102	IL2R		(will be copied to $21)
-//	18:00:$fd	$0103	IL1R		(will be copied to $22)
-//	18:00:$fc	$0104	BAM_NextID	(will be copied to $23 after flip, $ff if no more flips)
-//	18:00:$fb	$0105	IL0R		(will be copied to $24)
-//
-//	18:00:$fa	$0106	BAM_ProdID (0)
-//	18:00:$f9	$0107	BAM_ProdID (1)
-//	18:00:$f8	$0108	BAM_ProdID (2)
-//	18:00:$f7	$0109	BAM_DiskID	(for flip detection, compare to NextID @ $23 on ZP)
-//
 //----------------------------------------------------------------------------------------
 //	Directory Structure
 //
@@ -279,38 +267,37 @@
 .label ready		=CO			//DO=0,CO=1,AA=0	$1800=#$08	dd00=100000xx (#$83)
 								//Also serves to reset vT to vT0 + vTStep
 //ZP Usage:
-.label cT			=$00		//Current Track
+.label cT			=$00		//Requested Track
 .label cS			=$01		//Current Sector
-.label nS			=$02		//Next Sector
+.label nS			=$02		//Next Sector in chain using interleave
 .label BlockCtr		=$03		//No. of blocks in Bundle, stored as the last byte of first block
 .label WantedCtr	=$08		//Wanted Sector Counter
 .label Random		=$18		//Marks random file access
 .label VerifCtr		=$19		//Checksum Verification Counter
 .label LastT		=$20		//Track number of last block of a Bundle, initial value=#$01
 .label LastS		=$21		//Sector number of last block of a Bundle, initial value=#$00
-.label SCtr			=$22		//Sector Counter, sectors left unfetched in track
-.label BPtr			=$23		//Byte Pointer within block for random access
+.label SCtr			=$22		//Sector Counter, sectors remaining on current track
+.label BPtr			=$23		//Byte Pointer, stores offset where new bundle starts in block for random access
 .label StepDir		=$28		//Stepping  Direction
-.label ScndBuff		=$29		//#$01 if last block of a Bundle is fetched, otherwise $00
+.label ScndBuff		=$29		//#$01 if last block of a Bundle is fetched and stored in secondary buffer, otherwise $00
 .label WList		=$3e		//Wanted Sector list ($3e-$52) ([0]=unfetched, [-]=wanted, [+]=fetched)
 .label vT			=$56		//Start value: 44 ($2c) -> 36 -> 28 -> 20 -> 12 -> 36
 .label ZPSpVal		=$58		//Spartan step VIA 2 Port B value
 .label ErrCtr		=$59		//Checksum error counter
+.label UNUSED		=$5a
 .label NBC			=$5c		//New Block Count temporary storage
-.label DirSector	=$5e		//Initial value=XX1 (<>#$10 or #$11)
+.label DirSector	=$5e		//Initial value=XX4 (value != #$10 && value != #$11)
 .label ILTab		=$60		//Inverted Custom Interleave Table ($60-$64)
 .label NextID		=$63		//Next Side's ID - will be updated from 18:00:$fd of next side
 
-//UNUSED: $5a
-
-.label ReturnFlag	=$66		//Determines whether StepTimer code is called as a subroutine
+.label ReturnFlag	=$66		//Determines whether StepTimer is called as a subroutine
 
 .label NewTrackFlag	=$74		//Gets set after stepping to a new track and cleared once sync mark is found and correct block type is verified
-.label Plugin		=$76		//Determines whether fetched block is a plugin
+.label Plugin		=$76		//Determines whether fetched block is a plugin, stored as bits 6-7 of the track number in the internal directory 
 
-.label ZPILTab		=$6a		//$59/$5a = $0060
 .label ZPHdrID1		=$68
 .label ZPHdrID2		=$69
+.label ZPILTab		=$6a		//$6a/$6b = $0060
 
 .label ZP7f			=$30		//BitShufTab
 .label ZP12			=$3b		//TabF value
@@ -437,9 +424,9 @@ SFetchJmp:
 .byte	    $8b
 //0372
 ShufToRaw:	ldx #$09			//72 73	Fetched data are bit shuffled and
-			axs #$00			//74 75	EOR transformed for fast transfer, sets C
+			axs #$00			//74 75	EOR transformed for fast transfer
 			eor.z BitShufTab,x	//76 77
-			rts					//78
+			rts					//78	C=1 after AXS
 //0379
 .byte										$83
 //037a
@@ -465,10 +452,10 @@ CorrTrack:	ldy #$02			//92 93
 			sty ReturnFlag		//94 95
 			sec					//96
 			ldx cT				//97 98	X = Requested track
-			sta cT				//99 9a TabD value ($85 = OPC_STA_ZP)
+			sta cT				//99 9a TabD value ($85 = OPC_STA_ZP); temporarily store actual track in cT, will be overwritten by requested track later
 			txa					//9b
 			sbc cT				//9c 9d
-			bcs SkipStepDn		//9e 9f
+			bcs SkipStepDn		//9e 9f BEQ is not checked, track correction is only done if requested track != actual track
 			eor #$ff			//a0 a1
 			adc #$01			//a2 a3
 			iny					//a4
@@ -479,7 +466,7 @@ SkipStepDn:	asl					//a7
 	.byte	$80					//a9	TabD value (OPC_NOP_IMM)
 	.byte	XX3					//aa
 
-			jsr StepTmr			//ab-ad	Move head to track and update bitrate (also stores new Track number in cT and calculates SCtr but doesn't store it)
+			jsr StepTmr			//ab-ad	Move head to track and update bitrate, restore requested track in cT, calculate SCtr without storing it
 
 			ldy #<CSV			//ae af
 
@@ -492,7 +479,7 @@ SkipStepDn:	asl					//a7
 Patch0:
 	.byte	<GCRLoop0_2-(GCREntry + 2)	//b6 ($a2)	= LDX #$a2	- no effect
 	.byte	<GCRLoop0_2-(GCREntry + 2)	//b7 ($a2)
-	.byte	<GCRLoop0_2-(GCREntry + 2)	//b8 ($a2)	= LDX #$81	- no effect
+	.byte	<GCRLoop0_2-(GCREntry + 2)	//b8 ($a2)	= LDX #$81	- this value in X can be used to restore StepDir
 	
 	.byte	$81					//b9	TabD value (OPC_STA_IZX)
 		
@@ -564,7 +551,7 @@ AXS:		axs #$00			//f7 f8|07
 //--------------------------------------
 //0409
 NxtSct:		inx					//09
-Build:		iny					//0a	Temporary increase as we will have an unwanted decrease after BNE
+Build:		iny					//0a	Temporary increase as we will have an unwanted DEY at SkipSub
 BuildSvr:	lda #$ff			//0b 0c	Needed if nS = last sector of track and it is already fetched
 			bne MaxNumSct1		//0d 0e	Branch ALWAYS
 
@@ -777,14 +764,14 @@ SkipCSLoop:	tay
 RegBlockRet:
 			txa
 			ldx cS				//Current Sector in Buffer
-			cmp #$12			//If this is Track 18 then we are fetching Block 3 of the drive code or a Dir Block or checking Flip Info
+			cmp #$12			//If this is Track 18 then we are fetching a Dir Block or checking Flip Info
 			beq Track18
 
 //--------------------------------------
 //		Update Wanted List
 //--------------------------------------
 
-			sta WList,x			//Sector loaded successfully, mark it off on Wanted list (A=Current Track - always greater than zero)
+			sta WList,x			//Sector loaded successfully, mark it off on Wanted list (A = requested track - always positive)
 			dec SCtr			//Decrement Sector Counter
 
 //--------------------------------------
@@ -860,16 +847,16 @@ CheckATN:	lda $1c00			//Fetch Motor and LED status
 			ora #$0c			//Make sure LED will be on when we restart
 			tax					//This needs to be done here, so that we do not clobber the Z flag at Restart
 
-.const DelayInSec = 2			//Motor spindown delay in seconds
+			.const DelayInSec = 2	//Motor spindown delay in seconds
 
-.var Delay = floor(sqrt(2 * (DelayInSec * 1000000) / 256)) + 1
+			.var Delay = floor(sqrt(2 * (DelayInSec * 1000000) / 256))
 
-.if (Delay>255)
-{
-	.error "Delay cannot be more than 255 (about 8.25 seconds)!"
-}
+			.if (Delay>255)
+			{
+				.error "Spindown delay cannot be more than 255 (about 8.32 seconds)!"
+			}
 
-Frames:		ldy #<Delay			//100 frames (2 seconds) delay before turning motor off (#$c7 for 5 sec) = SQR((NumCycles/$100)*2)
+SF_Delay:	ldy #<Delay			//Delay before turning motor off (#$c7 for 5 sec) = SQR((NumCycles/$100)*2) (label needed for
 DelayOut:	sty $1c05			//Start timer, wait 2 seconds before turning motor off
 DelayIn:	lda $1c05
 			bne ChkLines
@@ -901,16 +888,15 @@ GetByte:	lda #$80			//$dd00=#$9b, $1800=#$94
 
 TrRnd:		jsr RcvByte			//OK to use stack here
 
-LoadStart:
 TrRndRet:	inx
-			beq Reset			//C64 requests drive reset
-
+			beq Reset			//A=#$ff, C64 requests drive reset
+LoadStart:
 FlipRet:
 TestRet:	ldy #$00			//Needed later (for FetchBAM if this is a flip request, and FetchDir too)
 			sty	ScndBuff		//Clear Second Buffer flag, in case we prefetched the last block of the next bundle
 
 			asl
-			bcs NewDiskID		//A=#$80-#$fe, Y=#$00 - flip disk
+			bcs NewDiskID		//A=#$80-#$fe, Y=#$00 - disk flip request
 			asl
 			sta DirLoop+1		//Dir entry offset within dir block
 			tya					//DirIndex=#$00-#$3f -> C=0 -> A will be $11 (dir sector 17)
@@ -918,7 +904,7 @@ TestRet:	ldy #$00			//Needed later (for FetchBAM if this is a flip request, and 
 			cmp DirSector		//Is the needed Dir block fetched?
 
 			sta DirSector		//Store Dir block index
-			bne FetchDir		//No, fetch directory sector, Y=#$00 here
+			bne FetchDir		//No, fetch Dir block, Y=#$00 here
 
 DirFetchReturn:
 			ldx #$03
@@ -934,10 +920,9 @@ DirLoop:	lda $0700,x
 			jsr ClearList		//Clear Wanted List, Y=00 here
 
 			inc ReturnFlag
-			inc Random
 
 			tax					//X=A=LastT
-			jsr StoreTrack		//Update Build loop, Y=MaxSct after this
+			jsr StoreTrack		//Store requested track in cT, update Build loop, returns with Y=MaxNumSct
 								//Also find interleave and sector count for requested track
 
 			ldx LastS			//This is actually the first sector on the track after track change (i.e. nS), always < MaxNumSct
@@ -948,9 +933,14 @@ DirLoop:	lda $0700,x
 			jsr Build			//Mark all sectors preceding the first sector of the new bundle as FETCHED
 			inc MarkSct			//Restore Build loop
 			iny					//Mark the first sector of the new bundle as WANTED
+			sty Random			//Set random file access flag
 			jsr NxtSct			//A=#$7f, X=Next Sector - 1 (we jump to an INX to correct X), Y=#$00 after this call
 
-			bcs GotoTrack		//A=#$7f, C=1, Y=#$00, Z=0/1 depending on the result of DEX - BCS always works
+GotoTrack:	iny
+			sty BlockCtr
+			sty WantedCtr		//Y=#$01 here
+			
+			jmp Fetch			//Fetch a random block header to determine R/W head position over disk before initiating any track change
 
 //--------------------------------------
 
@@ -964,13 +954,9 @@ FetchBAM:	tya					//Y=#$00
 FetchDir:	jsr ClearList		//C=1 after this
 			tax
 			dec WList,x			//Mark sector as wanted
-			lda #$12			//Both FetchBAM and FetchDir need track 18
+			lda #$12			//Request track 18 for both FetchBAM and FetchDir
 			sta cT
-GotoTrack:	iny
-			sty BlockCtr
-			sty WantedCtr		//Y=#$01 here
-			
-			jmp Fetch
+			bne GotoTrack
 
 //--------------------------------------
 //
@@ -1041,6 +1027,10 @@ StepWait:	bit $1c05
 
 SkipTmr:	dey
 			bne StepTmr
+
+//--------------------------------------
+//		Store requested track in cT
+//--------------------------------------
 
 StoreTrack:	stx cT
 
@@ -1234,6 +1224,8 @@ EndOfDriveCode:
 
 .pseudopc $0600 {
 
+.const ROMReadBlock	= $d586
+
 //--------------------------------------
 //		Initialization
 //--------------------------------------
@@ -1255,10 +1247,10 @@ CodeStart:	lda #$12			//Track 18
 			dex
 			bpl !-
 
-LoadSector:	jsr $d586			//Load blocks to buffers 4 ($0700), 2 ($0500), 1 ($0400), 0 ($0300)
+LoadSector:	jsr ROMReadBlock	//Load blocks to buffers 4 ($0700), 2 ($0500), 1 ($0400), 0 ($0300)
 			lsr
 			bne LoadSector		//Error? -> try again
-			lsr $f9				//Buffer pointer: -> $02 -> $01 -> $00
+			lsr $f9				//Buffer pointer: $04 -> $02 -> $01 -> $00 (skipping block 3 to avoid overwriting the installer code at $0600)
 			bne LoadSector
 			bcs LoadSector
 
@@ -1275,7 +1267,7 @@ LoadSector:	jsr $d586			//Load blocks to buffers 4 ($0700), 2 ($0500), 1 ($0400)
 
 //--------------------------------------
 
-InitCode:	jsr $d586			//Load block 3 (sector 16) to buffer 3
+InitCode:	jsr ROMReadBlock	//Load block 3 (sector 16) to buffer 3
 			lsr
 			bne InitCode		//Error? -> try again
 

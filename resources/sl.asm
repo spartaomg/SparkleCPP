@@ -219,21 +219,25 @@ NDWEnd:
 Cmd:
 //Load drive code blocks into buffers 0-4
 
+.const ROMLoadBAM	= $c647
+.const ROMSeekBlock	= $d038
+.const ROMReadBlock	= $d586
+
 .byte	'M','-','E',$05,$02			//-0204 Command buffer: $0200-$0228
 			
-!:			jsr $c647				//-0207 always start on track 18 by loading BAM - this will also initialize ZP variables (disk ID, current track)
+!:			jsr ROMLoadBAM			//-0207 always start on track 18 by loading BAM - this will also initialize ZP variables (disk ID, current track)
 			bne !-					//-0209 if error then try again
 			lda #$03				//-020b
 			sta $f9					//-020d buffer #3
 			ldx #$0f				//-020f
 			stx $81					//-0211
 			inx						//-0212
-			jsr $d038				//-0215 find track 16 sector 15, to make sure stepper bits are aligned
+			jsr ROMSeekBlock		//-0215 find track 16 sector 15, to make sure stepper bits are aligned
 			lsr						//-0216
 			bne !-					//-0218 if error then start over
 			lda #$12				//-021a
 			sta $0c					//-021c success, back to track 18
-!:			jsr $d586				//-021f load track 18 sector 15 (init code) to buffer #3 ($0600)
+!:			jsr ROMReadBlock		//-021f load track 18 sector 15 (init code) to buffer #3 ($0600)
 			lsr						//-0220
 			bne !-					//-0222 if error then try block again
 			jmp $0600				//-0225
