@@ -452,16 +452,16 @@ CorrTrack:	ldy #$02			//92 93
 			sty ReturnFlag		//94 95
 			sec					//96
 			ldx cT				//97 98	X = Requested track
-			sta cT				//99 9a TabD value ($85 = OPC_STA_ZP); temporarily store actual track in cT, will be overwritten by requested track later
+			sta cT				//99 9a	TabD value ($85 = OPC_STA_ZP); temporarily store actual track in cT, will be overwritten by requested track later
 			txa					//9b
 			sbc cT				//9c 9d
-			bcs SkipStepDn		//9e 9f BEQ is not checked, track correction is only done if requested track != actual track
-			sbc #$00			//a0 a1 C=0 -> A-=1 -> C=1
+			bcs SkipStepDn		//9e 9f	BEQ is not checked, track correction is only done if requested track != actual track
+			sbc #$00			//a0 a1	C=0 -> A-=1 -> C=1
 			eor #$ff			//a2 a3
-			rol StepDir			//a4 a5	StepDir: #$01 -> #$03
+			rol StepDir			//a4 a5	StepDir: #$01 -> #$03 Only store stepper direction DOWN/OUTWARD here
 SkipStepDn:	asl					//a6
 			tay					//a7
-			nop $80				//a8 a9 skipping TabD value $80 (OPC_NOP_IMM)
+			nop $80				//a8 a9	Skipping TabD value $80 (OPC_NOP_IMM)
 
 			jsr StepTmr			//aa-ac	Move head to track, store Spartan bitrate value, restore requested track in cT, calculate SCtr without storing it
 
@@ -469,18 +469,17 @@ SkipStepDn:	asl					//a6
 
 			nop	#$89			//b0 b1	Skipping TabD value $89 (OPC_NOP_IMM)
 			
-			lda #<CSV			//b2 b3	
-
+			lda #<CSV			//b2 b3
 			sta VerifCtr		//b4 b5
 
 Patch0:
-	.byte	<GCRLoop0_2-(GCREntry + 2)	//b6 ($a2)	= LDX #$a2	- no effect
+	.byte	<GCRLoop0_2-(GCREntry + 2)	//b6 ($a2) = LDX #$a2 - no effect
 	.byte	<GCRLoop0_2-(GCREntry + 2)	//b7 ($a2)
-	.byte	<GCRLoop0_2-(GCREntry + 2)	//b8 ($a2)	= LDX #$81	- this value in X can be used to restore StepDir
+	.byte	<GCRLoop0_2-(GCREntry + 2)	//b8 ($a2) = LDX #$81 - this value in X can be used to restore StepDir
 	
 	.byte	$81					//b9	TabD value (OPC_STA_IZX)
 		
-	.byte	<GCRLoop3-(GCREntry + 2)	//ba ($a8)	= TAY		- no effect
+	.byte	<GCRLoop3-(GCREntry + 2)	//ba ($a8) = TAY - no effect
 				
 			sax	StepDir			//bb bc	Restore stepper direction to UP/INWARD (A=#$07 & X=#$81 -> StepDir = #$01)
 
@@ -496,7 +495,7 @@ FetchSHeader:
 			lda #$52			//bf c0	First 8 bits of Header ID (01010010)
 			ldx #$04			//c1 c2	4 bytes to stack
 			txs					//c3	Header: $0104,$0103..$0101
-			bne Presync			//c4 c5 Skip Data Block fetch
+			bne Presync			//c4 c5	Skip Data Block fetch
 				
 FetchData:	ldy #<DataJmp		//c6 c7	Checksum verification after GCR loop will jump to Data Code - SP = $00 here (LDX #$00; TXS not needed)
 
@@ -505,15 +504,15 @@ FetchData:	ldy #<DataJmp		//c6 c7	Checksum verification after GCR loop will jump
 			lda #$55			//ca cb	First 8 bits of Data ID (01010101)
 
 Presync:	sty.z ModJmp+1		//cc cd
-			ldx #$83			//ce cf		
+			ldx #$83			//ce cf
 
-			ldy #$8c			//d0 d1 using TabD value in Y for sync loop countdown
+			ldy #$8c			//d0 d1	Using TabD value in Y for sync loop countdown
 
 			sta.z (ZP0102-$83,x)//d2 d3
 			jsr Sync			//d4-d6	JSR clobbers $0103-$0104 or $01ff-$0100 and either returns either here or SP gets reset to $04 after Error handling
 			clv					//d7
 			
-			nop #$84			//d8 d9 Skipping TabD value
+			nop #$84			//d8 d9	Skipping TabD value
 			
 			sta $0103			//da-dc	$103 must be set AFTER JSR, Y can no longer be used here
 			nop $1c01			//dd-df
@@ -566,8 +565,8 @@ IL:			axs #$00			//1c 1d	Calculate Next Sector using inverted interleave
 MaxNumSct1:	cpx MaxNumSct2+1	//1e-20	Reached Max?
 
 	.byte	$fa					//21	TabG (NOP)
-	.byte	$da					//22   	TabG (NOP)
-	.byte	$5a					//23   	TabG (NOP)
+	.byte	$da					//22	TabG (NOP)
+	.byte	$5a					//23	TabG (NOP)
 
 			bcc SkipSub			//24 25	Has not reached Max yet, so skip adjustments
 MaxNumSct2:	axs #$13			//26 27	Reached Max, so subtract Max
@@ -577,7 +576,7 @@ SkipSub:	dey					//2c	Any more blocks to be put in chain?
 			bne ChainLoop		//2d 2e
 			stx nS				//2f 30
 
-	.byte	$ea					//31 	TabG (NOP)
+	.byte	$ea					//31	TabG (NOP)
 	.byte 	$ca					//32	TabG (DEX) - this only matters in indexed calls - next call includes INX (NxtSct) -> Z=0/1 depending on X
 	.byte	$4a					//33	TabG (LSR) - no effect, A is already stored -> A = #$7f, C=1
 
@@ -589,7 +588,7 @@ SkipSub:	dey					//2c	Any more blocks to be put in chain?
 //0435
 FlipDtct:	lda NextID			//35 36	Side is done, check if there is a next side
 			cmp (ZP0101),y		//37 38	DiskID, compare it to NextID
-			bne ReFetch			//39 3a ID mismatch, fetch again until flip detected
+			bne ReFetch			//39 3a	ID mismatch, fetch again until flip detected
 			
 ProdIDLoop:	iny					//3b
 			cpy #$04			//3c 3d
@@ -649,14 +648,14 @@ Header:		bne FetchError		//5b 5c	33	Checksum mismatch
 			cmp #$29			//		117	Max track: 40 ($28)
 			bcs FetchError		//		119	Track mismatch
 			
-			ldx $0101			//		123 X = $0101 (ID2)
+			ldx $0101			//		123	X = $0101 (ID2)
 			cpx ZPHdrID2		//		126
 			bne CheckIDs		//		128	ID2 mismatch
 			
 			cpy ZPHdrID1		//		131
 			bne CheckIDs		//		133	ID1 mismatch
 
-			cmp cT				//		134 Everything else checked out, check if we are on the requested track
+			cmp cT				//		134	Everything else checked out, check if we are on the requested track
 			bne ToCorrTrack		//		136
 						
 			ldy VerifCtr		//		139
@@ -1103,7 +1102,7 @@ Loop:		lda $0100,y			//03-06			20-23			00-03
 			bit Rts: $1860		//07-10			24-27			04-07
 			bmi *-3				//11 12			28 29			08 09
 W1:			sax $1800			//13-16			30-33			10-13
-								//(17 cycles) 	(34 cycles)
+								//(17 cycles	(34 cycles)
 
 			dey					//00 01
 			asl					//02 03
