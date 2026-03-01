@@ -456,25 +456,22 @@ CorrTrack:	ldy #$02			//92 93
 			txa					//9b
 			sbc cT				//9c 9d
 			bcs SkipStepDn		//9e 9f BEQ is not checked, track correction is only done if requested track != actual track
-			eor #$ff			//a0 a1
-			adc #$01			//a2 a3
-			iny					//a4
-			sty StepDir			//a5 a6	Only store stepper direction DOWN/OUTWARD here (Y=#$03)
-SkipStepDn:	asl					//a7
-			tay					//a8
+			sbc #$00			//a0 a1 C=0 -> A-=1 -> C=1
+			eor #$ff			//a2 a3
+			rol StepDir			//a4 a5	StepDir: #$01 -> #$03
+SkipStepDn:	asl					//a6
+			tay					//a7
+			nop $80				//a8 a9 skipping TabD value $80 (OPC_NOP_IMM)
 
-	.byte	$80					//a9	TabD value (OPC_NOP_IMM)
-	.byte	XX3					//aa
+			jsr StepTmr			//aa-ac	Move head to track, store Spartan bitrate value, restore requested track in cT, calculate SCtr without storing it
 
-			jsr StepTmr			//ab-ad	Move head to track and update bitrate, restore requested track in cT, calculate SCtr without storing it
+			sta $1c00			//ad-af	Update bitrate after last halftrack step (StepTmr loop doesn't update bitrate bits)
 
-			ldy #<CSV			//ae af
+			nop	#$89			//b0 b1	Skipping TabD value $89 (OPC_NOP_IMM)
+			
+			lda #<CSV			//b2 b3	
 
-			ldx	#$89			//b0 b1	Using TabD value (OPC_NOP_IMM)
-
-			sta (ZP1c00-$89,x)	//b2 b3	Needed to update bitrate!!!
-
-			sty VerifCtr		//b4 b5
+			sta VerifCtr		//b4 b5
 
 Patch0:
 	.byte	<GCRLoop0_2-(GCREntry + 2)	//b6 ($a2)	= LDX #$a2	- no effect
@@ -485,7 +482,7 @@ Patch0:
 		
 	.byte	<GCRLoop3-(GCREntry + 2)	//ba ($a8)	= TAY		- no effect
 				
-			stx	StepDir			//bb bc	Restore stepper direction to UP/INWARD (X=#$81)
+			sax	StepDir			//bb bc	Restore stepper direction to UP/INWARD (A=#$07 & X=#$81 -> StepDir = #$01)
 
 //--------------------------------------
 //		Fetch Code
