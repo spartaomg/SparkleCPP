@@ -1052,20 +1052,16 @@ BitRate:	lsr SubSct+1		//SubSct = 0 for tracks 18+
 			inc SubSct+1		//SubSct = 1
 BR20:		ora #$20			//Bitrate=%11
 
-RateDone:	sty MaxNumSct2+1
-
 //--------------------------------------
 //		Update variables
 //--------------------------------------
 
+RateDone:	sty MaxNumSct2+1
+
 			ldx ILTab-$11,y		//Inverted Custom Interleave Table
 			stx IL+1
 
-			//lsr SubSct+1		//Set SubSct to 1 if MaxNumSct = 21 (tracks 1-17)
-			//cpy #$15
-			//rol SubSct+1
-
-			lsr ReturnFlag
+			lsr ReturnFlag		//Return for StoreTrack, random bundle access bitrate and Build loop adjustments
 			bcs Rts
 			
 			sta ZPSpVal			//Store correct bitrate for Spartan step
@@ -1084,7 +1080,8 @@ GCRLoopPatch:
 
 			sty NewTrackFlag	//Set New Track flag - we are on a new track - determines behavior if no sync mark is found (assume track error)
 								//Any positive non-zero value will work, e.g. sector count (17-21)
-			lsr ReturnFlag
+			
+			lsr ReturnFlag		//Return for StepTmr and BitRate
 			bcs Rts
 
 			sty SCtr			//Reset Sector Counter, but only if this is not a random bundle which gets SCtr from Dir
