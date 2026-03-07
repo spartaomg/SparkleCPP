@@ -1034,7 +1034,8 @@ StoreTrack:	stx cT
 //		Set Bitrate
 //--------------------------------------
 
-BitRate:	ldy #$11			//Sector count=17
+BitRate:	lsr SubSct+1		//SubSct = 0 for tracks 18+		
+			ldy #$11			//Sector count=17
 			cpx #$1f			//Tracks 31-40, speed zone 0
 			bcs RateDone		//Bitrate=%00
 
@@ -1048,6 +1049,7 @@ BitRate:	ldy #$11			//Sector count=17
 			bcs RateDone
 								//Tracks 01-17, speed zone 3
 			ldy #$15			//Sector count=21
+			inc SubSct+1		//SubSct = 1
 BR20:		ora #$20			//Bitrate=%11
 
 RateDone:	sty MaxNumSct2+1
@@ -1059,9 +1061,9 @@ RateDone:	sty MaxNumSct2+1
 			ldx ILTab-$11,y		//Inverted Custom Interleave Table
 			stx IL+1
 
-			lsr SubSct+1		//Set SubSct to 1 if MaxNumSct = 21 (tracks 1-17)
-			cpy #$15
-			rol SubSct+1
+			//lsr SubSct+1		//Set SubSct to 1 if MaxNumSct = 21 (tracks 1-17)
+			//cpy #$15
+			//rol SubSct+1
 
 			lsr ReturnFlag
 			bcs Rts
