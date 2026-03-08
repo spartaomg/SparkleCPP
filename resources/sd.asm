@@ -966,20 +966,16 @@ SeqLoad:	ldy BlockCtr		//End of Disk? BlockCtr can only be 0 here if the last NB
 			tay					//A=#$00 here -> Y=#$00
 			lda SCtr			//Skip track change if either of these is true: (1) SCtr > 0 OR
 			ora ScndBuff		//(2) SCtr = 0 but we have the last block of a bundle in the second buffer
-			bne ToStartTr
+			bne StartTr
 
 			lda NBC				//Very last sector of the disk?
-			beq ToStartTr		//Yes, skip track change, finish transfer
+			beq StartTr			//Yes, skip track change, finish transfer
 
 //--------------------------------------
 //		Prepare track change
 //--------------------------------------
 								//Otherwise, clear wanted list and start seeking
 			jmp JmpClrList		//C=0, Y=#$00 here, returns to NextTrack
-
-//--------------------------------------
-
-ToStartTr:	jmp StartTr
 
 //--------------------------------------
 
