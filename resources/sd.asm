@@ -968,7 +968,7 @@ SeqLoad:	ldy BlockCtr		//End of Disk? BlockCtr can only be 0 here if the last NB
 			ora ScndBuff		//(2) SCtr = 0 but we have the last block of a bundle in the second buffer
 			bne StartTr
 
-			lda NBC				//Very last sector of the disk?
+			lda NBC				//Very last sector of the disk? NBC can only be 0 here if the last block of the final bundle was on this track and it happens to be a full track
 			beq StartTr			//Yes, skip track change, finish transfer
 
 //--------------------------------------
