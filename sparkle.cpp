@@ -4986,6 +4986,46 @@ bool InjectCustomCodePlugin(int PluginIdx)
     }
     CustomCodeSize = sc_size;
 
+	//WE ALSO NEED TO UPDATE ZP OFFSET IN THE CUSTOM PLUGIN CODE!!!
+
+	unsigned char ZP = ConvertHexStringToInt(LoaderZP);
+
+	if (ZP != 2)
+	{
+		unsigned char OPC_STAZP = 0x85;     //STA Bits
+		unsigned char OPC_DECZP = 0xc6;		//DEC Bits
+		unsigned char OPC_RORZP = 0x66;		//ROR Bits
+
+		unsigned char ZPBase = 0x02;
+
+		for (int i = 0; i <= 247; i++)		//STA ZP+1
+		{
+			if ((CustomCode[i] == OPC_STAZP) && (CustomCode[i + 1] == ZPBase + 2))
+			{
+				CustomCode[i + 1] = ZP + 2;
+				i++;
+			}
+		}
+
+		for (int i = 0; i <= 247; i++)		//STA Bits
+		{
+			if ((CustomCode[i] == OPC_DECZP) && (CustomCode[i + 1] == ZPBase + 2))
+			{
+				CustomCode[i + 1] = ZP + 2;
+				i++;
+			}
+		}
+
+		for (int i = 0; i <= 247; i++)		//ROR Bits
+		{
+			if ((CustomCode[i] == OPC_RORZP) && (CustomCode[i + 1] == ZPBase + 2))
+			{
+				CustomCode[i + 1] = ZP + 2;
+				i++;
+			}
+		}
+	}
+
     //Calculate sector pointer on disk
     int SctPtr = BufferCnt;
 
@@ -5210,10 +5250,11 @@ bool InjectSaverPlugin(int PluginIdx)
     {
         unsigned char OPC_STAZP = 0x85;     //ZP, ZP+1, Bits
         unsigned char OPC_LDAZPY = 0xb1;    //ZP
+		unsigned char OPC_RORZP = 0x66;		//Bits
 
         unsigned char ZPBase = 0x02;
 
-        for (int i = 0; i <= 249; i++)
+        for (int i = 0; i <= 249; i++)		//STA ZP or LDA (ZP),y
         {
             if ((SaveCode[i] == OPC_STAZP) || (SaveCode[i] == OPC_LDAZPY))
             {
@@ -5225,7 +5266,7 @@ bool InjectSaverPlugin(int PluginIdx)
             }
         }
 
-        for (int i = 0; i <= 249; i++)
+        for (int i = 0; i <= 249; i++)		//STA ZP+1
         {
             if ((SaveCode[i] == OPC_STAZP) && (SaveCode[i + 1] == ZPBase + 1))
             {
@@ -5234,7 +5275,7 @@ bool InjectSaverPlugin(int PluginIdx)
             }
         }
 
-        for (int i = 0; i <= 249; i++)
+        for (int i = 0; i <= 249; i++)		//STA Bits
         {
             if ((SaveCode[i] == OPC_STAZP) && (SaveCode[i + 1] == ZPBase + 2))
             {
@@ -5242,7 +5283,16 @@ bool InjectSaverPlugin(int PluginIdx)
                 i++;
             }
         }
-    }
+	
+		for (int i = 0; i <= 249; i++)		//ROR Bits
+		{
+			if ((SaveCode[i] == OPC_RORZP) && (SaveCode[i + 1] == ZPBase + 2))
+			{
+				SaveCode[i + 1] = ZP + 2;
+				i++;
+			}
+		}
+	}
 
     SaveCode[0x03] = (HSLength / 0x100) + 1;            //We are comparing with max block count + 1
     SaveCode[0x10] = (HSAddress - 1) / 0x100;           //High byte of the address of the last byte of the Hi-Score file
@@ -7349,7 +7399,7 @@ int main(int argc, char* argv[])
 
 #ifdef DEBUG
 
-        string ScriptFileName = "c:/SparkleTestProjects/Aloft/Parts/AirplaneCloseup/AirplaneCloseup.sls";
+        string ScriptFileName = "c:/SparkleTestProjects/Aloft/Parts/FastTransfer/FastTransfer.sls";
         Script = ReadFileToString(ScriptFileName, true);
         SetScriptPath(ScriptFileName, AppPath);
 
