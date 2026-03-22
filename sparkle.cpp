@@ -10,10 +10,10 @@
 //  VERSION INFO
 //----------------------------------
 
-constexpr int FullDate = 20260308;
+constexpr int FullDate = 20260322;
 
 constexpr int VersionMajor = 3;
-constexpr int VersionMinor = 3;
+constexpr int VersionMinor = 4;
 
 constexpr int FullYear = FullDate/10000;
 constexpr int Year = FullYear % 100;
@@ -5912,29 +5912,36 @@ bool UpdateZP()
         return false;
     }
 
+	//UpdateZP BUG in Sparkle 3.3 REPORTED BY Wacek/Arise
+
+	//Find the PHA TXA PHA TYA sequence in the installer to identify the beginning of loader
+	int LoaderBase = 0xffff;
+	
+	const unsigned char OPC_PHA = 0x48;
+	const unsigned char OPC_TXA = 0x8a;
+	const unsigned char OPC_TYA = 0x98;
+
+	for (int i = 0; i < loader_size - 1 - 3; i++)
+	{
+		if ((loader[i] == OPC_PHA) && (loader[i + 1] == OPC_TXA) && (loader[i + 2] == OPC_PHA) && (loader[i + 3] == OPC_TYA))
+		{
+			LoaderBase = i;
+			break;
+		}
+	}
+
+#ifdef DEBUG
+	if (LoaderBase == 0xffff)	//This should not happen, if it does, then the above loop mustbe adjusted to match loader code changes
+	{
+		cerr << "***CRITICAL***\tZeropage offset could not be updated.\n";
+		return false;
+	}
+#endif // DEBUG
+
     //ZP=02 is the default, no need to update
     if (ZP == 2)
     {
         return true;
-    }
-
-    //UpdateZP BUG REPORTED BY Rico/Pretzel Logic
-
-    //Find the JMP $0700 sequence in the code to identify the beginning of loader
-    int LoaderBase = 0xffff;
-    for (int i = 0; i < loader_size - 1 - 2; i++)
-    {
-        if ((loader[i] == 0x4c) && (loader[i + 1] == 0x00) && (loader[i + 2] == 0x07))
-        {
-            LoaderBase = i + 3;
-            break;
-        }
-    }
-
-    if (LoaderBase == 0xffff)
-    {
-        cerr << "***CRITICAL***\tZeropage offset could not be updated.\n";
-        return false;
     }
 
     const unsigned char OPC_STAZP = 0x85;

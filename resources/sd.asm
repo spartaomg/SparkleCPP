@@ -509,7 +509,7 @@ Presync:	sty.z ModJmp+1		//cc cd
 			ldy #$8c			//d0 d1	Using TabD value in Y for sync loop countdown
 
 			sta.z (ZP0102-$83,x)//d2 d3
-			jsr Sync			//d4-d6	JSR clobbers $0103-$0104 or $01ff-$0100 and either returns either here or SP gets reset to $04 after Error handling
+			jsr Sync			//d4-d6	JSR clobbers $0103-$0104 or $01ff-$0100 and either returns here or SP gets reset to $04 after Error handling
 			clv					//d7
 			
 			nop #$84			//d8 d9	Skipping TabD value
