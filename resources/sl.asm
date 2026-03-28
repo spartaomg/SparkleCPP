@@ -229,18 +229,17 @@ Cmd:
 			bne !-					//-0209 if error then try again
 			lda #$03				//-020b
 			sta $f9					//-020d buffer #3
-			ldx #$0f				//-020f
+			ldx #$10				//-020f
 			stx $81					//-0211
-			inx						//-0212
-			jsr ROMSeekBlock		//-0215 find track 16 sector 15, to make sure stepper bits are aligned
-			lsr						//-0216
-			bne !-					//-0218 if error then start over
-			lda #$12				//-021a
-			sta $0c					//-021c success, back to track 18
-!:			jsr ROMReadBlock		//-021f load track 18 sector 15 (init code) to buffer #3 ($0600)
-			lsr						//-0220
-			bne !-					//-0222 if error then try block again
-			jmp $0600				//-0225
+			jsr ROMSeekBlock		//-0214 find track 16 sector 16, to make sure stepper bits are aligned
+			lsr						//-0215
+			bne !-					//-0217 if error then start over
+			lda #$12				//-0219
+			sta $0c					//-021b success, back to track 18
+!:			jsr ROMReadBlock		//-021e load track 18 sector 16 (init code) to buffer #3 ($0600)
+			lsr						//-021f
+			bne !-					//-0221 if error then try block again
+			jmp $0600				//-0224
 CmdEnd:
 
 //-----------------------------------------------------------------------------------

@@ -10,7 +10,7 @@
 //  VERSION INFO
 //----------------------------------
 
-constexpr int FullDate = 20260322;
+constexpr int FullDate = 20260328;
 
 constexpr int VersionMajor = 3;
 constexpr int VersionMinor = 4;
@@ -5768,19 +5768,6 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
         Drive[i] = sd[i];
     }
 
-    unsigned char B3[256]{};
-    //int B = 0;
-
-    //Resort and EOR transform Block 3
-    for (int i = 0; i < 256; i++)
-    {
-        B3[i] = Drive[(256 * 3) + i];
-        //B3[B] = EORtransform(Drive[(256 * 3) + i]);
-        //B--;
-        //if (B < 0)
-            //B += 256;
-    }
-
     //-------------------
     //   VersionInfo
     //-------------------
@@ -5801,19 +5788,11 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
     //   ProductID
     //-------------------
     //Add Product ID
+
     int PID = 0x6b;  //0x1b;
     Drive[PID + 0] = ProductID >> 16;
     Drive[PID + 1] = (ProductID & 0xff00) >> 8;
     Drive[PID + 2] = ProductID & 0xff;
-
-    //Resort blocks in drive code:
-    for (int i = 0; i < 256; i++)
-    {
-        Drive[(3 * 256) + i] = Drive[(4 * 256) + i];    //Copy ZP GCR Tab and GCR loop to block 3 for loading
-        Drive[(4 * 256) + i] = Drive[(5 * 256) + i];    //Copy Init code to block 4 for loading
-        Drive[(5 * 256) + i] = B3[i];                   //Copy original block 3 EOR transformed to block 5 to be loaded by init code
-
-    }
 
     //Add NextID and IL0-IL3 to ZP
     int ZPILTabLoc = 0x60;
@@ -5827,36 +5806,13 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
         idcNextID = (idcNextID * 2) % 256;
     }
 
-    Drive[(3 * 256) + ZPILTabLoc + 0] = 256 - IL3;
-    Drive[(3 * 256) + ZPILTabLoc + 1] = 256 - IL2;
-    Drive[(3 * 256) + ZPILTabLoc + 2] = 256 - IL1;
-    Drive[(3 * 256) + ZPILTabLoc + 3] = idcNextID;
-    Drive[(3 * 256) + ZPILTabLoc + 4] = 256 - IL0;
+    Drive[(4 * 256) + ZPILTabLoc + 0] = 256 - IL3;
+    Drive[(4 * 256) + ZPILTabLoc + 1] = 256 - IL2;
+    Drive[(4 * 256) + ZPILTabLoc + 2] = 256 - IL1;
+    Drive[(4 * 256) + ZPILTabLoc + 3] = idcNextID;
+    Drive[(4 * 256) + ZPILTabLoc + 4] = 256 - IL0;
 
-    /*
-    //Add PlugIn to ZP (IncSaver = $74)
-    int ZPIncPluginLoc = 0x74;
-#ifdef TESTDISK
-    if (bTestDisk)
-    {
-        Drive[(3 * 256) + ZPIncPluginLoc] = 1;
-    }
-    else
-    {
-#endif // TESTDISK
-        if ((bSaverPlugin) || (bCustomCodePlugin))
-        {
-            Drive[(3 * 256) + ZPIncPluginLoc] = 2;
-        }
-        else
-        {
-            Drive[(3 * 256) + ZPIncPluginLoc] = 0;
-        }
-#ifdef TESTDISK
-    }
-#endif // TESTDISK
-*/
-    CT = 18;
+	CT = 18;
     CS = 11;
 
     for (int c = 0; c <= 5; c++)        //6 blocks to be saved: 18:11, 18:12, 18:13, 18:14, 18:15, (18:16 - block 5)
@@ -5878,43 +5834,6 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
     Disk[BAM + 252] = EORtransform(256 - IL1);
     Disk[BAM + 251] = EORtransform(idcNextID);
     Disk[BAM + 250] = EORtransform(256 - IL0);
-/*
-    BlocksUsedByPlugin = 0;
-#ifdef TESTDISK
-    if (bTestDisk)
-    {
-        bSaverPlugin = false;   //Can't have Saver and FetchTest at the same time
-
-        //Add "IncludeFetchTest" flag and FetchTest plugin
-        //Disk[BAM + 249] = EORtransform(1);    //No longer used
-        if (!InjectTestPlugin())
-            return false;
-    }
-    else
-    {
-#endif // TESTDISK
-        if (bSaverPlugin)
-        {
-            //Add "IncludeSaveCode" flag and Saver plugin
-            //Disk[BAM + 249] = EORtransform(2);    //No longer used
-            if (!InjectSaverPlugin())
-                return false;
-        }
-        if (bCustomCodePlugin)
-        {
-            //Add "IncludeCustomCode" flag and Saver plugin
-            //Disk[BAM + 249] = EORtransform(2);    //No longer used
-            if (!InjectCustomCodePlugin())
-                return false;
-        }
-        else
-        {
-            //Disk[BAM + 249] = EORtransform(0);    //No longer used
-        }
-#ifdef TESTDISK
-    }
-#endif // TESTDISK
-*/
 
     //Also add Product ID to BAM, EOR-transformed
     Disk[BAM + 249] = EORtransform((ProductID / 0x10000) & 0xff);

@@ -325,7 +325,7 @@
 .label SF			=$0139		//SS drive code Fetch vector
 .label SH			=$013e		//SS drive code Got Header vector
 
-.label InitCodeLoc	=$0146		//$0146 - $01b9 ($73 bytes) are not used by the drive - we copy our init code here
+.label InitCodeLoc	=$0146		//$0146 - $01b9 ($74 bytes) are not used by the drive - we copy our init code here
 .label ZPCode		=$0700		//ZP code is initially loaded to $0700-$07ff
 
 .label OPC_ALR		=$4b
@@ -1221,46 +1221,35 @@ EndOfDriveCode:
 //		Initialization
 //--------------------------------------
 
-CodeStart:	lda #$12			//Track 18
-			sta $0e
-			sta $0c
-			ldy #$10			//Sectors 14 (b4), 16 (b3), 13 (b2), 12 (b1), 11 (b0)
-			sty $0d
+CodeStart:	ldx #$08
+			lda #$12
+			ldy #$0f
+!:			sta $06,x			//Sectors 18:15 (b4), 18:14 (b3), 18:13 (b2), 18:12 (b1), 18:11 (b0)
+			sty $07,x
 			dey
-			dey
-			sty $0f
-			ldx #$04
-			stx $f9				//Buffer pointer: -> $04
-!:			dey
-			sta $06,x			//$0a, $08, $06
-			sty $07,x			//$0b, $09, $07
 			dex
 			dex
 			bpl !-
-
-LoadSector:	jsr ROMReadBlock	//Load blocks to buffers 4 ($0700), 2 ($0500), 1 ($0400), 0 ($0300)
-			lsr
-			bne LoadSector		//Error? -> try again
-			lsr $f9				//Buffer pointer: $04 -> $02 -> $01 -> $00 (skipping block 3 to avoid overwriting the installer code at $0600)
-			bne LoadSector
-			bcs LoadSector
+			
+			lda #$04			//Buffer pointer: -> $04
+			sta $f9
 
 			ldx #<InitCodeEnd-InitCode - 1
 !:			lda InitCode,x
-			sta InitCodeLoc,x
+			sta InitCodeLoc,x	//$0146 - $01b9 ($74 bytes)
 			dex
 			bpl !-
-
-			lda #$03
-			sta $f9
 
 			jmp InitCodeLoc
 
 //--------------------------------------
 
-InitCode:	jsr ROMReadBlock	//Load block 3 (sector 16) to buffer 3
+InitCode:
+LoadSector:	jsr ROMReadBlock	//Load blocks to buffers 4 ($0700), 3 ($0600), 2 ($0500), 1 ($0400), 0 ($0300)
 			lsr
-			bne InitCode		//Error? -> try again
+			bne LoadSector		//Error? -> try again
+			dec $f9
+			bpl LoadSector
 
 //--------------------------------------
 
@@ -1273,7 +1262,6 @@ InitCode:	jsr ROMReadBlock	//Load block 3 (sector 16) to buffer 3
 			and #$93
 			ora #$4c			//1    1*   0*   1    1*   1*   1    0
 			sta $1c00			//SYNC BITR BITR WRTP LED  MOTR STEP STEP
-			sta ZPSpVal
 
 			lda #$7a
 			sta $1802			//0  1  1  1  1  0  1  0  Set these 1800 bits to OUT (they read back as 0)
@@ -1308,7 +1296,9 @@ ZPCopyLoop:	lda ZPCode,x		//Copy Tables C, E, F and GCR Loop from $0600 to ZP
 
 InitCodeEnd:
 
-.text "SPARKLE 3.3 BY OMG"
+.align $10
+
+.text "SPARKLE 3.4 BY OMG"
 
 CD:
 }
