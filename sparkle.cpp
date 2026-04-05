@@ -79,7 +79,7 @@ const string EntryTypeIL3 = "il3:";
 const string EntryTypeProdID = "prodid:";
 const string EntryTypeTracks = "tracks:";
 const string EntryTypeConfig = "config:";
-const string EntryTypeMotorOffDelay = "motoroff:";
+const string EntryTypeSpinDownDelay = "spindown:";
 
 const string EntryTypeHSFile = "hsfile:";
 const string EntryTypePlugin = "plugin:";
@@ -6641,7 +6641,7 @@ bool Build()
 				NewBundle = true;
 
 			}
-			else if (ScriptEntryType == EntryTypeMotorOffDelay)
+			else if (ScriptEntryType == EntryTypeSpinDownDelay)
 			{
 				if (!NewD)
 				{
@@ -6665,16 +6665,26 @@ bool Build()
 								{
 									Delay = ConvertStringToInt(sTmp);
 								}
+								else
+								{
+									cerr << "***CRITICAL***Invalid motor spindown delay value!\n";
+									return false;
+								}
 							}
 							else if (IsHexString(ScriptEntryArray[0]))
 							{
 								Delay = ConvertHexStringToInt(ScriptEntryArray[0]);
 							}
+							else
+							{
+								cerr << "***CRITICAL***Invalid motor spindown delay value!\n";
+								return false;
+							}
 						}
 
 						if (Delay < 0 || Delay > 8)
 						{
-							cerr << "***CRITICAL***Motor off delay must have a value between 0-8!\n";
+							cerr << "***CRITICAL***Motor spindown delay must have a value between 0-8!\n";
 							return false;
 						}
 						else
@@ -7301,7 +7311,7 @@ void PrintInfo()
     cout << "IL2:\t\t3\t\t\t\t\t\t<< 1-11 (hex) or .1-.17 (decimal), default: 3 if entry is omitted\n";
     cout << "IL3:\t\t3\t\t\t\t\t\t<< 1-10 (hex) or .1-.16 (decimal), default: 3 if entry is omitted\n";
 	cout << "Config:\t\tfull\t\t\t\t\t\t<< loader configuration: full/noirq/basic, once per script, default: full if entry is omitted\n";
-	cout << "MotorOff:\t2\t\t\t\t\t\t<< drive motor spindown delay in seconds: 0-8, once per script, default: 2 if entry is omitted\n";
+	cout << "SpinDown:\t2\t\t\t\t\t\t<< drive motor spindown delay in seconds: 0-8, once per script, default: 2 if entry is omitted\n";
 	cout << "ZP:\t\t02\t\t\t\t\t\t<< 02-fd (hex), once per script, must be the same for disks of a multidisk prod, default: 02 if omitted\n\n";
     cout << "<< Bundle 0 - bundles must be separated by at least one blank line!\n";
     cout << "File:\t\t\"filepath/file0.prg\"\t\t\t\t<< (default address) (default offset) (default length)\n\n";
