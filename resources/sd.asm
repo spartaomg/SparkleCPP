@@ -1255,9 +1255,6 @@ LoadSector:	jsr ROMReadBlock	//Load blocks to buffers 4 ($0700), 3 ($0600), 2 ($
 
 			sei
 
-			lda #<Delay
-			sta SF_Delay+1
-
 			lda #$ee			//Read mode, Set Overflow enabled
 			sta $1c0c			//could use JSR $fe00 here...
 

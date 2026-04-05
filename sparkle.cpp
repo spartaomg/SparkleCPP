@@ -1,6 +1,6 @@
 #include "common.h"
 
-//#define DEBUG
+#define DEBUG
 
 //#define TESTDISK
 
@@ -5798,14 +5798,13 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
 	double Delay = floor(sqrt(2 * (MotorOffDelayInSec * 1000000) / 256)) + 1;
 	unsigned char MotorOff = (unsigned char)Delay;
 	
-	unsigned char OPC_SEI = 0x78;
-	unsigned char OPC_LDA_IMM = 0xa9;
+	unsigned char OPC_STY_ABS = 0x8c;
 
-	for (int i = 0; i < 256 - 2; i++)
+	for (int i = 0; i < 256 - 3; i++)
 	{
-		if (Drive[0x500 + i] == OPC_SEI && Drive[0x501 + i] == OPC_LDA_IMM)
+		if (Drive[0x201 + i] == OPC_STY_ABS && Drive[0x202 + i] == 0x05 && Drive[0x203 + i] == 0x1c)	//Find STY $1c05
 		{
-			Drive[0x502 + i] = MotorOff;
+			Drive[0x200 + i] = MotorOff;
 			break;
 		}
 	}
