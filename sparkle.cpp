@@ -10,7 +10,7 @@
 //  VERSION INFO
 //----------------------------------
 
-constexpr int FullDate = 20260328;
+constexpr int FullDate = 20260405;
 
 constexpr int VersionMajor = 3;
 constexpr int VersionMinor = 4;
@@ -79,6 +79,8 @@ const string EntryTypeIL3 = "il3:";
 const string EntryTypeProdID = "prodid:";
 const string EntryTypeTracks = "tracks:";
 const string EntryTypeConfig = "config:";
+const string EntryTypeMotorOffDelay = "motoroff:";
+
 const string EntryTypeHSFile = "hsfile:";
 const string EntryTypePlugin = "plugin:";
 const string EntryTypeScript = "script:";
@@ -100,6 +102,8 @@ unsigned char BundleTypeTestPlugin = 6;
 #endif
 
 unsigned char BundleType = BundleTypeNone;
+
+double MotorOffDelayInSec = 2;
 
 enum class LoaderConfigs
 {
@@ -5771,7 +5775,8 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
     //-------------------
     //   VersionInfo
     //-------------------
-    //Add version info: VV YY MM DD
+    
+	//Add version info: VV YY MM DD to drive code
 
     int VI = 0x2f;  //0x5b;
     Drive[VI + 0] = (VersionMajor << 4) + VersionMinor;
@@ -5779,10 +5784,31 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
     Drive[VI + 14] = (VersionBuild & 0xff00) >> 8;
     Drive[VI + 16] = VersionBuild & 0xff;
 
+	//Add version info: VV YY MM DD to drive init code block
+
     Drive[0x5fc] = (VersionMajor << 4) + VersionMinor;
     Drive[0x5fd] = VersionBuild >> 16;
     Drive[0x5fe] = (VersionBuild & 0xff00) >> 8;
     Drive[0x5ff] = VersionBuild & 0xff;
+
+	//--------------------------
+	//   Drive Motor Off Delay
+	//--------------------------
+
+	double Delay = floor(sqrt(2 * (MotorOffDelayInSec * 1000000) / 256)) + 1;
+	unsigned char MotorOff = (unsigned char)Delay;
+	
+	unsigned char OPC_SEI = 0x78;
+	unsigned char OPC_LDA_IMM = 0xa9;
+
+	for (int i = 0; i < 256 - 2; i++)
+	{
+		if (Drive[0x500 + i] == OPC_SEI && Drive[0x501 + i] == OPC_LDA_IMM)
+		{
+			Drive[0x502 + i] = MotorOff;
+			break;
+		}
+	}
 
     //-------------------
     //   ProductID
@@ -6586,7 +6612,7 @@ bool Build()
 
 						}
 
-						if (loaderconfig == "full" || loaderconfig == "0")
+						if (loaderconfig == "full" || loaderconfig == "0" || loaderconfig == "default")
 						{
 							LoaderConfig = LoaderConfigs::LoaderConfigFull;
 						}
@@ -6615,6 +6641,51 @@ bool Build()
 				NewBundle = true;
 
 			}
+			else if (ScriptEntryType == EntryTypeMotorOffDelay)
+			{
+				if (!NewD)
+				{
+					NewD = true;
+					if ((!FinishDisk(false)) || (!ResetDiskVariables()))
+						return false;
+				}
+
+				if (DiskCnt == 0)
+				{
+					if (NumScriptEntries > -1)
+					{
+						int Delay = 2;		//Default motor spindown delay = 2 seconds
+
+						if (ScriptEntryArray[0].size() > 0)
+						{
+							if (ScriptEntryArray[0].at(0) == '.')
+							{
+								string sTmp = ScriptEntryArray[0].substr(1);
+								if (IsNumeric(sTmp))
+								{
+									Delay = ConvertStringToInt(sTmp);
+								}
+							}
+							else if (IsHexString(ScriptEntryArray[0]))
+							{
+								Delay = ConvertHexStringToInt(ScriptEntryArray[0]);
+							}
+						}
+
+						if (Delay < 0 || Delay > 8)
+						{
+							cerr << "***CRITICAL***Motor off delay must have a value between 0-8!\n";
+							return false;
+						}
+						else
+						{
+							MotorOffDelayInSec = (double)Delay;
+						}
+					}
+				}
+
+				NewBundle = true;
+				}
 			else if (ScriptEntryType == EntryTypeIL0)
             {
                 if (!NewD)
@@ -7229,7 +7300,9 @@ void PrintInfo()
     cout << "IL1:\t\t3\t\t\t\t\t\t<< 1-12 (hex) or .1-.18 (decimal), default: 3 if entry is omitted\n";
     cout << "IL2:\t\t3\t\t\t\t\t\t<< 1-11 (hex) or .1-.17 (decimal), default: 3 if entry is omitted\n";
     cout << "IL3:\t\t3\t\t\t\t\t\t<< 1-10 (hex) or .1-.16 (decimal), default: 3 if entry is omitted\n";
-    cout << "ZP:\t\t02\t\t\t\t\t\t<< 02-fd (hex), once per script, must be the same for disks of a multidisk prod, default: 02 if omitted\n\n";
+	cout << "Config:\t\tfull\t\t\t\t\t\t<< loader configuration: full/noirq/basic, once per script, default: full if entry is omitted\n";
+	cout << "MotorOff:\t2\t\t\t\t\t\t<< drive motor spindown delay in seconds: 0-8, once per script, default: 2 if entry is omitted\n";
+	cout << "ZP:\t\t02\t\t\t\t\t\t<< 02-fd (hex), once per script, must be the same for disks of a multidisk prod, default: 02 if omitted\n\n";
     cout << "<< Bundle 0 - bundles must be separated by at least one blank line!\n";
     cout << "File:\t\t\"filepath/file0.prg\"\t\t\t\t<< (default address) (default offset) (default length)\n\n";
     cout << "<< Bundle 1 - files marked with * will be loaded under I/O ($d000-$dfff)\n";

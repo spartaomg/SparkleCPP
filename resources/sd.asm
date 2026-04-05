@@ -845,7 +845,7 @@ CheckATN:	lda $1c00			//Fetch Motor and LED status
 
 			.const DelayInSec = 2	//Motor spindown delay in seconds
 
-			.var Delay = floor(sqrt(2 * (DelayInSec * 1000000) / 256))
+			.var Delay = floor(sqrt(2 * (DelayInSec * 1000000) / 256)) + 1
 
 			.if (Delay>255)
 			{
@@ -1254,6 +1254,9 @@ LoadSector:	jsr ROMReadBlock	//Load blocks to buffers 4 ($0700), 3 ($0600), 2 ($
 //--------------------------------------
 
 			sei
+
+			lda #<Delay
+			sta SF_Delay+1
 
 			lda #$ee			//Read mode, Set Overflow enabled
 			sta $1c0c			//could use JSR $fe00 here...
