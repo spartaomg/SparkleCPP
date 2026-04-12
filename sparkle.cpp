@@ -5004,7 +5004,7 @@ bool InjectCustomCodePlugin(int PluginIdx)
 
 		unsigned char ZPBase = 0x02;
 
-		for (int i = 0; i <= 247; i++)		//STA ZP+1
+		for (int i = 0; i <= 247; i++)		//STA Bits
 		{
 			if ((CustomCode[i] == OPC_STAZP) && (CustomCode[i + 1] == ZPBase + 2))
 			{
@@ -5013,7 +5013,7 @@ bool InjectCustomCodePlugin(int PluginIdx)
 			}
 		}
 
-		for (int i = 0; i <= 247; i++)		//STA Bits
+		for (int i = 0; i <= 247; i++)		//DEC Bits
 		{
 			if ((CustomCode[i] == OPC_DECZP) && (CustomCode[i + 1] == ZPBase + 2))
 			{
