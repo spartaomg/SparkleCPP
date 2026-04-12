@@ -127,8 +127,8 @@ ChkDone:	ldx #<Cmd
 			lda #$35
 			sta $01
 
-			ldx #$5f
-			txs						//Loader starts @ $160, so reduce stack to $100-$15f
+			ldx #$5f				//Value depends on loader configuration: Full = #$5f, NoIRQ = #$79, Basic = #$9e
+			txs						//Loader starts @ $160/$17a/$19f, so reduce stack
 
 			inx
 			stx LTo+1

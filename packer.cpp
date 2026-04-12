@@ -100,7 +100,7 @@ bool UpdateByteStream()
 {
     if (BufferCnt > (SectorsPerDisk - BlocksUsedByPlugin))
     {
-        cerr << "***CRITICAL***\tUnable to add bundle. Disk is full!!!\n";
+        cerr << "***ABORT***\tUnable to add bundle. Disk is full!!!\n";
         return false;
     }
 
@@ -1350,7 +1350,7 @@ bool StartNewBundle()
     if (LastBlockCnt > 255)
     {
         //Bundles cannot be larger than 255 blocks compressed
-        cout << "***CRITICAL***\tBundle " << BundleCnt << " would need " << LastBlockCnt << " blocks on the disk.\nBundles cannot be larger than 255 blocks!\n";
+        cout << "***ABORT***\tBundle " << BundleCnt << " would need " << LastBlockCnt << " blocks on the disk.\nBundles cannot be larger than 255 blocks!\n";
         return false;
     }
 

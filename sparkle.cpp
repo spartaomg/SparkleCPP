@@ -1,6 +1,6 @@
 #include "common.h"
 
-#define DEBUG
+//#define DEBUG
 
 //#define TESTDISK
 
@@ -10,7 +10,7 @@
 //  VERSION INFO
 //----------------------------------
 
-constexpr int FullDate = 20260405;
+constexpr int FullDate = 20260412;
 
 constexpr int VersionMajor = 3;
 constexpr int VersionMinor = 4;
@@ -102,6 +102,8 @@ unsigned char BundleTypeTestPlugin = 6;
 #endif
 
 unsigned char BundleType = BundleTypeNone;
+
+int resident_size = 0x01a0;
 
 double MotorOffDelayInSec = 2;
 
@@ -497,7 +499,7 @@ bool CreateDirectory(const string& DiskDir)
 
     if (!fs::exists(DiskDir))
     {
-        cerr << "***CRITICAL***\tUnable to create the following folder: " << DiskDir << "\n";
+        cerr << "***ABORT***\tUnable to create the following folder: " << DiskDir << "\n";
         return false;
     }
     return true;
@@ -550,7 +552,7 @@ bool WriteDiskImage(const string& DiskName)
 
         if (!myFile.good())
         {
-            cerr << "***CRITICAL***\tError during writing " << DiskName << "\n";
+            cerr << "***ABORT***\tError during writing " << DiskName << "\n";
             myFile.close();
             return false;
         }
@@ -560,7 +562,7 @@ bool WriteDiskImage(const string& DiskName)
     }
     else
     {
-        cerr << "***CRITICAL***\tError opening file for writing disk image: " << DiskName << "\n";
+        cerr << "***ABORT***\tError opening file for writing disk image: " << DiskName << "\n";
         return false;
     }
 }
@@ -953,7 +955,7 @@ bool EvaluateParameterExpression()
 
                 if (!tep.compile(Expr))
                 {
-                    cerr << "***CRITICAL***\tBundle #" << BundleCnt << " File #" << (FileCnt + 1) << "\tError the following file parameter expression:\t'" << ScriptEntryArray[i] << "'\n";
+                    cerr << "***ABORT***\tBundle #" << BundleCnt << " File #" << (FileCnt + 1) << "\tError the following file parameter expression:\t'" << ScriptEntryArray[i] << "'\n";
                     //cout << "\t\t\t\t\t\t\t\t      Error near here:\t  " << setfill(' ') << setw(tep.get_last_error_position()) << "^\n";
                     string EM = tep.get_last_error_message();
                     if (!EM.empty())
@@ -967,7 +969,7 @@ bool EvaluateParameterExpression()
 
                 if (isnan(r))
                 {
-                    cerr << "***CRITICAL***\tBundle #" << BundleCnt << " File #" << (FileCnt + 1) << "\tError the following file parameter expression:\t'" << ScriptEntryArray[i] << "'\n";
+                    cerr << "***ABORT***\tBundle #" << BundleCnt << " File #" << (FileCnt + 1) << "\tError the following file parameter expression:\t'" << ScriptEntryArray[i] << "'\n";
                     //cout << "\t\t\t\t\t\t\t\t      Error near here:\t  " << setfill(' ') << setw(tep.get_last_error_position()) << "^\n";
                     string EM = tep.get_last_error_message();
                     if (!EM.empty())
@@ -978,7 +980,7 @@ bool EvaluateParameterExpression()
                 }
                 else if (r < 0)
                 {
-                    cerr << "***CRITICAL***\tBundle #" << BundleCnt << " File #" << (FileCnt + 1) << "\tError the following file parameter expression:\t'" << ScriptEntryArray[i] << "'\n";
+                    cerr << "***ABORT***\tBundle #" << BundleCnt << " File #" << (FileCnt + 1) << "\tError the following file parameter expression:\t'" << ScriptEntryArray[i] << "'\n";
                     //cout << "\t\t\t\t\t\t\t\t      Error near here:\t  " << setfill(' ') << setw(tep.get_last_error_position()) << "^\n";
                     cerr << "Error message:\tResult cannot be a negative number.\n";
                     return false;
@@ -990,7 +992,7 @@ bool EvaluateParameterExpression()
                 {
                     if (Result > 0xffffffff)
                     {
-                        cerr << "***CRITICAL***\t Bundle #" << BundleCnt << " File #" << (FileCnt + 1) << "\tError in the following file parameter expression: '" << ScriptEntryArray[i] << "'\n";
+                        cerr << "***ABORT***\t Bundle #" << BundleCnt << " File #" << (FileCnt + 1) << "\tError in the following file parameter expression: '" << ScriptEntryArray[i] << "'\n";
                         return false;
                     }
                     else
@@ -1002,7 +1004,7 @@ bool EvaluateParameterExpression()
                 {
                     if (Result > 0xffff)
                     {
-                        cerr << "***CRITICAL***\t Bundle #" << BundleCnt << " File #" << (FileCnt + 1) << "\tError in the following file parameter expression: '" << ScriptEntryArray[i] << "'\n";
+                        cerr << "***ABORT***\t Bundle #" << BundleCnt << " File #" << (FileCnt + 1) << "\tError in the following file parameter expression: '" << ScriptEntryArray[i] << "'\n";
                         return false;
                     }
                     else
@@ -1020,7 +1022,7 @@ bool EvaluateParameterExpression()
                 }
                 else
                 {
-                    cerr << "***CRITICAL***\t Bundle #" << BundleCnt << " File #" << (FileCnt + 1) << "\tError in the following file parameter expression: '" << ScriptEntryArray[i] << "'\n";
+                    cerr << "***ABORT***\t Bundle #" << BundleCnt << " File #" << (FileCnt + 1) << "\tError in the following file parameter expression: '" << ScriptEntryArray[i] << "'\n";
                     return false;
                 }
             }
@@ -1183,12 +1185,12 @@ bool AddHSFile()
         HSFile.clear();
         if (ReadBinaryFile(FN, HSFile) == -1)
         {
-            cerr << "***CRITICAL***\tUnable to open Hi-score File\n";
+            cerr << "***ABORT***\tUnable to open Hi-score File\n";
             return false;
         }
         else if (HSFile.size() == 0)
         {
-            cerr << "***CRITICAL***\tHi-score File cannot be 0 bytes long\n";
+            cerr << "***ABORT***\tHi-score File cannot be 0 bytes long\n";
             return false;
         }
 
@@ -1203,7 +1205,7 @@ bool AddHSFile()
             }
             else                                                                //Short file without paramters -> HARD STOP
             {
-                cerr << "***CRITICAL***\tFile paramteres are needed for the Hi-Score File: " << FN << "\n";
+                cerr << "***ABORT***\tFile paramteres are needed for the Hi-Score File: " << FN << "\n";
                 return false;
             }
             break;
@@ -1233,7 +1235,7 @@ bool AddHSFile()
                 int iFON = ConvertHexStringToInt(FO) + 2 - (int)FAN;
                 if ((iFON < 0) || ((size_t)iFON > HSFile.size() - 1))
                 {
-                    cerr << "***CRITICAL***\tInvalid memory segment start parameter in the Hi-Score File: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                    cerr << "***ABORT***\tInvalid memory segment start parameter in the Hi-Score File: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                     return false;
                 }
                 FA = ScriptEntryArray[2];
@@ -1246,7 +1248,7 @@ bool AddHSFile()
                 FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
                 if (FON > HSFile.size() - 1)
                 {
-                    cerr << "***CRITICAL***\tInvalid file offset in the following Hi-Score File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                    cerr << "***ABORT***\tInvalid file offset in the following Hi-Score File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                     return false;
                 }
                 FL = ConvertIntToHextString(HSFile.size() - FON, 4);             //Length=prg length-offset
@@ -1264,14 +1266,14 @@ bool AddHSFile()
                 int iFLN = ConvertHexStringToInt(FL) - ConvertHexStringToInt(FO) + 1;
                 if (iFLN <= 0)
                 {
-                    cerr << "***CRITICAL***\tInvalid memory segment start and/or end parameter(s) in the Hi-Score File entry: " << ScriptEntry << "\n";
+                    cerr << "***ABORT***\tInvalid memory segment start and/or end parameter(s) in the Hi-Score File entry: " << ScriptEntry << "\n";
                     return false;
                 }
                 FL = ConvertIntToHextString(iFLN, 4);
                 int iFON = ConvertHexStringToInt(FO) + 2 - (int)FAN;
                 if ((iFON < 0) || ((size_t)iFON > HSFile.size() - 1))
                 {
-                    cerr << "***CRITICAL***\tInvalid memory segment start parameter in the Hi-Score File entry: " << ScriptEntry << "\n";
+                    cerr << "***ABORT***\tInvalid memory segment start parameter in the Hi-Score File entry: " << ScriptEntry << "\n";
                     return false;
                 }
                 FA = ScriptEntryArray[2];
@@ -1282,7 +1284,7 @@ bool AddHSFile()
                 FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
                 if (FON > HSFile.size() - 1)
                 {
-                    cerr << "***CRITICAL***\tInvalid file offset in the Hi-Score File: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                    cerr << "***ABORT***\tInvalid file offset in the Hi-Score File: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                     return false;
                 }
             }
@@ -1295,7 +1297,7 @@ bool AddHSFile()
         //Make sure file offset is within the file
         if (FON > HSFile.size())
         {
-            cerr << "***CRITICAL***\tInvalid hi-score file offset!\n";
+            cerr << "***ABORT***\tInvalid hi-score file offset!\n";
             return false;
         }
 
@@ -1303,14 +1305,14 @@ bool AddHSFile()
         if ((FON + FLN > HSFile.size()) || (FLN == 0))
         {
             //FLN = HSFile.size() - FON;
-            cerr << "***CRITICAL***\tInvalid hi-score file length!\n";
+            cerr << "***ABORT***\tInvalid hi-score file length!\n";
             return false;
         }
 
         //Round UP to nearest $100, at least $100 but not more than $0f00 bytes
         if (FLN % 0x100 != 0)
         {
-            cerr << "***CRITICAL***\tHi-score file must be rounded up to the nearest $100 bytes!\n";
+            cerr << "***ABORT***\tHi-score file must be rounded up to the nearest $100 bytes!\n";
             return false;
             //FLN += 0x100;
         }
@@ -1318,7 +1320,7 @@ bool AddHSFile()
         //Make sure hi-score file doesn't overlap with the loader
         if ((FAN < 0x400) && (FAN + FLN >= 0x160))
         {
-            cerr << "***CRITICAL***\tHi-score file overlaps with the loader in the RAM!\n";
+            cerr << "***ABORT***\tHi-score file overlaps with the loader in the RAM!\n";
             return false;
         }
 
@@ -1326,7 +1328,7 @@ bool AddHSFile()
         if (FAN + FLN > 0x10000)
         {
             //FLN = (0x10000 - FAN);// & 0xf00;
-            cerr << "***CRITICAL***\tHi-score file is too big!\n";
+            cerr << "***ABORT***\tHi-score file is too big!\n";
             return false;
         }
 
@@ -1367,7 +1369,7 @@ bool AddHSFile()
             //Make sure file offset is within the file
             //if (FON > HSFile.size())
             //{
-            //    cerr << "***CRITICAL***\tInvalid hi-score file offset!\n";
+            //    cerr << "***ABORT***\tInvalid hi-score file offset!\n";
             //    return false;
             //}
 
@@ -1375,14 +1377,14 @@ bool AddHSFile()
             //if ((FON + FLN > HSFile.size()) || (FLN == 0))
             //{
             //    //FLN = HSFile.size() - FON;
-            //    cerr << "***CRITICAL***\tInvalid hi-score file length!\n";
+            //    cerr << "***ABORT***\tInvalid hi-score file length!\n";
             //    return false;
             //}
 
             //Round UP to nearest $100, at least $100 but not more than $0f00 bytes
             if (FLN % 0x100 != 0)
             {
-                cerr << "***CRITICAL***\tHi-score file must be rounded up to the nearest $100 bytes!\n";
+                cerr << "***ABORT***\tHi-score file must be rounded up to the nearest $100 bytes!\n";
                 return false;
                 //FLN += 0x100;
             }
@@ -1390,7 +1392,7 @@ bool AddHSFile()
             //Make sure hi-score file doesn't overlap with the loader
             //if ((FAN < 0x400) && (FAN + FLN >= 0x160))
             //{
-            //    cerr << "***CRITICAL***\tHi-score file overlaps with the loader in the RAM!\n";
+            //    cerr << "***ABORT***\tHi-score file overlaps with the loader in the RAM!\n";
             //    return false;
             //}
 
@@ -1398,7 +1400,7 @@ bool AddHSFile()
             if (FAN + FLN > 0x10000)
             {
                 //FLN = (0x10000 - FAN);// & 0xf00;
-                cerr << "***CRITICAL***\tHi-score file is too big!\n";
+                cerr << "***ABORT***\tHi-score file is too big!\n";
                 return false;
             }
 
@@ -1418,7 +1420,7 @@ bool AddHSFile()
         }
         else
         {
-            cerr << "***CRITICAL***\tThe Hi-Score File " << HSFileName << " doesn't exist and an empty Hi-Score File could not be created without all 3 parameters.\n";
+            cerr << "***ABORT***\tThe Hi-Score File " << HSFileName << " doesn't exist and an empty Hi-Score File could not be created without all 3 parameters.\n";
             return false;
         }
     }
@@ -1590,7 +1592,7 @@ bool ResetDiskVariables()
 {
     if (DiskCnt == 126)
     {
-        cerr << "***CRITICAL***\tYou have reached the maximum number of disks (127) in this project.\n";
+        cerr << "***ABORT***\tYou have reached the maximum number of disks (127) in this project.\n";
         return false;
     }
 
@@ -1864,7 +1866,7 @@ bool InsertScript(string& SubScriptPath)
 
     if (!fs::exists(SubScriptPath))
     {
-        cerr << "***CRITICAL***\tThe following script was not found and could not be processed: " << SubScriptPath << "\n";
+        cerr << "***ABORT***\tThe following script was not found and could not be processed: " << SubScriptPath << "\n";
         return false;
     }
 
@@ -2122,7 +2124,7 @@ bool CompressBundle()             //NEEDS PackFile() and CloseFile()
     if (LastBlockCnt > 255)
     {
         //Parts cannot be larger than 255 blocks compressed
-        cerr << "***CRITICAL***\tBundle exceeds 255-block limit! Bundle " << BundleCnt << " would need " << LastBlockCnt << " blocks on the disk.\n";
+        cerr << "***ABORT***\tBundle exceeds 255-block limit! Bundle " << BundleCnt << " would need " << LastBlockCnt << " blocks on the disk.\n";
         return false;
     }
 
@@ -2173,7 +2175,7 @@ bool SortVirtualFiles()
                     }
                     else
                     {
-                        cerr << "***CRITICAL***\tThe following two virtual files overlap in Bundle " << dec << (BundleCnt - 1) << ":\n"
+                        cerr << "***ABORT***\tThe following two virtual files overlap in Bundle " << dec << (BundleCnt - 1) << ":\n"
                             << tmpVFiles[i].FileName << " ($" << tmpVFiles[i].FileAddr << " - $" << hex << FEI << ")\n"
                             << tmpVFiles[o].FileName << " ($" << tmpVFiles[o].FileAddr << " - $" << hex << FEO << ")\n";
                         return false;
@@ -2281,7 +2283,7 @@ bool SortVirtualFiles()
                     }
                     else
                     {
-                        cerr << "***CRITICAL***\tThe following file and virtual file overlap in Bundle " << dec << (BundleCnt - 1) << ":\n"
+                        cerr << "***ABORT***\tThe following file and virtual file overlap in Bundle " << dec << (BundleCnt - 1) << ":\n"
                             << "File:\t" << tmpPrgs[i].FileName << " ($" << tmpPrgs[i].FileAddr << " - $" << hex << FEI << ")\n"
                             << "Mem:\t" << tmpVFiles[o].FileName << " ($" << tmpVFiles[o].FileAddr << " - $" << hex << FEO << ")\n";
                         return false;
@@ -2328,7 +2330,7 @@ bool SortBundle()
                         }
                         else
                         {
-                            cerr << "***CRITICAL***\tThe following two files overlap in Bundle " << dec << (BundleCnt - 1) << ":\n"
+                            cerr << "***ABORT***\tThe following two files overlap in Bundle " << dec << (BundleCnt - 1) << ":\n"
                             << tmpPrgs[i].FileName << " ($" << tmpPrgs[i].FileAddr << " - $" << hex << FEI << ")\n"
                             << tmpPrgs[o].FileName << " ($" << tmpPrgs[o].FileAddr << " - $" << hex << FEO << ")\n";
                             return false;
@@ -2530,7 +2532,7 @@ bool AddVirtualFile()
 
     if (BundleType > BundleTypeFile)
     {
-        string ErrorMsg = "***CRITICAL***\tCan't have both Mem and ";
+        string ErrorMsg = "***ABORT***\tCan't have both Mem and ";
         if (BundleType == BundleTypeScript)
         {
             ErrorMsg += "Script entries in the same bundle.\n";
@@ -2610,12 +2612,12 @@ bool AddVirtualFile()
     {
         if (ReadBinaryFile(FN, P) == -1)
         {
-            cerr << "***CRITICAL***\tUnable to open the following file: " << FN << "\n";
+            cerr << "***ABORT***\tUnable to open the following file: " << FN << "\n";
             return false;
         }
         else if (P.size() == 0)
         {
-            cerr << "***CRITICAL***\t The following file is 0 bytes long: " << FN << "\n";
+            cerr << "***ABORT***\t The following file is 0 bytes long: " << FN << "\n";
             return false;
         }
 
@@ -2638,7 +2640,7 @@ bool AddVirtualFile()
             }
             else                                                        //Short file without paramters -> HARD STOP
             {
-                cerr << "***CRITICAL***\tFile parameteres are needed for the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                cerr << "***ABORT***\tFile parameteres are needed for the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                 return false;
             }
             break;
@@ -2668,7 +2670,7 @@ bool AddVirtualFile()
                 int iFON = ConvertHexStringToInt(FO) + 2 - (int)FAN;
                 if ((iFON < 0) || ((size_t)iFON > P.size() - 1))
                 {
-                    cerr << "***CRITICAL***\tInvalid memory segment start parameter in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                    cerr << "***ABORT***\tInvalid memory segment start parameter in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                     return false;
                 }
                 FA = ScriptEntryArray[2];
@@ -2681,7 +2683,7 @@ bool AddVirtualFile()
                 FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
                 if (FON > P.size() - 1)
                 {
-                    cerr << "***CRITICAL***\tInvalid file offset in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                    cerr << "***ABORT***\tInvalid file offset in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                     return false;
                 }
                 FL = ConvertIntToHextString(P.size() - FON, 4);             //Length=prg length-offset
@@ -2699,14 +2701,14 @@ bool AddVirtualFile()
                 int iFLN = ConvertHexStringToInt(FL) - ConvertHexStringToInt(FO) + 1;
                 if (iFLN <= 0)
                 {
-                    cerr << "***CRITICAL***\tInvalid memory segment start and/or end parameter(s) in the following Mem entry: " << ScriptEntry << "\n";
+                    cerr << "***ABORT***\tInvalid memory segment start and/or end parameter(s) in the following Mem entry: " << ScriptEntry << "\n";
                     return false;
                 }
                 FL = ConvertIntToHextString(iFLN, 4);
                 int iFON = ConvertHexStringToInt(FO) + 2 - (int)FAN;
                 if ((iFON < 0) || ((size_t)iFON > P.size() - 1))
                 {
-                    cerr << "***CRITICAL***\tInvalid memory segment start parameter in the following Mem entry: " << ScriptEntry << "\n";
+                    cerr << "***ABORT***\tInvalid memory segment start parameter in the following Mem entry: " << ScriptEntry << "\n";
                     return false;
                 }
                 FA = ScriptEntryArray[2];
@@ -2717,7 +2719,7 @@ bool AddVirtualFile()
                 FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
                 if (FON > P.size() - 1)
                 {
-                    cerr << "***CRITICAL***\tInvalid file offset in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                    cerr << "***ABORT***\tInvalid file offset in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                     return false;
                 }
             }
@@ -2730,21 +2732,21 @@ bool AddVirtualFile()
         //File length cannot be 0 bytes
         if (FLN == 0)
         {
-            cerr << "***CRITICAL***\tInvalid file length in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+            cerr << "***ABORT***\tInvalid file length in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
             return false;
         }
 
         //Make sure file length is not longer than actual file
         if (FON + FLN > P.size())
         {
-            cerr << "***CRITICAL***\tInvalid file length in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+            cerr << "***ABORT***\tInvalid file length in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
             return false;
         }
 
         //Make sure file address+length<=&H10000
         if (FAN + FLN > 0x10000)
         {
-            cerr << "***CRITICAL***\tInvalid file address and/or length in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+            cerr << "***ABORT***\tInvalid file address and/or length in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
             return false;
         }
 
@@ -2766,7 +2768,7 @@ bool AddVirtualFile()
     }
     else
     {
-        cerr << "***CRITICAL***\tThe following Mem file does not exist: " << FN << "\n";
+        cerr << "***ABORT***\tThe following Mem file does not exist: " << FN << "\n";
         return false;
     }
 
@@ -2790,7 +2792,7 @@ bool AddFile()
 
     if (BundleType > BundleTypeFile)
     {
-        string ErrorMsg = "***CRITICAL***\tCan't have both File and ";
+        string ErrorMsg = "***ABORT***\tCan't have both File and ";
         if (BundleType == BundleTypeScript)
         {
             ErrorMsg += "Script entries in the same bundle.\n";
@@ -2871,12 +2873,12 @@ bool AddFile()
         //P.clear();
         if (ReadBinaryFile(FN, P) == -1)
         {
-            cerr << "***CRITICAL***\tUnable to open the following file: " << FN << "\n";
+            cerr << "***ABORT***\tUnable to open the following file: " << FN << "\n";
             return false;
         }
         else if (P.size() == 0)
         {
-            cerr << "***CRITICAL***\t The following file is 0 bytes long: " << FN << "\n";
+            cerr << "***ABORT***\t The following file is 0 bytes long: " << FN << "\n";
             return false;
         }
 
@@ -2899,7 +2901,7 @@ bool AddFile()
             }
             else                                                        //Short file without paramters -> HARD STOP
             {
-                cerr << "***CRITICAL***\tFile parameteres are needed for the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                cerr << "***ABORT***\tFile parameteres are needed for the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                 return false;
             }
             break;
@@ -2929,7 +2931,7 @@ bool AddFile()
                 int iFON = ConvertHexStringToInt(FO) + 2 - (int)FAN;
                 if ((iFON < 0) || ((size_t)iFON > P.size() - 1))
                 {
-                    cerr << "***CRITICAL***\tInvalid memory segment start parameter in the following File entry: " << ScriptEntry << "\n";
+                    cerr << "***ABORT***\tInvalid memory segment start parameter in the following File entry: " << ScriptEntry << "\n";
                     return false;
                 }
                 FA = ScriptEntryArray[2];
@@ -2942,7 +2944,7 @@ bool AddFile()
                 FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
                 if (FON > P.size() - 1)
                 {
-                    cerr << "***CRITICAL***\tInvalid file offset in the following File entry: " << ScriptEntry << "\n";
+                    cerr << "***ABORT***\tInvalid file offset in the following File entry: " << ScriptEntry << "\n";
                     return false;
                 }
                 FL = ConvertIntToHextString(P.size() - FON, 4);             //Length=prg length-offset
@@ -2960,14 +2962,14 @@ bool AddFile()
                 int iFLN = ConvertHexStringToInt(FL) - ConvertHexStringToInt(FO) + 1;
                 if (iFLN <= 0)
                 {
-                    cerr << "***CRITICAL***\tInvalid memory segment start and/or end parameter(s) in the following File entry: " << ScriptEntry << "\n";
+                    cerr << "***ABORT***\tInvalid memory segment start and/or end parameter(s) in the following File entry: " << ScriptEntry << "\n";
                     return false;
                 }
                 FL = ConvertIntToHextString(iFLN, 4);
                 int iFON = ConvertHexStringToInt(FO) + 2 - (int)FAN;
                 if ((iFON < 0) || ((size_t)iFON > P.size() - 1))
                 {
-                    cerr << "***CRITICAL***\tInvalid memory segment start parameter in the following File entry: " << ScriptEntry << "\n";
+                    cerr << "***ABORT***\tInvalid memory segment start parameter in the following File entry: " << ScriptEntry << "\n";
                     return false;
                 }
                 FA = ScriptEntryArray[2];
@@ -2978,7 +2980,7 @@ bool AddFile()
                 FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
                 if (FON > P.size() - 1)
                 {
-                    cerr << "***CRITICAL***\tInvalid file offset in the following File entry: " << ScriptEntry << "\n";
+                    cerr << "***ABORT***\tInvalid file offset in the following File entry: " << ScriptEntry << "\n";
                     return false;
                 }
             }
@@ -2991,27 +2993,27 @@ bool AddFile()
         //File length cannot be 0 bytes
         if (FLN == 0)
         {
-            cerr << "***CRITICAL***\tInvalid file length in the following File entry: " << ScriptEntry << "\n";
+            cerr << "***ABORT***\tInvalid file length in the following File entry: " << ScriptEntry << "\n";
             return false;
         }
         //Make sure file length is not longer than actual file
         if(FON + FLN > P.size())
         {
-            cerr << "***CRITICAL***\tInvalid file length in the following File entry: " << ScriptEntry << "\n";
+            cerr << "***ABORT***\tInvalid file length in the following File entry: " << ScriptEntry << "\n";
             return false;
         }
 
         //Make sure file address+length<=&H10000
         if (FAN + FLN > 0x10000)
         {
-            cerr << "***CRITICAL***\tInvalid file address and/or length in the following File entry: " << ScriptEntry << "\n";
+            cerr << "***ABORT***\tInvalid file address and/or length in the following File entry: " << ScriptEntry << "\n";
             return false;
         }
 
         //Make sure file doesn't overlap with the loader
         //if ((FAN < 0x400) && (FAN + FLN >= 0x160))
         //{
-        //    cerr << "***CRITICAL***\tFile overlaps with the loader in the RAM: " << ScriptEntry << "\n";
+        //    cerr << "***ABORT***\tFile overlaps with the loader in the RAM: " << ScriptEntry << "\n";
         //    return false;
         //}
         //}
@@ -3034,7 +3036,7 @@ bool AddFile()
     }
     else
     {
-        cerr << "***CRITICAL***\tThe following file does not exist: " << FN << "\n";
+        cerr << "***ABORT***\tThe following file does not exist: " << FN << "\n";
         return false;
     }
 
@@ -4909,7 +4911,7 @@ bool InjectTestPlugin(int PlgIdx)
 
     if (BlocksFree < BlocksUsedByPlugin)
     {
-        cerr << "***CRITICAL***\tThe Disk Test Plugin cannot be added because there is not enough free space on the disk!\n";
+        cerr << "***ABORT***\tThe Disk Test Plugin cannot be added because there is not enough free space on the disk!\n";
         return false;
     }
 
@@ -4961,7 +4963,7 @@ bool InjectCustomCodePlugin(int PluginIdx)
 
     if (BlocksFree < BlocksUsedByPlugin)
     {
-        cerr << "***CRITICAL***\tThe Custom Drive Code Plugin cannot be added because there is not enough free space on the disk!\n";
+        cerr << "***ABORT***\tThe Custom Drive Code Plugin cannot be added because there is not enough free space on the disk!\n";
         return false;
     }
 
@@ -4969,14 +4971,14 @@ bool InjectCustomCodePlugin(int PluginIdx)
     {
         if (!HasDirIdx && BundleNo + PluginIdx > 127)
         {
-            cerr << "***CRITICAL***\tThe Custom Drive Code Plugin cannot be added to the disk because the number of file bundles exceeds 128!\n";
+            cerr << "***ABORT***\tThe Custom Drive Code Plugin cannot be added to the disk because the number of file bundles exceeds 128!\n";
             return false;
         }
 
         if (HasDirIdx && DirIdx < BundleNo)
         {
             cerr << "PlgIndex:\t" << dec << PluginFiles.at(PluginIdx).PluginDirIndex << "\n";
-            cerr << "***CRITICAL***\tThe PlgIndex value must be greater than the last file bundles index if DirIndex entries are not used!\n";
+            cerr << "***ABORT***\tThe PlgIndex value must be greater than the last file bundles index if DirIndex entries are not used!\n";
             return false;
         }
     }
@@ -5092,13 +5094,13 @@ bool InjectCustomCodePlugin(int PluginIdx)
             }
             else
             {
-                cout << "***CRITICAL***\tThe PlgIndex must be greater than 0! The directory index 0 is reserved and is internally used for bundle #0.\n";
+                cout << "***ABORT***\tPlgIndex must be greater than 0! Directory index 0 is reserved and is used internally for bundle #0.\n";
 				return false;
             }
         }
         else
         {
-            cout << "***CRITICAL***\tThe number of file bundles is greater than " << dec << MaxAltDirEntries << " on this disk!\n"
+            cout << "***ABORT***\tThe number of file bundles is greater than " << dec << MaxAltDirEntries << " on this disk!\n"
                 << "A PlgIndex value can only be assigned to bundles 1-" << MaxAltDirEntries - 1 << ".\n";
             return false;
         }
@@ -5157,26 +5159,26 @@ bool InjectSaverPlugin(int PluginIdx)
 
     if (HSFile.size() == 0)
     {
-        cerr << "***CRITICAL***\tThe Hi-Score File's size must be a multiple of $100 bytes.\n";
+        cerr << "***ABORT***\tThe Hi-Score File's size must be a multiple of $100 bytes.\n";
         return false;
     }
     if (HSFileName.empty())
     {
-        cerr << "***CRITICAL***\tThe Hi-Score File's name is not defined.\n";
+        cerr << "***ABORT***\tThe Hi-Score File's name is not defined.\n";
         return false;
     }
     if (!DirIndicesUsed)
     {
         if (!HasDirIdx && BundleNo + PluginIdx > 127)
         {
-            cerr << "***CRITICAL***\tThe Hi-Score File Saver Plugin cannot be added to the disk because the number of file bundles exceeds 128!\n";
+            cerr << "***ABORT***\tThe Hi-Score File Saver Plugin cannot be added to the disk because the number of file bundles exceeds 128!\n";
             return false;
         }
 
         if (HasDirIdx && DirIdx < BundleNo)
         {
             cerr << "PlgIndex:\t" << dec << DirIdx << "\n";
-            cerr << "***CRITICAL***\tThe PlgIndex value must be greater than the last file bundles index if DirIndex entries are not used!\n";
+            cerr << "***ABORT***\tThe PlgIndex value must be greater than the last file bundle's index if DirIndex entries are not used!\n";
             return false;
         }
     }
@@ -5240,7 +5242,7 @@ bool InjectSaverPlugin(int PluginIdx)
 
     if (BlocksFree < BlocksUsedByPlugin)
     {
-        cerr << "***CRITICAL***\tThe Hi-Score File and the Saver Plugin cannot be added because there is not enough free space on the disk!\n";
+        cerr << "***ABORT***\tThe Hi-Score File and the Saver Plugin cannot be added because there is not enough free space on the disk!\n";
         return false;
     }
 
@@ -5370,13 +5372,13 @@ bool InjectSaverPlugin(int PluginIdx)
             }
             else
             {
-                cout << "***CRITICAL***\tThe PlgIndex must be greater than 0! The directory index 0 is reserved and is internally used for bundle #0.\n";
+                cout << "***ABORT***\tThe PlgIndex must be greater than 0! The directory index 0 is reserved and is internally used for bundle #0.\n";
                 return false;
             }
         }
         else
         {
-            cout << "***CRITICAL***\tThe number of file bundles is greater than " << dec << MaxAltDirEntries << " on this disk!\n"
+            cout << "***ABORT***\tThe number of file bundles is greater than " << dec << MaxAltDirEntries << " on this disk!\n"
                 << "A PlgIndex value can only be assigned to bundles 1-" << MaxAltDirEntries - 1 << ".\n";
             return false;
         }
@@ -5426,12 +5428,12 @@ bool InjectSaverPlugin(int PluginIdx)
         if (HasDirIdx && DirIdx <= BundleNo)
         {
             cerr << "PlgIndex:\t" << dec << DirIdx << "\n";
-            cerr << "***CRITICAL***\tThe PlgIndex value must be a hex number greater than the number of file bundles, if DirIndices are not used!\n";
+            cerr << "***ABORT***\tThe PlgIndex value must be a hex number greater than the number of file bundles, if DirIndices are not used!\n";
             return false;
         }
         if (!HasDirIdx && BundleNo + HSFileIdx > 127)
         {
-            cerr << "***CRITICAL***\tThe Hi-Score File cannot be added to the disk because the number of file bundles exceeds 128!\n";
+            cerr << "***ABORT***\tThe Hi-Score File cannot be added to the disk because the number of file bundles exceeds 128!\n";
             return false;
         }
     }
@@ -5484,13 +5486,13 @@ bool InjectSaverPlugin(int PluginIdx)
             }
             else
             {
-                cout << "***CRITICAL***\tThe PlgIndex must be greater than 0! The directory index 0 is reserved and is internally used for bundle #0.\n";
+                cout << "***ABORT***\tThe PlgIndex must be greater than 0! The directory index 0 is reserved and is internally used for bundle #0.\n";
                 return false;
             }
         }
         else
         {
-            cout << "***CRITICAL***\tThe number of file bundles is greater than " << dec << MaxAltDirEntries << " on this disk!\n"
+            cout << "***ABORT***\tThe number of file bundles is greater than " << dec << MaxAltDirEntries << " on this disk!\n"
                 << "A PlgIndex value can only be assigned to bundles 1-" << MaxAltDirEntries - 1 << ".\n";
             return false;
         }
@@ -5730,21 +5732,21 @@ bool AddPluginFiles()
                 else
                 {
                     //ERROR - Saver plugin must be followed by HS file!!!
-                    cerr << "***CRITICAL***\tThe Saver Plugin bundle must always be followed by an HSFile bundle in the script!\n";
+                    cerr << "***ABORT***\tThe Saver Plugin bundle must always be followed by an HSFile bundle in the script!\n";
                     return false;
                 }
             }
             else
             {
                 //ERROR - Saver plugin must be followed by HS file!!!
-                cerr << "***CRITICAL***\tThe Saver Plugin bundle must always be followed by an HSFile bundle in the script!\n";
+                cerr << "***ABORT***\tThe Saver Plugin bundle must always be followed by an HSFile bundle in the script!\n";
                 return false;
             }
         }
         else if (PluginFiles.at(i).PluginType == BundleTypeHSFile)
         {
             //ERROR - HSFile must be preceded by Saver plugin!!!
-            cerr << "***CRITICAL***\tAn HSFile bundle must always be preceded by a Saver Plugin bundle in the script!\n";
+            cerr << "***ABORT***\tAn HSFile bundle must always be preceded by a Saver Plugin bundle in the script!\n";
             return false;
         }
     }
@@ -5897,46 +5899,24 @@ bool UpdateZP()
     //ZP cannot be $00, $01, or $ff
     if (ZP < 2)
     {
-        cerr << "***CRITICAL***\tZeropage value cannot be less than $02.\n";
+        cerr << "***ABORT***\tZeropage value cannot be less than $02.\n";
         return false;
     }
     else if (ZP > 0xfd)
     {
-        cerr << "***CRITICAL***\tZeropage value cannot be greater than $fd.\n";
+        cerr << "***ABORT***\tZeropage value cannot be greater than $fd.\n";
         return false;
     }
 
-	//UpdateZP BUG in Sparkle 3.3 REPORTED BY Wacek/Arise
-
-	//Find the PHA TXA PHA TYA sequence in the installer to identify the beginning of loader
-	int LoaderBase = 0xffff;
-	
-	const unsigned char OPC_PHA = 0x48;
-	const unsigned char OPC_TXA = 0x8a;
-	const unsigned char OPC_TYA = 0x98;
-
-	for (int i = 0; i < loader_size - 1 - 3; i++)
-	{
-		if ((loader[i] == OPC_PHA) && (loader[i + 1] == OPC_TXA) && (loader[i + 2] == OPC_PHA) && (loader[i + 3] == OPC_TYA))
-		{
-			LoaderBase = i;
-			break;
-		}
-	}
-
-#ifdef DEBUG
-	if (LoaderBase == 0xffff)	//This should not happen, if it does, then the above loop mustbe adjusted to match loader code changes
-	{
-		cerr << "***CRITICAL***\tZeropage offset could not be updated.\n";
-		return false;
-	}
-#endif // DEBUG
+	//UpdateZP BUG in Sparkle 3.3 REPORTED BY Wacek/Arise - algorithm was unable to find the start of the C64 resident code and Sparle exited with error
 
     //ZP=02 is the default, no need to update
     if (ZP == 2)
     {
         return true;
     }
+
+	int loader_start = loader_size - resident_size;	// 0xffff;
 
     const unsigned char OPC_STAZP = 0x85;
     const unsigned char OPC_RORZP = 0x66;
@@ -5946,16 +5926,13 @@ bool UpdateZP()
     const unsigned char OPC_STAZPY = 0x91;
 
     const unsigned char OPC_DECZP = 0xC6;
-    //const unsigned char OPC_LDAZP = 0xA5;
-    //const unsigned char OPC_EORIMM = 0x49;
-    //unsigned char OPC_LDAZPY = 0xB1;
 
     const unsigned char ZPDstLo = 0x02;
     const unsigned char ZPDstHi = 0x03;
     const unsigned char ZPBits = 0x04;
 
     //Update STA ZPDst, ADC ZPDst, STA (ZPDst),Y
-    for (int i = LoaderBase; i < loader_size - 1; i++)
+    for (int i = loader_start; i < loader_size - 1; i++)
     {
         if ((loader[i] == OPC_STAZP) || (loader[i] == OPC_ADCZP) || (loader[i] == OPC_STAZPY))
         {
@@ -5968,7 +5945,7 @@ bool UpdateZP()
     }
 
     //Update STA ZPDst+1, DEC ZPDst+1, ADC ZPDst+1
-    for (int i = LoaderBase; i < loader_size - 1; i++)
+    for (int i = loader_start; i < loader_size - 1; i++)
     {
         if ((loader[i] == OPC_STAZP) || (loader[i] == OPC_DECZP) || (loader[i] == OPC_ADCZP))
         {
@@ -5981,7 +5958,7 @@ bool UpdateZP()
     }
 
     //Update STA Bits, ROR Bits, ASL Bits,
-    for (int i = LoaderBase; i < loader_size - 1; i++)
+    for (int i = loader_start; i < loader_size - 1; i++)
     {
         if ((loader[i] == OPC_STAZP) || (loader[i] == OPC_RORZP) || (loader[i] == OPC_ASLZP))
         {
@@ -6004,17 +5981,17 @@ bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL)
     unsigned char ST{}, SS{}, AdLo{}, AdHi{};
 
 
-    if (!DemoStart.empty())                            //Check if we have a Demo Start Address
+    if (!DemoStart.empty())							//Check if we have a Demo Start Address
     {
         B = ConvertHexStringToInt(DemoStart);
     }
-    else if (!FirstFileStart.empty())                  //No Demo Start Address, check if we have the first file's start address
+    else if (!FirstFileStart.empty())				//No Demo Start Address, check if we have the first file's start address
     {
         B = ConvertHexStringToInt(FirstFileStart);
     }
     else
     {
-        cerr << "***CRITICAL***\tStart address is missing!\n";
+        cerr << "***ABORT***\tStart address is missing!\n";
         return false;
     }
 
@@ -6027,32 +6004,32 @@ bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL)
     unsigned char LDA_IMM = 0xa9;
     unsigned char PHA = 0x48;
 
-    for (int i = 0; i < loader_size - 5; i++)      //Find STA $fffb instruction which is 14 bytes from AdLo
+    for (int i = 0; i < loader_size - 5; i++)		//Find LDA #<10ad; PHA; LDA #>10ad; PHA; instruction sequence
     {
         if ((loader[i] == LDA_IMM) && (loader[i + 2] == PHA) && (loader[i + 3] == LDA_IMM) && (loader[i + 5] == PHA))
         {
-            loader[i + 1] = AdHi;                  //Hi Byte return address at the end of Loader
-            loader[i + 4] = AdLo;                  //Lo Byte return address at the end of Loader
+            loader[i + 1] = AdHi;					//Hi Byte return address at the end of Loader
+            loader[i + 4] = AdLo;					//Lo Byte return address at the end of Loader
             break;
         }
     }
 
-	unsigned char Stack = 0x5f;				//Default stack pointer value, loader uses $0160-$02ff (LoaderConfig = LoaderConfigs::LoaderConfigFull)
+	unsigned char Stack = 0x5f;						//Default stack pointer value, loader uses $0160-$02ff (LoaderConfig = LoaderConfigs::LoaderConfigFull)
 
 	unsigned char PLA = 0x68;
 	unsigned char RTI = 0x40;
 	unsigned char LDX_IMM = 0xa2;
 
-	int loadersize = loader_size;
-	int loaderstart = loadersize - 0x01a0;
+	int loader_start = loader_size - resident_size;
 
+	//Determine the size of the stack depending on loader configuration
 	if (LoaderConfig == LoaderConfigs::LoaderConfigNoIRQ)
 	{
 		for (int i = 0; i < 0xa0; i++)
 		{
-			if (loader[loaderstart + i] == PLA && loader[loaderstart + i + 1] == RTI)
+			if (loader[loader_start + i] == PLA && loader[loader_start + i + 1] == RTI)				//Find PLA; RTI
 			{
-				Stack += i + 2;				//SP = $79, loader uses $017a-$02ff
+				Stack += i + 2;						//SP = $79, loader uses $017a-$02ff
 				break;
 			}
 		}
@@ -6061,26 +6038,26 @@ bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL)
 	{
 		for (int i = 0; i < 0xa0; i++)
 		{
-			if (loader[loaderstart + i] == LDA_IMM && loader[loaderstart + i + 1] == 0xf8)		//Find LDA #$f8
+			if (loader[loader_start + i] == LDA_IMM && loader[loader_start + i + 1] == 0xf8)		//Find LDA #$f8
 			{
-				Stack += i + 9;				//SP = $9e, loader uses $019f-$02ff
+				Stack += i + 9;						//SP = $9e, loader uses $019f-$02ff
 				break;
 			}
 		}
 	}
 
-	for (int i = 0; i < loaderstart; i++)      //Find LDX #$5f instruction that updates stack pointer
+	for (int i = 0; i < loader_start; i++)			//Find LDX #$5f instruction that updates stack pointer
 	{
 		if (loader[i] == LDX_IMM && loader[i + 1] == 0x5f)
 		{
-			loader[i + 1] = Stack;						//Update stack pointer value depending on loader configuration
+			loader[i + 1] = Stack;					//Update stack pointer value depending on loader configuration
 			break;
 		}
 	}
 
-    //Number of blocks in Loader
-    LoaderBlockCount = loadersize / 254;
-    if (loadersize % 254 != 0)
+    //Number of blocks on disk needed for the loader
+    LoaderBlockCount = loader_size / 254;
+    if (loader_size % 254 != 0)
     {
         LoaderBlockCount += 1;
     }
@@ -6094,14 +6071,14 @@ bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL)
         SS = CS;
         for (int c = 0; c < 254; c++)
         {
-            if ((i * 254) + c < loadersize)
+            if ((i * 254) + c < loader_size)
             {
                 Disk[Track[CT] + (CS * 256) + 2 + c] = loader[(i * 254) + c];
             }
         }
         DeleteBit(CT, CS);
 
-        AddInterleave(IL);      //Go to next free sector with Interleave IL
+        AddInterleave(IL);      //Find next free sector using Interleave IL
 
         if (i < LoaderBlockCount - 1)
         {
@@ -6111,18 +6088,16 @@ bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL)
         else
         {
             Disk[Track[ST] + (SS * 256) + 0] = 0;
-            if (loadersize % 254 == 0)
+            if (loader_size % 254 == 0)
             {
                 Disk[Track[ST] + (SS * 256) + 1] = 255;     //254+1
             }
             else
             {
-                Disk[Track[ST] + (SS * 256) + 1] = ((loadersize) % 254) + 1;
+                Disk[Track[ST] + (SS * 256) + 1] = ((loader_size) % 254) + 1;
             }
         }
     }
-
-    //delete[] Loader;
 
     return true;
 }
@@ -6239,7 +6214,7 @@ bool AddCompressedBundlesToDisk()
 {
     if (BlocksFree < BufferCnt)
     {
-        cerr << "***CRITICAL***\t" << D64Name << " cannot be built because it would require " << BufferCnt << " blocks.\n"
+        cerr << "***ABORT***\t" << D64Name << " cannot be built because it would require " << BufferCnt << " blocks.\n"
              << "This disk only has " << SectorsPerDisk << " blocks.\n";
         return false;
     }
@@ -6287,7 +6262,7 @@ bool FinishDisk(bool LastDisk)
 {
     if ((BundleCnt == 0) && (FileCnt == -1))
     {
-        cerr << "***CRITICAL***\tThis disk does not contain any files!\n";
+        cerr << "***ABORT***\tThis disk does not contain any files!\n";
         return false;
     }
 
@@ -6330,7 +6305,7 @@ bool FinishDisk(bool LastDisk)
     }
 #endif // TESTDISK
 
-    if (!InjectLoader(18,7,1))                      //If InjectLoader(-1, 18, 7, 1) = False Then GoTo NoDisk
+    if (!InjectLoader(18,7,1))								//If InjectLoader(-1, 18, 7, 1) = False Then GoTo NoDisk
         return false;
 
     if (ThisID == 255)
@@ -6402,7 +6377,7 @@ bool Build()
 
     //if (ScriptEntryType != EntryTypeScriptHeader)
     //{
-    //    cerr << "***CRITICAL***\tInvalid script file!\n";
+    //    cerr << "***ABORT***\tInvalid script file!\n";
     //    return false;
     //}
     
@@ -6452,13 +6427,13 @@ bool Build()
                         ThisID = ConvertHexStringToInt(ScriptEntryArray[0]);
                         if (ThisID > 126)   //0x00-0x7e; called with A=$80+ID, 0x7f is reserved for disk reset (called with A=$ff)
                         {
-                            cerr << "***CRITICAL***\tThis Side Index must be a hex number and cannot be greater than $7e!\n";
+                            cerr << "***ABORT***\tThisSide ID must be a hex number and cannot be greater than $7e!\n";
                             return false;
                         }
                     }
                     else
                     {
-                        cerr << "***CRITICAL***\tThis Side Index must be a hex number betweem $00-$7e!\n";
+                        cerr << "***ABORT***\tThisSide ID must be a hex number between $00-$7e!\n";
                         return false;
                     }
                 }
@@ -6480,13 +6455,13 @@ bool Build()
                         NextID = ConvertHexStringToInt(ScriptEntryArray[0]);
                         if (NextID > 126)   //0x00-0x7e; called with A=$80+ID, 0x7f is reserved for disk reset (called with A=$ff)
                         {
-                            cerr << "***CRITICAL***\tNext Side Index must be a hex number and cannot be greater than $7e!\n";
+                            cerr << "***ABORT***\tNextSide ID must be a hex number and cannot be greater than $7e!\n";
                             return false;
                         }
                     }
                     else
                     {
-                        cerr << "***CRITICAL***\tNext Side Index must be a hex number between $00-$7e!\n";
+                        cerr << "***ABORT***\tNextSide ID must be a hex number between $00-$7e!\n";
                         return false;
                     }
                 }
@@ -6625,14 +6600,14 @@ bool Build()
 						}
 						else
 						{
-							cerr << "***CRITICAL***\tUnrecognized loader config value!\n";
+							cerr << "***ABORT***\tUnrecognized loader config value!\n";
 							return false;
 						}
 					}
 				}
 				else
 				{
-					cerr << "***CRITICAL***\tLoader config can only be set in the first disk!\n";
+					cerr << "***ABORT***\tLoader config can only be set in the first disk!\n";
 					return false;
 
 				}
@@ -6666,7 +6641,7 @@ bool Build()
 								}
 								else
 								{
-									cerr << "***CRITICAL***Invalid motor spindown delay value!\n";
+									cerr << "***ABORT***Invalid motor spindown delay value!\n";
 									return false;
 								}
 							}
@@ -6676,14 +6651,14 @@ bool Build()
 							}
 							else
 							{
-								cerr << "***CRITICAL***Invalid motor spindown delay value!\n";
+								cerr << "***ABORT***Invalid motor spindown delay value!\n";
 								return false;
 							}
 						}
 
 						if (Delay < 0 || Delay > 8)
 						{
-							cerr << "***CRITICAL***Motor spindown delay must have a value between 0-8!\n";
+							cerr << "***ABORT***Motor spindown delay must have a value between 0-8!\n";
 							return false;
 						}
 						else
@@ -6875,13 +6850,13 @@ bool Build()
                         ProductID = ConvertHexStringToInt(ScriptEntryArray[0]);
                         if (ProductID > 0xffffff)
                         {
-                            cerr << "***CRITICAL***\tThe Product ID must be a maximum 6-digit long hexadecimal number!\n";
+                            cerr << "***ABORT***\tThe Product ID must be a maximum 6-digit long hexadecimal number!\n";
                             return false;
                         }
                     }
                     else
                     {
-                        cerr << "***CRITICAL***\tThe Product ID must be a maximum 6-digit long hexadecimal number!\n";
+                        cerr << "***ABORT***\tThe Product ID must be a maximum 6-digit long hexadecimal number!\n";
                         return false;
                     }
                 }
@@ -6938,12 +6913,12 @@ bool Build()
                 }
                 else if (BundleType == BundleTypeHSFile)
                 {
-                    cerr << "***CRITICAL***\tCan't have more than one HSFile in the bundle!\n";
+                    cerr << "***ABORT***\tCan't have more than one HSFile in the bundle!\n";
                     return false;
                 }
                 else
                 {
-                    cerr << "***CRITICAL***\tCan't mix the HSFile with other files/plugins in the bundle!\n";
+                    cerr << "***ABORT***\tCan't mix the HSFile with other files/plugins in the bundle!\n";
                     return false;
                 }
                 
@@ -6996,12 +6971,12 @@ bool Build()
                         }
                         else if (BundleType == BundleTypeCustomPlugin)
                         {
-                            cerr << "***CRITICAL***\tCan't have more than one Custom Plugin in the bundle!\n";
+                            cerr << "***ABORT***\tCan't have more than one Custom Plugin in the bundle!\n";
                             return false;
                         }
                         else
                         {
-                            cerr << "***CRITICAL***\tCan't mix the Custom Plugin with other files/plugins in the bundle!\n";
+                            cerr << "***ABORT***\tCan't mix the Custom Plugin with other files/plugins in the bundle!\n";
                             return false;
                         }
                     }
@@ -7013,12 +6988,12 @@ bool Build()
                         }
                         else if (BundleType == BundleTypeSaverPlugin)
                         {
-                            cerr << "***CRITICAL***\tMultiple Saver Plugins must be in separate bundles!\n";
+                            cerr << "***ABORT***\tMultiple Saver Plugins must be in separate bundles!\n";
                             return false;
                         }
                         else
                         {
-                            cerr << "***CRITICAL***\tCan't mix the Saver Plugin with other files/plugins in the bundle!\n";
+                            cerr << "***ABORT***\tCan't mix the Saver Plugin with other files/plugins in the bundle!\n";
                             return false;
                         }
                     }
@@ -7034,7 +7009,7 @@ bool Build()
 #endif //TESTDISK
                     else
                     {
-                        cerr << "***CRITICAL***\tUnrecognized plugin type!\n";
+                        cerr << "***ABORT***\tUnrecognized plugin type!\n";
                         return false;
                     }
                 }
@@ -7093,7 +7068,7 @@ bool Build()
 
                         if ((tmp == 0) || (tmp > 127))
                         {
-                            cerr << "***CRITICAL***\tThe PlgIndex value must be a hex number between $01 and $7f!\n";
+                            cerr << "***ABORT***\tThe PlgIndex value must be a hex number between $01 and $7f!\n";
                             return false;
                         }
 
@@ -7101,7 +7076,7 @@ bool Build()
                         //{
                             if (DirIndices[tmp] != 0)
                             {
-                                cerr << "***CRITICAL***\tDirectory index $" << ScriptEntryArray[0] << "is already in use!\n";
+                                cerr << "***ABORT***\tDirectory index $" << ScriptEntryArray[0] << "is already in use!\n";
                                 return false;
                             }
                             else
@@ -7114,12 +7089,12 @@ bool Build()
                         //{
                             //if (tmp <= BundleNo)
                             //{
-                            //    cerr << "***CRITICAL***\tThe PlgIndex value must be a hex number greater than the number of file bundles, if DirIndices are not used!\n";
+                            //    cerr << "***ABORT***\tThe PlgIndex value must be a hex number greater than the number of file bundles, if DirIndices are not used!\n";
                             //    return false;
                             //}
                             //if (DirIndices[tmp] != 0)
                             //{
-                            //    cerr << "***CRITICAL***\tDirectory index $" << ScriptEntryArray[0] << "is already in use!\n";
+                            //    cerr << "***ABORT***\tDirectory index $" << ScriptEntryArray[0] << "is already in use!\n";
                             //    return false;
                             //}
                             //else
@@ -7132,13 +7107,13 @@ bool Build()
                     }
                     else
                     {
-                        cerr << "***CRITICAL***\tThe PlgIndex value must be a hex number between $01 and $7f!\n";
+                        cerr << "***ABORT***\tThe PlgIndex value must be a hex number between $01 and $7f!\n";
                         return false;
                     }
                 }
                 else
                 {
-                    cerr << "***CRITICAL***\tThe PlgIndex value must be a hex number between $01 and $7f!\n";
+                    cerr << "***ABORT***\tThe PlgIndex value must be a hex number between $01 and $7f!\n";
                     return false;
                 }
 
@@ -7165,13 +7140,13 @@ bool Build()
 
                         if ((tmp == 0) || (tmp > 127))
                         {
-                            cerr << "***CRITICAL***\tThe DirIndex value must be a hex number between $01 and $7f!\n";
+                            cerr << "***ABORT***\tThe DirIndex value must be a hex number between $01 and $7f!\n";
                             return false;
                         }
                         
                         if (DirIndices[tmp] != 0)
                         {
-                            cerr << "***CRITICAL***\tDirIndex $" << ScriptEntryArray[0] << "is already in use!\n";
+                            cerr << "***ABORT***\tDirIndex $" << ScriptEntryArray[0] << "is already in use!\n";
                             return false;
                         }
                         else
@@ -7184,13 +7159,13 @@ bool Build()
                     }
                     else
                     {
-                        cerr << "***CRITICAL***\tThe DirIndex value must be a hex number between $01 and $7f!\n";
+                        cerr << "***ABORT***\tThe DirIndex value must be a hex number between $01 and $7f!\n";
                         return false;
                     }
                 }
                 else
                 {
-                    cerr << "***CRITICAL***\tThe DirIndex value must be a hex number between $01 and $7f!\n";
+                    cerr << "***ABORT***\tThe DirIndex value must be a hex number between $01 and $7f!\n";
                     return false;
                 }
 
@@ -7296,10 +7271,10 @@ void PrintInfo()
     cout << "USAGE: sparkle script.sls [-p a/e]\n\n";
     cout << "SCRIPT TEMPLATE:\n\n";
     cout << "Path:\t\t\"filepath/diskname.d64\"\t\t\t\t<< path and file name of the D64 image <- THIS IS A COMMENT\n";
-    cout << "Header:\t\tdisk header\t\t\t\t\t<< max. 16 characters\n";
-    cout << "ID:\t\tdskid\t\t\t\t\t\t<< max. 5 characters\n";
-    cout << "Name:\t\tdemo name\t\t\t\t\t<< max. 16 characters\n";
-    cout << "Start:\t\tabcd\t\t\t\t\t\t<< 4-digit hex number, first part's start address\n";
+    cout << "Header:\t\tdisk header\t\t\t\t\t<< directory header, max. 16 characters\n";
+    cout << "ID:\t\tdskid\t\t\t\t\t\t<< directory id, max. 5 characters\n";
+    cout << "Name:\t\tdemo name\t\t\t\t\t<< first directory entry, max. 16 characters\n";
+    cout << "Start:\t\tabcd\t\t\t\t\t\t<< first bundle's start address, 4-digit hex number\n";
     cout << "DirArt:\t\t\"filepath/dirartfile.d64\"\t\t\t<< D64, TXT, PRG, BIN, C array, KickAss ASM, PET, JSON, PNG, BMP file formats accepted\n";
     cout << "Tracks:\t\t35\t\t\t\t\t\t<< 35 vs 40, default: 35 if entry is omitted\n";
     cout << "ProdID:\t\tabcdef\t\t\t\t\t\t<< 6-digit hex number, once per script, must be the same for disks of a multidisk prod, random if omitted\n";
@@ -7390,7 +7365,7 @@ int main(int argc, char* argv[])
 
 #else
 
-    cerr << "***CRITICAL***\tUnsupported operating system!\n";
+    cerr << "***ABORT***\tUnsupported operating system!\n";
     return EXIT_FAILURE;
 
 #endif
@@ -7449,7 +7424,7 @@ int main(int argc, char* argv[])
 
                 if (OptionPause.length() != 1)
                 {
-                    cerr << "***CRITICAL***\tUnrecognized value for option -p (pause on exit): " << OptionPause << "\n";
+                    cerr << "***ABORT***\tUnrecognized value for option -p (pause on exit): " << OptionPause << "\n";
                     cerr << "-p accepts a (always) or e (on error).\n";
                     OptionPause = "e";
                     ErrorPause();
@@ -7460,7 +7435,7 @@ int main(int argc, char* argv[])
                 
                 if ((OptionPause != "a") && (OptionPause != "e"))
                 {
-                    cerr << "***CRITICAL***\tUnrecognized value for option -p (pause on exit): " << OptionPause << "\n";
+                    cerr << "***ABORT***\tUnrecognized value for option -p (pause on exit): " << OptionPause << "\n";
                     cerr << "-p accepts a (always) or e (on error).\n";
                     OptionPause = "e";
                     ErrorPause();
@@ -7469,7 +7444,7 @@ int main(int argc, char* argv[])
             }
             else
             {
-                cerr << "***CRITICAL***\tMissing value for option -p (pause on exit).\n";
+                cerr << "***ABORT***\tMissing value for option -p (pause on exit).\n";
                 cerr << "-p accepts a (always) or e (on error).\n";
                 OptionPause = "e";
                 ErrorPause();
@@ -7478,7 +7453,7 @@ int main(int argc, char* argv[])
         }
         else
         {
-            cerr << "***CRITICAL***\tUnrecognized option: " << args[i] << "\n";
+            cerr << "***ABORT***\tUnrecognized option: " << args[i] << "\n";
             ErrorPause();
             return EXIT_FAILURE;
         }
@@ -7487,7 +7462,7 @@ int main(int argc, char* argv[])
     
     if (Script.empty())
     {
-        cerr << "***CRITICAL***\tUnable to load script file or the file is empty!\n";
+        cerr << "***ABORT***\tUnable to load script file or the file is empty!\n";
         ErrorPause();
         return EXIT_FAILURE;
     }
