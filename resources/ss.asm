@@ -338,7 +338,7 @@ SFetch:		ldy #<SHeaderJmp
 
 //--------------------------------------
 			//jmp (SaveJmp)				//31	Header byte #10 (GGGHHHHH) = $55, skipped (cycles [26-51] ... [32-63])	
-SHeader:	bne SFetch					//33	We are on Track 35/40 here, so it is ALWAYS Speed Zone 0 (32 cycles per byte)
+SHeader:	bne SFetch					//33
 			lda $0103					//37
 			jsr ShufToRaw				//57	Details:
 												//jsr ShufToRaw		43
