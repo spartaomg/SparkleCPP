@@ -373,12 +373,12 @@ SyncLoop:	bvc *						//01
 			lax ZP02					//16
 BfrLoop2:	sta BfrLoop1+2				//20		22
 BfrLoop1:	lda $0200,y					//24	16	26	Worst case scenario: 27 cycles when switching buffers from $0200 to $0700
-										//				Should also work in Speed Zone 3 (but current version only writes to track 35/40)
+										//				Also works in Speed Zone 3 (write cycle is still within range)
 			bvc *						//01	01	01
 			clv							//03	03	03
-			sta $1c01					//07	07	07	Switch with CLV if write error in Zone 3
+			sta $1c01					//07	07	07
 			iny							//09	09	09
-			bne BfrLoop1				//11	12	12
+			bne BfrLoop1				//11	12	11
 			lda #$07					//13		13
 			dex							//15		15
 			bne BfrLoop2				//17		18
@@ -393,7 +393,7 @@ BfrLoop1:	lda $0200,y					//24	16	26	Worst case scenario: 27 cycles when switchi
 										//STA $1c03	R/W head to input
 										//RTS
 
-			jsr ToggleLED				//Trun LED off - no proper ROM function for this unfortunately...
+			jsr ToggleLED				//Turn LED off - no proper ROM function for this unfortunately...
 
 			dec SCtr					//Sector complete, decrease sector counter
 
