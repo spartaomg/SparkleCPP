@@ -10,7 +10,7 @@
 //  VERSION INFO
 //----------------------------------
 
-constexpr int FullDate = 20260412;
+constexpr int FullDate = 20260426;
 
 constexpr int VersionMajor = 3;
 constexpr int VersionMinor = 4;
