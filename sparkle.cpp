@@ -10,7 +10,7 @@
 //  VERSION INFO
 //----------------------------------
 
-constexpr int FullDate = 20260502;
+constexpr int FullDate = 20260503;
 
 constexpr int VersionMajor = 3;
 constexpr int VersionMinor = 4;
@@ -7360,23 +7360,6 @@ void ErrorPause()
 
 #if _WIN32
 
-std::string ws2s(const std::wstring& wstr) {
-    if (wstr.empty()) return std::string();
-    
-	size_t convertedChars = 0;
-	// Step 1: Get the required size (includes null terminator)
-	wcstombs_s(&convertedChars, nullptr, 0, wstr.c_str(), _TRUNCATE);
-
-	if (convertedChars == 0) return std::string();
-
-	// Step 2 & 3: Allocate buffer and convert
-	std::vector<char> buffer(convertedChars);
-	wcstombs_s(&convertedChars, buffer.data(), buffer.size(), wstr.c_str(), _TRUNCATE);
-
-	// Step 4: Return as std::string (excluding the null terminator)
-	return std::string(buffer.data());
-}
-
 int wmain(int argc, wchar_t* argv[])
 {
 	auto cstart = std::chrono::system_clock::now();
@@ -7397,17 +7380,16 @@ int wmain(int argc, wchar_t* argv[])
 
 #ifdef DEBUG
 		wstring SFN = L"c:/SparkleTestProjects/Aloft/Parts/FástTransfer/FastTransfer.sls";
-		string ScriptFileName = ws2s(SFN);
 
-		cout << ScriptFileName << "\n";
+		int size_needed = WideCharToMultiByte(CP_UTF8, 0, &SFN[0], (int)SFN.size(), NULL, 0, NULL, NULL);
+		string ScriptFileName(size_needed, 0);
+		WideCharToMultiByte(CP_UTF8, 0, &SFN[0], (int)SFN.size(), &ScriptFileName[0], size_needed, NULL, NULL);
+
 		Script = ReadFileToString(ScriptFileName, true);
 		SetScriptPath(ScriptFileName, CurrentPath);
-
 #else
-
 		PrintInfo();
 		return EXIT_SUCCESS;
-
 #endif
 
 	}
@@ -7431,11 +7413,8 @@ int wmain(int argc, wchar_t* argv[])
 			int size_needed = WideCharToMultiByte(CP_UTF8, 0, &SFN[0], (int)SFN.size(), NULL, 0, NULL, NULL);	
 			string ScriptFileName(size_needed, 0);
 			WideCharToMultiByte(CP_UTF8, 0, &SFN[0], (int)SFN.size(), &ScriptFileName[0], size_needed, NULL, NULL);
-			
-			cout << ScriptFileName << "\n";
 
 			Script = ReadFileToString(ScriptFileName, true);
-
 			SetScriptPath(ScriptFileName, CurrentPath);
 		}
 		else if ((args[i] == L"-p") || (args[i] == L"-P"))
@@ -7452,21 +7431,9 @@ int wmain(int argc, wchar_t* argv[])
 				{
 					OptionPause = "e";
 				}
-
-				if (OptionPause.length() != 1)
+				else
 				{
-					cerr << "***ABORT***\tUnrecognized value for option -p (pause on exit): " << OptionPause << "\n";
-					cerr << "-p accepts a (always) or e (on error).\n";
-					OptionPause = "e";
-					ErrorPause();
-					return EXIT_FAILURE;
-				}
-
-				OptionPause = tolower(OptionPause.at(0));   //only one letter is allowed
-
-				if ((OptionPause != "a") && (OptionPause != "e"))
-				{
-					cerr << "***ABORT***\tUnrecognized value for option -p (pause on exit): " << OptionPause << "\n";
+					wcerr << "***ABORT***\tUnrecognized value for option -p (pause on exit): " << OP << "\n";
 					cerr << "-p accepts a (always) or e (on error).\n";
 					OptionPause = "e";
 					ErrorPause();
