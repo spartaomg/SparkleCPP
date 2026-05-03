@@ -10,7 +10,7 @@
 //  VERSION INFO
 //----------------------------------
 
-constexpr int FullDate = 20260426;
+constexpr int FullDate = 20260502;
 
 constexpr int VersionMajor = 3;
 constexpr int VersionMinor = 4;
@@ -261,7 +261,8 @@ vector <unsigned char> Image;   //pixels in RGBA format (4 bytes per pixel)
 vector <unsigned char> ImgRaw;  //raw image
 
 int Mplr = 0;
-
+#if _WIN32
+#else
 typedef struct tagBITMAPINFOHEADER {
     int32_t biSize;
     int32_t biWidth;
@@ -287,6 +288,7 @@ typedef struct tagBITMAPINFO {
     BITMAPINFOHEADER bmiHeader;
     RGBQUAD          bmiColors[1];
 } BITMAPINFO, * LPBITMAPINFO, * PBITMAPINFO;
+#endif
 
 BITMAPINFO BmpInfo;
 BITMAPINFOHEADER BmpInfoHeader;
@@ -408,15 +410,16 @@ inline bool FileExists(const string& FileName)
 
 int ReadBinaryFile(const string& FileName, vector<unsigned char>& prg)
 {
+	fs::path FN = fs::u8path(FileName);
 
-    if (!fs::exists(FileName))
+    if (!fs::exists(FN))
     {
         return -1;
     }
 
     prg.clear();
 
-    ifstream infile(FileName, ios_base::binary);
+    ifstream infile(FN, ios_base::binary);
 
     if (infile.fail())
     {
@@ -438,15 +441,17 @@ int ReadBinaryFile(const string& FileName, vector<unsigned char>& prg)
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-string ReadFileToString(const string& FileName, bool CorrectFilePath)
+string ReadFileToString(const string FileName, bool CorrectFilePath)
 {
 
-    if (!fs::exists(FileName))
+	fs::path FN = fs::u8path(FileName);
+
+    if (!fs::exists(FN))
     {
         return "";
     }
 
-    ifstream infile(FileName);
+    ifstream infile(FN);
 
     if (infile.fail())
     {
@@ -491,13 +496,16 @@ void SaveScript(const string& DiskName)
 
 bool CreateDirectory(const string& DiskDir)
 {
-    if (!fs::exists(DiskDir))
+
+	fs::path DD = fs::u8path(DiskDir);
+	
+	if (!fs::exists(DD))
     {
         cout << "Creating folder: " << DiskDir << "\n";
-        fs::create_directories(DiskDir);
+        fs::create_directories(DD);
     }
 
-    if (!fs::exists(DiskDir))
+    if (!fs::exists(DD))
     {
         cerr << "***ABORT***\tUnable to create the following folder: " << DiskDir << "\n";
         return false;
@@ -1180,7 +1188,9 @@ bool AddHSFile()
         FN.replace(FN.length() - 1, 1, "");
     }
 
-    if (fs::exists(FN))
+	fs::path pFN = fs::u8path(FN);
+
+    if (fs::exists(pFN))
     {
         HSFile.clear();
         if (ReadBinaryFile(FN, HSFile) == -1)
@@ -1864,7 +1874,9 @@ bool InsertScript(string& SubScriptPath)
 
     string sPath = SubScriptPath;
 
-    if (!fs::exists(SubScriptPath))
+	fs::path pSS = fs::u8path(SubScriptPath);
+
+    if (!fs::exists(pSS))
     {
         cerr << "***ABORT***\tThe following script was not found and could not be processed: " << SubScriptPath << "\n";
         return false;
@@ -2608,7 +2620,10 @@ bool AddVirtualFile()
     }
 
     //Get file variables from script, or get default values if there were none in the script entry
-    if (fs::exists(FN))
+
+	fs::path pFN = fs::u8path(FN);
+	
+	if (fs::exists(pFN))
     {
         if (ReadBinaryFile(FN, P) == -1)
         {
@@ -2868,7 +2883,10 @@ bool AddFile()
     }
 
     //Get file variables from script, or get default values if there were none in the script entry
-    if (fs::exists(FN))
+
+	fs::path pFN = fs::u8path(FN);
+	
+	if (fs::exists(pFN))
     {
         //P.clear();
         if (ReadBinaryFile(FN, P) == -1)
@@ -4602,7 +4620,9 @@ void AddDirArt()
         return;
     }
 
-    if (!fs::exists(DirArtName))
+	fs::path pDA = fs::u8path(DirArtName);
+
+    if (!fs::exists(pDA))
     {
         cout << "***INFO***\tThe following DirArt file does not exist: " << DirArtName << "\nThe disk is built without DirArt.\n";
         return;
@@ -6535,7 +6555,9 @@ bool Build()
 
                 string DAN = FindAbsolutePath(ScriptEntryArray[0], ScriptPath);
 
-                if (fs::exists(DAN))
+				fs::path pDAN = fs::u8path(DAN);
+				
+				if (fs::exists(pDAN))
                 {
                     DirArtName = DAN;
                 }
@@ -7217,7 +7239,7 @@ void SetScriptPath(string sPath, string aPath)
 #if _WIN32
     if ((sPath.size() < 3) || ((sPath.substr(1, 2) != ":\\") && (sPath.substr(1, 2) != ":/")))
     {
-        sPath = aPath + sPath;                      //sPath is relative - use Sparkle's base folder to make it a full path
+        sPath = aPath + sPath;                      //sPath is relative - use the current folder from where Sparkle is opened to make it a full path
     }
 #elif __APPLE__ || __linux__
     if (sPath[0] != '/')
@@ -7236,7 +7258,7 @@ void SetScriptPath(string sPath, string aPath)
         }
         else
         {
-            //sPath is relative - use Sparkle's base folder to make it a full path
+            //sPath is relative - use the current folder from where Sparkle is opened to make it a full path
             sPath = aPath + sPath;
         }
     }
@@ -7254,7 +7276,7 @@ void SetScriptPath(string sPath, string aPath)
 
     ScriptName = sPath;                             //Absolute script path + file name
 
-    ScriptPath = sPath;                             //Absolute script path
+    ScriptPath = sPath;                             //Absolute script path without file name
 
     int i = sPath.length() - 1;
 
@@ -7336,19 +7358,179 @@ void ErrorPause()
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-int main(int argc, char* argv[])
+#if _WIN32
+
+std::string ws2s(const std::wstring& wstr) {
+    if (wstr.empty()) return std::string();
+    
+	size_t convertedChars = 0;
+	// Step 1: Get the required size (includes null terminator)
+	wcstombs_s(&convertedChars, nullptr, 0, wstr.c_str(), _TRUNCATE);
+
+	if (convertedChars == 0) return std::string();
+
+	// Step 2 & 3: Allocate buffer and convert
+	std::vector<char> buffer(convertedChars);
+	wcstombs_s(&convertedChars, buffer.data(), buffer.size(), wstr.c_str(), _TRUNCATE);
+
+	// Step 4: Return as std::string (excluding the null terminator)
+	return std::string(buffer.data());
+}
+
+int wmain(int argc, wchar_t* argv[])
 {
-    auto cstart = std::chrono::system_clock::now();
+	auto cstart = std::chrono::system_clock::now();
+
+	SetConsoleOutputCP(CP_UTF8);
+
+	cout << "\n**************************************\n";
+	cout << "Sparkle " << VersionMajor << "." << VersionMinor << "." << hex << VersionBuild << dec << " by Sparta 2019-" << FullYear << "\n";
+	cout << "**************************************\n\n";
+
+	string CurrentPath{ fs::current_path().string() };
+
+	if (CurrentPath[CurrentPath.size() - 1] != '\\')
+		CurrentPath += "\\";
+
+	if (argc < 2)
+	{
+
+#ifdef DEBUG
+		wstring SFN = L"c:/SparkleTestProjects/Aloft/Parts/FástTransfer/FastTransfer.sls";
+		string ScriptFileName = ws2s(SFN);
+
+		cout << ScriptFileName << "\n";
+		Script = ReadFileToString(ScriptFileName, true);
+		SetScriptPath(ScriptFileName, CurrentPath);
+
+#else
+
+		PrintInfo();
+		return EXIT_SUCCESS;
+
+#endif
+
+	}
+
+	vector <wstring> args;
+	args.resize(argc);
+
+	for (int c = 0; c < argc; c++)
+	{
+		args[c] = argv[c];
+	}
+
+	int i = 1;
+
+	while (i < argc)
+	{
+		if (i == 1)
+		{
+			wstring SFN(argv[1]);
+			
+			int size_needed = WideCharToMultiByte(CP_UTF8, 0, &SFN[0], (int)SFN.size(), NULL, 0, NULL, NULL);	
+			string ScriptFileName(size_needed, 0);
+			WideCharToMultiByte(CP_UTF8, 0, &SFN[0], (int)SFN.size(), &ScriptFileName[0], size_needed, NULL, NULL);
+			
+			cout << ScriptFileName << "\n";
+
+			Script = ReadFileToString(ScriptFileName, true);
+
+			SetScriptPath(ScriptFileName, CurrentPath);
+		}
+		else if ((args[i] == L"-p") || (args[i] == L"-P"))
+		{
+			if (i + 1 < argc)
+			{
+				wstring OP = args[++i];
+
+				if (OP == L"a" || OP == L"A")
+				{
+					OptionPause = "a";
+				}
+				else if (OP == L"e" || OP == L"E")
+				{
+					OptionPause = "e";
+				}
+
+				if (OptionPause.length() != 1)
+				{
+					cerr << "***ABORT***\tUnrecognized value for option -p (pause on exit): " << OptionPause << "\n";
+					cerr << "-p accepts a (always) or e (on error).\n";
+					OptionPause = "e";
+					ErrorPause();
+					return EXIT_FAILURE;
+				}
+
+				OptionPause = tolower(OptionPause.at(0));   //only one letter is allowed
+
+				if ((OptionPause != "a") && (OptionPause != "e"))
+				{
+					cerr << "***ABORT***\tUnrecognized value for option -p (pause on exit): " << OptionPause << "\n";
+					cerr << "-p accepts a (always) or e (on error).\n";
+					OptionPause = "e";
+					ErrorPause();
+					return EXIT_FAILURE;
+				}
+			}
+			else
+			{
+				cerr << "***ABORT***\tMissing value for option -p (pause on exit).\n";
+				cerr << "-p accepts a (always) or e (on error).\n";
+				OptionPause = "e";
+				ErrorPause();
+				return EXIT_FAILURE;
+			}
+		}
+		else
+		{
+			wcerr << "***ABORT***\tUnrecognized option: " << args[i] << "\n";
+			ErrorPause();
+			return EXIT_FAILURE;
+		}
+		i++;
+	}
+
+	if (Script.empty())
+	{
+		cerr << "***ABORT***\tUnable to load script file or the file is empty!\n";
+		ErrorPause();
+		return EXIT_FAILURE;
+	}
+
+	CalcTabs();     //THIS IS NEEDED HERE!!!
+
+	if (!Build())
+	{
+		ErrorPause();
+		return EXIT_FAILURE;
+	}
+
+	auto cend = std::chrono::system_clock::now();
+	std::chrono::duration<double> elapsed_seconds = cend - cstart;
+
+	cout << "Elapsed time: " << elapsed_seconds.count() << "s\n\n";
+
+	ExitPause();
+	return EXIT_SUCCESS;
+}
+
+#else
+
+int main(int argc, char* argv[])
+{  
+	auto cstart = std::chrono::system_clock::now();
 
     cout << "\n**************************************\n";
     cout << "Sparkle " << VersionMajor <<"." << VersionMinor << "." << hex << VersionBuild << dec << " by Sparta 2019-" << FullYear << "\n";
     cout << "**************************************\n\n";
 
+	string CurrentPath{ fs::current_path().string() };
+
 #if _WIN32
 
-    string AppPath{ fs::current_path().string() };
-    if (AppPath[AppPath.size() - 1] != '\\')
-        AppPath += "\\";
+    if (CurrentPath[CurrentPath.size() - 1] != '\\')
+        CurrentPath += "\\";
 
 #elif __APPLE__ || __linux__
 
@@ -7358,10 +7540,9 @@ int main(int argc, char* argv[])
     {
         HomeDir = tmp;
     }
- 
-    string AppPath{ fs::current_path().string() };
-    if (AppPath[AppPath.size() - 1] != '/')
-        AppPath += "/";
+
+	if (CurrentPath[CurrentPath.size() - 1] != '/')
+        CurrentPath += "/";
 
 #else
 
@@ -7373,31 +7554,12 @@ int main(int argc, char* argv[])
     if (argc < 2)
     {
 
-#ifdef DEBUG
-
-        string ScriptFileName = "c:/SparkleTestProjects/Aloft/Parts/FastTransfer/FastTransfer.sls";
-        Script = ReadFileToString(ScriptFileName, true);
-        SetScriptPath(ScriptFileName, AppPath);
-
-        //cout << ScriptName << "\n" << ScriptPath << "\n";
-
-#else
-
-        PrintInfo();
-        return EXIT_SUCCESS;
-
-#endif
+    PrintInfo();
+    return EXIT_SUCCESS;
 
     }
-/*    else
-    {
-        string ScriptFileName(argv[1]);
-        Script = ReadFileToString(ScriptFileName, true);
 
-        SetScriptPath(ScriptFileName, AppPath);
-    }
-*/
-    vector <string> args;
+	vector <string> args;
     args.resize(argc);
 
     for (int c = 0; c < argc; c++)
@@ -7414,7 +7576,7 @@ int main(int argc, char* argv[])
             string ScriptFileName(argv[1]);
             Script = ReadFileToString(ScriptFileName, true);
 
-            SetScriptPath(ScriptFileName, AppPath);
+            SetScriptPath(ScriptFileName, CurrentPath);
         }
         else if ((args[i] == "-p") || (args[i] == "-P"))
         {
@@ -7483,3 +7645,4 @@ int main(int argc, char* argv[])
     ExitPause();
     return EXIT_SUCCESS;
 }
+#endif

@@ -15,6 +15,10 @@
 #include "thirdparty/lodepng.h"
 #include "thirdparty/tinyexpr.h"
 
+#if _WIN32
+#include <Windows.h>
+#endif
+
 using namespace std;
 
 namespace fs = filesystem;

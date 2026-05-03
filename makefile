@@ -8,7 +8,7 @@ ifeq ($(OS),Windows_NT)
 	DIR_BIN = bin/windows
 	DIR_OBJ = obj/windows
 	EXEC = $(DIR_BIN)/Sparkle.exe
-	LINKFLAGS = -static -static-libgcc -static-libstdc++ -s -std=c++17 -o
+	LINKFLAGS = -static -static-libgcc -static-libstdc++ -s -std=c++17 -o 
 	#LINKFLAGS = -std=c++17 -o
 else
 	UNAME = $(shell uname)
@@ -39,13 +39,16 @@ OBJ += $(DIR_OBJ)/sc.o #$(DIR_OBJ)/sf.o
 
 create_dir = @"mkdir" -p $(@D)
 
+FLG = 
+
 ifeq ($(OS),Windows_NT)
 	OBJ += $(DIR_OBJ)/sparkle.res
+	FLG += -municode
 endif
 
 $(EXEC): $(OBJ)
 	$(create_dir)
-	$(CC) $(LINKFLAGS) $(EXEC) $(OBJ)
+	$(CC) $(LINKFLAGS) $(EXEC) $(OBJ) $(FLG)
 
 $(DIR_OBJ)/%.o: %.cpp common.h
 	$(create_dir)
