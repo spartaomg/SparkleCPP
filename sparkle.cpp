@@ -10,7 +10,7 @@
 //  VERSION INFO
 //----------------------------------
 
-constexpr int FullDate = 20260503;
+constexpr int FullDate = 20260517;
 
 constexpr int VersionMajor = 3;
 constexpr int VersionMinor = 4;
@@ -621,7 +621,7 @@ void DeleteBit(unsigned char T, unsigned char S)
     int BitPtr = NumSectorPtr + 1 + (S / 8);        //BAM Position for Bit Change
     unsigned char BitToDelete = 1 << (S % 8);       //BAM Bit to be deleted
 
-    if (Disk[BitPtr] && BitToDelete != 0)
+    if (Disk[BitPtr] & BitToDelete)
     {
         Disk[BitPtr] &= (255 - BitToDelete);
 
@@ -5894,8 +5894,8 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
 bool UpdateZP()
-{
-    if (LoaderZP.size() < 2)    //00 - need 2, 01 - need 1
+{	
+	if (LoaderZP.size() < 2)    //00 - need 2, 01 - need 1
     {
         string DefaultZP = "02";
         for (size_t i = 0; i < LoaderZP.size(); i++)
@@ -5907,14 +5907,20 @@ bool UpdateZP()
     {
         string DefaultZP = LoaderZP;
         LoaderZP = "";
-        for (size_t i = LoaderZP.size()-2; i < LoaderZP.size(); i++)
+        for (size_t i = DefaultZP.size()-2; i < DefaultZP.size(); i++)
         {
             LoaderZP += DefaultZP[i];
         }
     }
 
     //Convert LoaderZP to byte
-    unsigned char ZP = ConvertHexStringToInt(LoaderZP) % 256;
+    if (!IsHexString(LoaderZP))
+	{
+		cerr << "***ABORT***\tZeropage value is not a hex number: " << LoaderZP << "\n";
+		return false;
+	}
+
+	unsigned char ZP = ConvertHexStringToInt(LoaderZP) % 256;
 
     //ZP cannot be $00, $01, or $ff
     if (ZP < 2)
@@ -6581,7 +6587,7 @@ bool Build()
                 {
                     if (NumScriptEntries > -1)
                     {
-                        LoaderZP = ScriptEntryArray[0];
+						LoaderZP = ScriptEntryArray[0];
                     }
                 }
 
@@ -7379,7 +7385,7 @@ int wmain(int argc, wchar_t* argv[])
 	{
 
 #ifdef DEBUG
-		wstring SFN = L"c:/SparkleTestProjects/Aloft/Parts/FástTransfer/FastTransfer.sls";
+		wstring SFN = L"c:/SparkleTestProjects/Aloftá/Parts/FástTransfer/FastTransfer.sls";
 
 		int size_needed = WideCharToMultiByte(CP_UTF8, 0, &SFN[0], (int)SFN.size(), NULL, 0, NULL, NULL);
 		string ScriptFileName(size_needed, 0);
