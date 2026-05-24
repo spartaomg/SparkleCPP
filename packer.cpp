@@ -4,19 +4,38 @@ using namespace std;
 using namespace std::filesystem;
 
 struct sequence {
-    int Len;		//Length of the sequence in bytes (0 based)
-    int Off;		//Offset of Match sequence in bytes (1 based), 0 if Literal Sequence
-    int Nibbles;
-    int TotalBits;		//Total Bits in Buffer
+	int Len;
+	int Off;
+	int Nibbles;
+	int TotalBits;
 };
 
-template <class T>
-T FastMin(const T& left, const T& right)
+struct MatchArrays
 {
-    return left < right ? left : right;
-}
+	std::vector<unsigned char> SL, NL, FL, FSL, FNL, FFL;
+	std::vector<int> SO, NO, FO, FSO, FNO, FFO;
+	std::vector<sequence> Seq;
 
-sequence *Seq;
+	void Init(int PrgLen)
+	{
+		SL.assign(PrgLen, 0);
+		NL.assign(PrgLen, 0);
+		FL.assign(PrgLen, 0);
+		FSL.assign(PrgLen, 0);
+		FNL.assign(PrgLen, 0);
+		FFL.assign(PrgLen, 0);
+		SO.assign(PrgLen, 0);
+		NO.assign(PrgLen, 0);
+		FO.assign(PrgLen, 0);
+		FSO.assign(PrgLen, 0);
+		FNO.assign(PrgLen, 0);
+		FFO.assign(PrgLen, 0);
+		Seq.assign(PrgLen + 1, sequence{});
+	}
+};
+
+//sequence *Seq;
+static MatchArrays* CurrentMA = nullptr;
 
 bool TransitionalBlock;
 bool LastBlockOfBundle = false;
@@ -38,7 +57,7 @@ const int MidLitSelector = 1;
 const int MaxNearOffset = 256;                      //0-based (1-256, stored as 0-255)
 const int MaxShortOffset = 64;                      //0-based (1-64, stored as 0-63)
 
-int MaxOffset = MaxNearOffset * 8;                  //3 is most optimal for size, loading and disk creating speed, 8 is the new standard!!!
+int MaxOffset = MaxNearOffset * 8;                  //8 is most optimal for size, loading and disk creating speed
 
 //Match lengths
 const int MaxLongLen = 255;                         //1-based (32-255, stored the same)
@@ -76,9 +95,9 @@ int ReferenceUnderIO{};
 
 array<unsigned char, 256> Buffer;
 
-int *SO, *NO, *FO, * FSO, * FNO, *FFO;
+//int *SO, *NO, *FO, * FSO, * FNO, *FFO;
 
-unsigned char* SL, * NL, * FL, * FSL, * FNL, * FFL;
+//unsigned char* SL, * NL, * FL, * FSL, * FNL, * FFL;
 
 int NibblePtr, BitPos, BitsLeft;
 unsigned char LastByte;
@@ -439,6 +458,13 @@ int CalcLitBits(int Lits)
 void CalcMatchBytesAndBits(int Length, int Offset)
 {
 
+	if (Length == 0)
+	{
+		MatchBytes = 0;
+		MatchBits = 0;
+		return;
+	}
+
     if ((Length <= MaxShortLen) && (Offset <= MaxShortOffset))
     {
         MatchBytes = 1;
@@ -461,10 +487,10 @@ void CalcMatchBytesAndBits(int Length, int Offset)
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void CheckLitSeq(int Pos)
+void CheckLitSeq(int Pos, MatchArrays& MA)
 {
     //Continue previous Lit sequence or start new sequence
-    LitCnt = (Seq[Pos].Off == 0) ? Seq[Pos].Len : -1;
+    LitCnt = (MA.Seq[Pos].Off == 0) ?MA.Seq[Pos].Len : -1;
 
     //Calculate literal bits for a presumtive LitCnt+1 value
     LitBits = ((LitCnt + 1) / MaxLitPerBlock) * 13;
@@ -486,21 +512,21 @@ void CheckLitSeq(int Pos)
 
     //LITERALS ARE ALWAYS FOLLOWED BY MATCHES, SO TYPE SELECTOR BIT IS NOT NEEDED AFTER LITERALS AT ALL
 
-    int TotBits = Seq[Pos - (LitCnt + 1)].TotalBits + LitBits + ((LitCnt + 2) * 8);
+    int TotBits =MA.Seq[Pos - (LitCnt + 1)].TotalBits + LitBits + ((LitCnt + 2) * 8);
 
     //See if total bit count is less than best version and save it to sequence at Pos+1 (position is 1 based)
-    if (TotBits < Seq[Pos + 1].TotalBits)
+    if (TotBits <MA.Seq[Pos + 1].TotalBits)
     {
-        Seq[Pos + 1].Len = LitCnt + 1;      //LitCnt is 0 based, LitLen is 0 based
-        Seq[Pos + 1].Off = 0;               //An offset of 0 marks a literal sequence, match offset is 1 based
-        Seq[Pos + 1].Nibbles = Seq[Pos - (LitCnt + 1)].Nibbles + ((LitBits > 1) ? 1 : 0);
-        Seq[Pos + 1].TotalBits = TotBits;
+       MA.Seq[Pos + 1].Len = LitCnt + 1;      //LitCnt is 0 based, LitLen is 0 based
+       MA.Seq[Pos + 1].Off = 0;               //An offset of 0 marks a literal sequence, match offset is 1 based
+       MA.Seq[Pos + 1].Nibbles =MA.Seq[Pos - (LitCnt + 1)].Nibbles + ((LitBits > 1) ? 1 : 0);
+       MA.Seq[Pos + 1].TotalBits = TotBits;
     }
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void CheckMatchSeq(int SeqLen, int SeqOff, int Pos)
+void CheckMatchSeq(int SeqLen, int SeqOff, int Pos, MatchArrays& MA)
 {
     //If this is a far match then min len = 3, otherwise min len = 2
     int MinLen = (SeqOff > MaxNearOffset) ? 3 : 2;
@@ -527,16 +553,25 @@ void CheckMatchSeq(int SeqLen, int SeqOff, int Pos)
         }
 
         //Calculate total bit count, independently of nibble status
-        int TotBits = Seq[Pos + 1 - L].TotalBits + MatchBits;
+        int TotBits =MA.Seq[Pos + 1 - L].TotalBits + MatchBits;
 
-        if (TotBits < Seq[Pos + 1].TotalBits)
+        if (TotBits <MA.Seq[Pos + 1].TotalBits)
         {
             //If better, update best version
-            Seq[Pos + 1].Len = L;            //MatchLen is 1 based
-            Seq[Pos + 1].Off = SeqOff;       //Off is 1 based
-            Seq[Pos + 1].Nibbles = Seq[Pos + 1 - L].Nibbles;
-            Seq[Pos + 1].TotalBits = TotBits;
+           MA.Seq[Pos + 1].Len = L;				//MatchLen is 1 based
+           MA.Seq[Pos + 1].Off = SeqOff;			//Off is 1 based
+           MA.Seq[Pos + 1].Nibbles =MA.Seq[Pos + 1 - L].Nibbles;
+           MA.Seq[Pos + 1].TotalBits = TotBits;
         }
+		else if (TotBits ==MA.Seq[Pos + 1].TotalBits)
+		{
+			if (L >MA.Seq[Pos + 1].Len)			//prefer the longer match (+/-shorter offset) -> faster depacking
+			{
+				MA.Seq[Pos + 1].Len = L;
+				MA.Seq[Pos + 1].Off = SeqOff;
+				MA.Seq[Pos + 1].Nibbles =MA.Seq[Pos + 1 - L].Nibbles;
+			}
+		}
     }
 }
 
@@ -614,7 +649,7 @@ bool SequenceFits(int BytesToAdd, int BitsToAdd, int SequenceUnderIO) {
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void FindFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex, int RefMaxAddress, int RefMinAddress)
+void FindFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex, int RefMaxAddress, int RefMinAddress, MatchArrays& MA)
 {
     //unsigned char* Prg8 = &Prgs[CurrentFileIndex].Prg[0];
     //unsigned char* Ref8 = &Prgs[RefIndex].Prg[0];
@@ -660,9 +695,9 @@ void FindFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex, int RefMaxAd
     {
         unsigned char PrgValAtPos = Prgs[CurrentFileIndex].Prg[Pos];
 
-        //int ShortMinO = RefMinAddressIndex;
-        //int ShortMaxO = min(max(Pos + MaxShortOffset, OffsetBase + RefMinAddressIndex), OffsetBase + RefMaxAddressIndex) - OffsetBase;
-/*
+        int ShortMinO = RefMinAddressIndex;
+        int ShortMaxO = min(max(Pos + MaxShortOffset, OffsetBase + RefMinAddressIndex), OffsetBase + RefMaxAddressIndex) - OffsetBase;
+
         for (int O = ShortMaxO; O >= ShortMinO; O--)
         {
             //Check if first byte matches at offset, if not go to next offset
@@ -680,30 +715,30 @@ void FindFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex, int RefMaxAd
                         //L=MatchLength + 1 here
                         if (L > 2)
                         {
-                            if (FSL[Pos] < min(MaxSL, L))
+                            if (MA.FSL[Pos] < min(MaxSL, L))
                             {
-                                FSL[Pos] = min(MaxSL, L); //If(L > MaxShortLen, MaxShortLen, L)   'Short matches cannot be longer than 4 bytes
-                                FSO[Pos] = O - Pos + OffsetBase;                        //Keep Offset 1-based
+								MA.FSL[Pos] = min(MaxSL, L); //If(L > MaxShortLen, MaxShortLen, L)   'Short matches cannot be longer than 4 bytes
+								MA.FSO[Pos] = O - Pos + OffsetBase;                        //Keep Offset 1-based
                             }
-                            if (FNL[Pos] < L)   //Allow short (2-byte) Mid Matches
+                            if (MA.FNL[Pos] < L)   //Allow short (2-byte) Mid Matches
                             {
-                                FNL[Pos] = L;
-                                FNO[Pos] = O - Pos + OffsetBase;
+								MA.FNL[Pos] = L;
+								MA.FNO[Pos] = O - Pos + OffsetBase;
                             }
                         }
                         break;
                     }
                 }
-                if ((FSL[Pos] == MaxSL) && (FNL[Pos] == MaxLL))
+                if ((MA.FSL[Pos] == MaxSL) && (MA.FNL[Pos] == MaxLL))
                 {
                     break;
                 }
             }
         }
-*/
-//int NearMinO = min(RefMinAddressIndex, ShortMaxO);
-//int NearMaxO = min(max(Pos + MaxNearOffset, OffsetBase + RefMinAddressIndex), OffsetBase + RefMaxAddressIndex) - OffsetBase;
-/*
+
+		int NearMinO = min(RefMinAddressIndex, ShortMaxO);
+		int NearMaxO = min(max(Pos + MaxNearOffset, OffsetBase + RefMinAddressIndex), OffsetBase + RefMaxAddressIndex) - OffsetBase;
+
         for (int O = NearMaxO; O >= NearMinO; O--)
         {
             //Check if first byte matches at offset, if not go to next offset
@@ -720,30 +755,36 @@ void FindFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex, int RefMaxAd
                         //L=MatchLength + 1 here
                         if (L > 2)
                         {
-                            if (FNL[Pos] < L)   //Allow short (2-byte) Mid Matches
+                            if (MA.FNL[Pos] < L)   //Allow short (2-byte) Mid Matches
                             {
-                                FNL[Pos] = L;
-                                FNO[Pos] = O - Pos + OffsetBase;
+								MA.FNL[Pos] = L;
+								MA.FNO[Pos] = O - Pos + OffsetBase;
                             }
                         }
                         break;
                     }
                 }
                 //If far matches maxed out, we can leave the loop and go to the next Prg position
-                if (FNL[Pos] == MaxLL)
+                if (MA.FNL[Pos] == MaxLL)
                 {
                     break;
                 }
             }
         }
-*/
-//int FarMinO = max(RefMinAddressIndex, NearMaxO);
-        int BestLength = FFL[Pos];
-        int BestOffset = FFO[Pos];
+
+		//int FarMinO = max(RefMinAddressIndex, NearMaxO);
+        int BestLength = MA.FFL[Pos];
+        int BestOffset = MA.FFO[Pos];
 
         for (int O = RefMaxAddressIndex; O >= RefMinAddressIndex; O--)
         {
-            //Check if first byte matches at offset, if not go to next offset
+			//Early exit if remaining range < best found so far
+			if ((O - RefMinAddressIndex + 1) < BestLength)
+			{
+				break;
+			}
+			
+			//Check if first byte matches at offset, if not go to next offset
             if (PrgValAtPos == Prgs[RefIndex].Prg[O])
             {
                 int MaxLL = min(min(Pos + 1, MaxLongLen), O - RefMinAddressIndex + 1);   //MaxLL = 255 or less
@@ -774,14 +815,14 @@ void FindFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex, int RefMaxAd
             }
         }
 
-        FFL[Pos] = BestLength;
-        FFO[Pos] = BestOffset;
+		MA.FFL[Pos] = BestLength;
+		MA.FFO[Pos] = BestOffset;
     }
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void SearchReferenceFile(int PrgMaxIndex, int RefIndex, int RefMaxAddress, int RefMinAddress)
+void SearchReferenceFile(int PrgMaxIndex, int RefIndex, int RefMaxAddress, int RefMinAddress, MatchArrays& MA)
 {
     //PrgMaxIndex = relative address within Prg
     //RefMaxAddress, RefMinAddress = absolute addresses within reference file
@@ -794,28 +835,28 @@ void SearchReferenceFile(int PrgMaxIndex, int RefIndex, int RefMaxAddress, int R
             if (RefMinAddress + 1 < 0xd000)
             {
                 //Search from start to $cfff
-                FindFarMatches(RefIndex, PrgMaxIndex, 1, 0xcfff, RefMinAddress + 1);
+                FindFarMatches(RefIndex, PrgMaxIndex, 1, 0xcfff, RefMinAddress + 1, MA);
             }
             if (RefMaxAddress > 0xe000)
             {
                 //Search from $e000 to end of file
-                FindFarMatches(RefIndex, PrgMaxIndex, 1, RefMaxAddress, 0xe000 + 1);
+                FindFarMatches(RefIndex, PrgMaxIndex, 1, RefMaxAddress, 0xe000 + 1, MA);
             }
         }
         else
         {
-            FindFarMatches(RefIndex, PrgMaxIndex, 1, RefMaxAddress, RefMinAddress + 1);
+            FindFarMatches(RefIndex, PrgMaxIndex, 1, RefMaxAddress, RefMinAddress + 1, MA);
         }
     }
     else
     {
-        FindFarMatches(RefIndex, PrgMaxIndex, 1, RefMaxAddress, RefMinAddress + 1);
+        FindFarMatches(RefIndex, PrgMaxIndex, 1, RefMaxAddress, RefMinAddress + 1, MA);
     }
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
+void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun, MatchArrays& MA)
 {
     //----------------------------------------------------------------------------------------------------------
     //                                      TODO: TRY REVERSE VECTORS!!!
@@ -834,42 +875,37 @@ void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
         int MaxLL = min(Pos, MaxLongLen);
         int MaxSL = min(Pos, MaxShortLen);
 
-        if ((FirstRun) || (FO[Pos] > MaxO) || (NO[Pos] > MaxO) || (SO[Pos] > MaxO))
+        if ((FirstRun) || (MA.FO[Pos] > MaxO) || (MA.NO[Pos] > MaxO) || (MA.SO[Pos] > MaxO))
         {
             //Only run search for this Pos if this is the first pass or the previously found match has an offset beyond block
-            if (SO[Pos] > MaxO)
+            if (MA.SO[Pos] > MaxO)
             {
-                SO[Pos] = 0;
-                SL[Pos] = 0;
+				MA.SO[Pos] = 0;
+				MA.SL[Pos] = 0;
             }
-            if (NO[Pos] > MaxO)
+            if (MA.NO[Pos] > MaxO)
             {
-                NO[Pos] = 0;
-                NL[Pos] = 0;
+				MA.NO[Pos] = 0;
+				MA.NL[Pos] = 0;
             }
-            if (FO[Pos] > MaxO)
+            if (MA.FO[Pos] > MaxO)
             {
-                FO[Pos] = 0;
-                FL[Pos] = 0;
+				MA.FO[Pos] = 0;
+				MA.FL[Pos] = 0;
             }
 
             unsigned char PrgValAtPos = Prgs[CurrentFileIndex].Prg[Pos];
 
             int ShortMaxO = min(MaxShortOffset, MaxO);
 
-            int BestSL = SL[Pos];
-            int BestSO = SO[Pos];
+            int BestSL = MA.SL[Pos];
+            int BestSO = MA.SO[Pos];
 
-            int BestNL = NL[Pos];
-            int BestNO = NO[Pos];
+            int BestNL = MA.NL[Pos];
+            int BestNO = MA.NO[Pos];
 
             for (int O = 1; O <= ShortMaxO; O++)
             {
-                //If both short and long matches maxed out, we can leave the loop and go to the next Prg position
-                if ((BestNL == MaxLL) && (BestSL == MaxSL))
-                {
-                    break;
-                }
                 //Check if first byte matches at offset, if not go to next offset
                 if (PrgValAtPos == Prgs[CurrentFileIndex].Prg[Pos + O])
                 {
@@ -901,22 +937,22 @@ void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
                                 BestNO = O;
                             }
                         }
-                    }
+						//If both short and long matches maxed out, we can leave the loop and go to the next Prg position
+						if ((BestNL == MaxLL) && (BestSL == MaxSL))
+						{
+							break;
+						}
+					}
                 }
             }
 
-            SL[Pos] = BestSL;
-            SO[Pos] = BestSO;
+			MA.SL[Pos] = BestSL;
+			MA.SO[Pos] = BestSO;
 
             int NearMaxO = min(MaxNearOffset, MaxO);
 
             for (int O = ShortMaxO + 1; O <= NearMaxO; O++)
             {
-                //If both short and long matches maxed out, we can leave the loop and go to the next Prg position
-                if (BestNL == MaxLL)
-                {
-                    break;
-                }
                 //Check if first byte matches at offset, if not go to next offset
                 if (PrgValAtPos == Prgs[CurrentFileIndex].Prg[Pos + O])
                 {
@@ -939,32 +975,51 @@ void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
                             BestNL = CurrentMaxL;
                             BestNO = O;
                         }
-                        int I = Pos;
-                        while ((L >= (CurrentMaxL = min(I, MaxLL))) && (L-- > 1))
-                        {
-                            NL[I] = CurrentMaxL;
-                            NO[I--] = O;
-                        }
-                    }
+                        					
+						int PropLen = L;
+						int I = Pos;
+						
+						while (PropLen > 1)
+						{
+							int MaxProp = min(I, MaxLL);
+							
+							if (PropLen < MaxProp)
+							{
+								break;
+							}
+							
+							if (MA.NL[I] < MaxProp)
+							{
+								MA.NL[I] = MaxProp;
+								MA.NO[I--] = O;
+								PropLen--;
+							}
+							else
+							{
+								break;
+							}
+						}				
+						//If near long match maxed out, we can leave the loop and go to the next Prg position
+						if (BestNL == MaxLL)
+						{
+							break;
+						}
+
+					}
                 }
             }
 
-            NL[Pos] = BestNL;
-            NO[Pos] = BestNO;
+			MA.NL[Pos] = BestNL;
+			MA.NO[Pos] = BestNO;
 
             if (BestNL != MaxLL)
             {
 
-                int BestFL = FL[Pos];
-                int BestFO = FO[Pos];
+                int BestFL = MA.FL[Pos];
+                int BestFO = MA.FO[Pos];
 
                 for (int O = NearMaxO + 1; O <= MaxO; O++)
                 {
-                    //If both short and long matches maxed out, we can leave the loop and go to the next Prg position
-                    if (BestFL == MaxLL)
-                    {
-                        break;
-                    }
                     //Check if first byte matches at offset, if not go to next offset
                     if (PrgValAtPos == Prgs[CurrentFileIndex].Prg[Pos + O])
                     {
@@ -987,17 +1042,40 @@ void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
                                 BestFL = CurrentMaxL;
                                 BestFO = O;
                             }
-                            int I = Pos;
-                            while ((L >= (CurrentMaxL = min(I, MaxLL))) && (L-- > 2))
-                            {
-                                FL[I] = CurrentMaxL;
-                                FO[I--] = O;
-                            }
-                        }
+
+							int PropLen = L;
+							int I = Pos;
+
+							while (PropLen > 1)
+							{
+								int MaxProp = min(I, MaxLL);
+
+								if (PropLen < MaxProp)
+								{
+									break;
+								}
+
+								if (MA.FL[I] < MaxProp)
+								{
+									MA.FL[I] = MaxProp;
+									MA.FO[I--] = O;
+									PropLen--;
+								}
+								else
+								{
+									break;
+								}
+							}
+							//If far long match maxed out, we can leave the loop and go to the next Prg position
+							if (BestFL == MaxLL)
+							{
+								break;
+							}
+						}
                     }
                 }
-                FL[Pos] = BestFL;
-                FO[Pos] = BestFO;
+				MA.FL[Pos] = BestFL;
+				MA.FO[Pos] = BestFO;
             }
         }
     }
@@ -1005,11 +1083,11 @@ void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void CalcBestSequence(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
+void CalcBestSequence(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun, MatchArrays& MA)
 {
     if (!Uncompressed)
     {
-        FindMatches(SeqHighestIndex, SeqLowestIndex, FirstRun);
+        FindMatches(SeqHighestIndex, SeqLowestIndex, FirstRun, MA);
     }
 
     //----------------------------------------------------------------------------------------------------------
@@ -1019,48 +1097,53 @@ void CalcBestSequence(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun)
     for (int Pos = SeqLowestIndex; Pos <= SeqHighestIndex; Pos++)
     {
         //Start with second element, first has been initialized above
-        Seq[Pos + 1].TotalBits = 0xffffff;
+       MA.Seq[Pos + 1].TotalBits = 0xffffff;
         //Make initial value greater than max block size=100 = $10000 bytes = $80000 bits
 
-        if ((FL[Pos] != 0) || (FFL[Pos] != 0))
-        {
-            if (FL[Pos] >= FFL[Pos])
-            {
-                CheckMatchSeq(FL[Pos], FO[Pos], Pos);
-            }
-            else if (Pos < SeqHighestIndex)     //The last byte of the block MUST be a literal, we can't use Far Matches there
-            {
-                //If a reference is under I/O then this block also must be under I/O to be able to copy the reference
-                //If ((PrgAdd + Pos + FFO(Pos) >= &HD000) AndAlso (PrgAdd + Pos + FFO(Pos) < &HE000)) OrElse
-                //((PrgAdd + Pos + FFO(Pos) - FFL(Pos) >= &HD000) AndAlso (PrgAdd + Pos + FFO(Pos) - FFL(Pos) < &HE000)) Then
-                //BlockUnderIO = 1
-                //End If
-                CheckMatchSeq(FFL[Pos], FFO[Pos], Pos);
-            }
-        }
-        if ((NL[Pos] > 0) || (FNL[Pos] > 0))
-        {
-            if (NL[Pos] >= FNL[Pos])
-            {
-                CheckMatchSeq(NL[Pos], NO[Pos], Pos);
-            }
-            else if (Pos < SeqHighestIndex)
-            {
-                CheckMatchSeq(FNL[Pos], FNO[Pos], Pos);
-            }
-        }
-        if ((SL[Pos] > 0) || (FSL[Pos] > 0))
-        {
-            if (SL[Pos] >= FSL[Pos])
-            {
-                CheckMatchSeq(SL[Pos], SO[Pos], Pos);
-            }
-            else if (Pos < SeqHighestIndex)
-            {
-                CheckMatchSeq(FSL[Pos], FSO[Pos], Pos);
-            }
-        }
-        CheckLitSeq(Pos);
+		if (MA.FFL[Pos] != 0 && Pos < SeqHighestIndex)     //The last byte of the block MUST be a literal, we can't use Far Matches there
+		{
+			//If a reference is under I/O then this block also must be under I/O to be able to copy the reference
+			//If ((PrgAdd + Pos + FFO(Pos) >= &HD000) AndAlso (PrgAdd + Pos + FFO(Pos) < &HE000)) OrElse
+			//((PrgAdd + Pos + FFO(Pos) - FFL(Pos) >= &HD000) AndAlso (PrgAdd + Pos + FFO(Pos) - FFL(Pos) < &HE000)) Then
+			//BlockUnderIO = 1
+			//End If
+			CheckMatchSeq(MA.FFL[Pos], MA.FFO[Pos], Pos, MA);
+		}
+
+		if (MA.FL[Pos] != 0)
+		{
+			//if (FL[Pos] >= FFL[Pos])
+			//{
+			CheckMatchSeq(MA.FL[Pos], MA.FO[Pos], Pos, MA);
+			//}
+		}
+
+		if (MA.FNL[Pos] > 0 && Pos < SeqHighestIndex)
+		{
+			CheckMatchSeq(MA.FNL[Pos], MA.FNO[Pos], Pos, MA);
+		}
+
+		if (MA.NL[Pos] > 0)
+		{
+			//if (NL[Pos] >= FNL[Pos])
+			//{
+			CheckMatchSeq(MA.NL[Pos], MA.NO[Pos], Pos, MA);
+			//}
+		}
+
+		if (MA.FSL[Pos] > 0 && Pos < SeqHighestIndex)
+		{
+			CheckMatchSeq(MA.FSL[Pos], MA.FSO[Pos], Pos, MA);
+		}
+
+		if (MA.SL[Pos] > 0)
+		{
+			//if (SL[Pos] >= FSL[Pos])
+			//{
+			CheckMatchSeq(MA.SL[Pos], MA.SO[Pos], Pos, MA);
+			//}
+		}
+        CheckLitSeq(Pos, MA);
     }
 }
 
@@ -1092,8 +1175,10 @@ bool CloseBuffer() {
 
     if (SI < 0)                         //We have reached the end of the file -> exit
     {
-        return true;
+        return true;					//MA not needed past this point (after return)
     }
+
+	MatchArrays& MA = *CurrentMA;
 
     //If we have not reached the end of the file, then update buffer
 
@@ -1111,7 +1196,7 @@ bool CloseBuffer() {
 
     //LETHARGY BUG - Bits Left need to be calculated from Seq(SI+1) and NOT Seq(SI)
     //Add 4 bits if number of nibbles is odd
-    int BitsLeftInBundle = Seq[SI + 1].TotalBits + ((Seq[SI + 1].Nibbles % 2) * 4);
+    int BitsLeftInBundle = MA.Seq[SI + 1].TotalBits + ((MA.Seq[SI + 1].Nibbles % 2) * 4);
 
     //If the next block is the first one on a new track, no need to recalculate the sequence
     //As all previous blocks will be loaded from the previous track before this block gets loaded
@@ -1187,7 +1272,7 @@ bool CloseBuffer() {
         //If BlockCnt <> 1 Then MsgBox((BitsLeftInBundle + BitsNeededForNextBundle).ToString + vbNewLine + (Seq(SI + 1).TotalBits + BitsNeededForNextBundle).ToString + vbNewLine + ((LastByte - 1) * 8 + BitPos).ToString)
 
         //Only recalculate the very first byte's sequence
-        CalcBestSequence(max(SI, 1), max(SI, 1), false); //'(If(SI > 1, SI, 1), If(SI > 1, SI, 1))
+        CalcBestSequence(max(SI, 1), max(SI, 1), false, MA); //'(If(SI > 1, SI, 1), If(SI > 1, SI, 1))
 
         if (NewTrack)
         {
@@ -1199,10 +1284,10 @@ bool CloseBuffer() {
                     if (PartialFileIndex > -1)
                     {
                         //Search the finished segment of partial file
-                            //ReferenceFile = Prgs(PartialFileIndex).ToArray
+                        //ReferenceFile = Prgs(PartialFileIndex).ToArray
                         ReferenceFileStart = Prgs[PartialFileIndex].iFileAddr;
 
-                        SearchReferenceFile(SI, PartialFileIndex, ReferenceFileStart + PartialFileOffset, ReferenceFileStart + 1);
+                        SearchReferenceFile(SI, PartialFileIndex, ReferenceFileStart + PartialFileOffset, ReferenceFileStart + 1, MA);
                     }
 
                     //Search any finished files on track (partial file < finished file < current file)
@@ -1211,14 +1296,14 @@ bool CloseBuffer() {
                         //ReferenceFile = Prgs(I).ToArray
                         ReferenceFileStart = Prgs[I].iFileAddr;
 
-                        SearchReferenceFile(SI, I, ReferenceFileStart + Prgs[I].iFileLen - 1, ReferenceFileStart + 1);
+                        SearchReferenceFile(SI, I, ReferenceFileStart + Prgs[I].iFileLen - 1, ReferenceFileStart + 1, MA);
                     }
 
                     //Search the finished segment of this file
                     //ReferenceFile = Prgs(CurrentFileIndex).ToArray
                     ReferenceFileStart = Prgs[CurrentFileIndex].iFileAddr;
 
-                    SearchReferenceFile(SI, CurrentFileIndex, ReferenceFileStart + Prgs[CurrentFileIndex].iFileLen - 1, ReferenceFileStart + SI + 1);
+                    SearchReferenceFile(SI, CurrentFileIndex, ReferenceFileStart + Prgs[CurrentFileIndex].iFileLen - 1, ReferenceFileStart + SI + 1, MA);
                 }
                 else
                 {
@@ -1226,12 +1311,12 @@ bool CloseBuffer() {
                     //ReferenceFile = Prgs(CurrentFileIndex).ToArray
                     ReferenceFileStart = Prgs[CurrentFileIndex].iFileAddr;
 
-                    SearchReferenceFile(SI, CurrentFileIndex, ReferenceFileStart + PartialFileOffset, ReferenceFileStart + SI + 1);
+                    SearchReferenceFile(SI, CurrentFileIndex, ReferenceFileStart + PartialFileOffset, ReferenceFileStart + SI + 1, MA);
 
                 }
             }
 
-            //'The current file becomes the partial file, anything before it is now finished and can be used for search
+            //The current file becomes the partial file, anything before it is now finished and can be used for search
             PartialFileIndex = CurrentFileIndex;
             PartialFileOffset = SI;
 
@@ -1240,21 +1325,21 @@ bool CloseBuffer() {
         if ((BlockCnt != 1) && (!NewTrack))     //Do not recalculate the very first block and first blocks on each track
         {
             //Last/Transitional block
-            BitsLeftInBundle = Seq[SI + 1].TotalBits + ((Seq[SI + 1].Nibbles % 2) * 4);
+            BitsLeftInBundle =MA.Seq[SI + 1].TotalBits + ((MA.Seq[SI + 1].Nibbles % 2) * 4);
             //If the new bit count does not fit in the buffer then this is NOT the last block -> recalc sequence
             //KARAOKE BUG - fixed in Sparkle 2.2
             if (BitsLeftInBundle + BitsNeededForNextBundle + ((MLen == 0) ? 0 : 1) + 8 > ((LastByte - 1) * 8) + BitPos)
             {
                 LastBlockOfBundle = false;
-                goto CalcAll;
-            }
+				//Calc all:
+				CalcBestSequence(max(SI, 1), max(SI - MaxOffset, 1), false, MA);   //If(SI > 1, SI, 1), If(SI - MaxOffset > 1, SI - MaxOffset, 1))
+			}
         }
     }
     else
     {
-        //For all other blocks recalculate the first 256*3 bytes' sequence (MaxNearOffset * 3)
-    CalcAll:
-        CalcBestSequence(max(SI, 1), max(SI - MaxOffset, 1), false);   //If(SI > 1, SI, 1), If(SI - MaxOffset > 1, SI - MaxOffset, 1))
+        //Calc all: for all other blocks recalculate the first 256*3 bytes' sequence (MaxNearOffset * 3)
+        CalcBestSequence(max(SI, 1), max(SI - MaxOffset, 1), false, MA);   //If(SI > 1, SI, 1), If(SI - MaxOffset > 1, SI - MaxOffset, 1))
     }
 
     //----------------------------------------------------------------------------------------------------------
@@ -1436,7 +1521,6 @@ bool CloseBundle(int NextFileIO, bool LastBundleOnDisk)
     }
     else
     {
-
         //If last sequence was a match (no literals) then add a match bit
         if ((MLen > 0) || (LitCnt == -1))
         {
@@ -1456,7 +1540,7 @@ bool CloseBundle(int NextFileIO, bool LastBundleOnDisk)
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void FindVirtualFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex,int RefMaxAddress, int RefMinAddress)
+void FindVirtualFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex,int RefMaxAddress, int RefMinAddress, MatchArrays& MA)
 {
 
     //Filter out virtual files overlapping packed file
@@ -1505,14 +1589,14 @@ void FindVirtualFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex,int Re
 
         for (int O = ShortMinO; O <= ShortMaxO; O++)
         {
-            //Check if first byte matches at offset, if not go to next offset
+			//Check if first byte matches at offset, if not go to next offset
             if (PrgValAtPos == VFiles[RefIndex].Prg[O])
             {
                 //int MaxLL = FastMin(FastMin(Pos + 1, MaxLongLen),O - RefMinAddressIndex + 1);   //MaxLL = 255 or less
                 int MaxLL = min(min(Pos + 1, MaxLongLen), O - RefMinAddressIndex + 1);   //MaxLL = 255 or less
                 int MaxSL = min(min(Pos + 1, MaxShortLen), O - RefMinAddressIndex + 1);
 
-                if ((FSL[Pos] == MaxSL) && (FNL[Pos] == min(min(Pos + 1, MaxFarMidLen), O - RefMinAddressIndex + 1)))
+                if ((MA.FSL[Pos] == MaxSL) && (MA.FNL[Pos] == min(min(Pos + 1, MaxFarMidLen), O - RefMinAddressIndex + 1)))
                 {
                     break;
                 }
@@ -1525,15 +1609,15 @@ void FindVirtualFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex,int Re
                         //L=MatchLength + 1 here
                         if (L > 2)
                         {
-                            if (FSL[Pos] < min(MaxSL, L))
+                            if (MA.FSL[Pos] < min(MaxSL, L))
                             {
-                                FSL[Pos] = min(MaxSL, L); //If(L > MaxShortLen, MaxShortLen, L)   'Short matches cannot be longer than 4 bytes
-                                FSO[Pos] = O - Pos + OffsetBase;                        //Keep Offset 1-based
+								MA.FSL[Pos] = min(MaxSL, L); //If(L > MaxShortLen, MaxShortLen, L)   'Short matches cannot be longer than 4 bytes
+								MA.FSO[Pos] = O - Pos + OffsetBase;                        //Keep Offset 1-based
                             }
-                            if (FNL[Pos] < L)   //Allow short (2-byte) Mid Matches
+                            if (MA.FNL[Pos] < L)   //Allow short (2-byte) Mid Matches
                             {
-                                FNL[Pos] = L;
-                                FNO[Pos] = O - Pos + OffsetBase;
+								MA.FNL[Pos] = L;
+								MA.FNO[Pos] = O - Pos + OffsetBase;
                             }
                         }
                         break;
@@ -1554,7 +1638,7 @@ void FindVirtualFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex,int Re
                 int MaxLL = min(min(Pos + 1, MaxLongLen), O - RefMinAddressIndex + 1);   //MaxLL = 255 or less
 
                 //If far matches maxed out, we can leave the loop and go to the next Prg position
-                if (FNL[Pos] == min(min(Pos + 1, MaxFarMidLen), O - RefMinAddressIndex + 1))
+                if (MA.FNL[Pos] == min(min(Pos + 1, MaxFarMidLen), O - RefMinAddressIndex + 1))
                 {
                     break;
                 }
@@ -1567,10 +1651,10 @@ void FindVirtualFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex,int Re
                         //L=MatchLength + 1 here
                         if (L > 2)
                         {
-                            if (FNL[Pos] < L)   //Allow short (2-byte) Mid Matches
+                            if (MA.FNL[Pos] < L)   //Allow short (2-byte) Mid Matches
                             {
-                                FNL[Pos] = L;
-                                FNO[Pos] = O - Pos + OffsetBase;
+								MA.FNL[Pos] = L;
+								MA.FNO[Pos] = O - Pos + OffsetBase;
                             }
                         }
                         break;
@@ -1583,13 +1667,19 @@ void FindVirtualFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex,int Re
 
         for (int O = FarMinO; O <= RefMaxAddressIndex; O++)
         {
-            //Check if first byte matches at offset, if not go to next offset
+			//Early exit if remaining range < best found so far
+			if ((RefMaxAddressIndex - O + 1) < MA.FFL[Pos])
+			{
+				break;
+			}
+			
+			//Check if first byte matches at offset, if not go to next offset
             if (PrgValAtPos == VFiles[RefIndex].Prg[O])
             {
                 //int MaxLL = FastMin(FastMin(Pos + 1, MaxLongLen),O - RefMinAddressIndex + 1);   //MaxLL = 255 or less
                 int MaxLL = min(min(Pos + 1, MaxLongLen), O - RefMinAddressIndex + 1);   //MaxLL = 255 or less
                 //If far matches maxed out, we can leave the loop and go to the next Prg position
-                if (FFL[Pos] == min(min(Pos + 1, MaxFarMidLen), O - RefMinAddressIndex + 1))
+                if (MA.FFL[Pos] == min(min(Pos + 1, MaxFarMidLen), O - RefMinAddressIndex + 1))
                 {
                     break;
                 }
@@ -1600,12 +1690,12 @@ void FindVirtualFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex,int Re
                     {
                         //Find the first position where there is NO match -> this will give us the absolute length of the match
                         //L=MatchLength + 1 here
-                        if (L > 3)
+                        if (L > 3)			//could be L > 2
                         {
-                            if (FFL[Pos] < L)
+                            if (MA.FFL[Pos] < L)
                             {
-                                FFL[Pos] = L;
-                                FFO[Pos] = O - Pos + OffsetBase;
+								MA.FFL[Pos] = L;
+								MA.FFO[Pos] = O - Pos + OffsetBase;
                                 //cout << hex << FFL[Pos] << "\t" << FFO[Pos] << "\t" << Pos << dec << "\n";
                             }
                         }
@@ -1667,7 +1757,7 @@ void FindVirtualFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex,int Re
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool Pack()
+bool Pack(MatchArrays& MA)
 {
     //Packing is done backwards
 
@@ -1676,286 +1766,310 @@ bool Pack()
     SI = PrgLen - 1;
     StartPtr = SI;
 
-Restart:
-    while (SI >= 0)
-    {
-        if (Seq[SI + 1].Off == 0)
-        {
-            //--------------------------------------------------------------------
-            //Literal sequence
-            //--------------------------------------------------------------------
-            LitCnt = Seq[SI + 1].Len;               //LitCnt is 0 based
-            LitSI = SI;
-            MLen = 0;                               //Reset MLen - this is needed for accurate bit counting in sequencefits
+	bool Restart = true;
 
-            //The max number of literals that fit in a single buffer is 249 bytes
-            //This bypasses longer literal sequences and improves compression speed
-            BufferFull = false;
+	while (Restart)
+	{
+		Restart = false;
+		
+		while (SI >= 0)
+		{
+			if (MA.Seq[SI + 1].Off == 0)
+			{
+				//--------------------------------------------------------------------
+				//Literal sequence
+				//--------------------------------------------------------------------
+				LitCnt = MA.Seq[SI + 1].Len;               //LitCnt is 0 based
+				LitSI = SI;
+				MLen = 0;                               //Reset MLen - this is needed for accurate bit counting in sequencefits
 
-            //Shortcut to bypass long literal sequences that wouldn't fit in the buffer anyway
-            if (LitCnt > BytePtr)       //MaxLitPerBlock Then
-            {
-                BufferFull = true;
-                LitCnt = BytePtr;       //MaxLitPerBlock
-            }
+				//The max number of literals that fit in a single buffer is 249 bytes
+				//This bypasses longer literal sequences and improves compression speed
+				BufferFull = false;
 
-            while (LitCnt > -1)
-            {
-                if (SequenceFits(LitCnt + 1, CalcLitBits(LitCnt), CheckIO(SI - LitCnt, -1)))
-                {
-                    break;
-                }
-                LitCnt--;
-                BufferFull = true;
-            }
+				//Shortcut to bypass long literal sequences that wouldn't fit in the buffer anyway
+				if (LitCnt > BytePtr)       //MaxLitPerBlock Then
+				{
+					BufferFull = true;
+					LitCnt = BytePtr;       //MaxLitPerBlock
+				}
 
-            //Go to next element in sequence
-            SI -= LitCnt + 1;       //If nothing added to the buffer, LitCnt=-1+1=0
+				while (LitCnt > -1)
+				{
+					if (SequenceFits(LitCnt + 1, CalcLitBits(LitCnt), CheckIO(SI - LitCnt, -1)))
+					{
+						break;
+					}
+					LitCnt--;
+					BufferFull = true;
+				}
 
-            if (BufferFull)
-            {
-                AddLitSequence();
-                if (!CloseBuffer())      //The whole literal sequence did not fit, buffer is full, close it
-                    return false;
-            }
-        }
-        else
-        {
-            //--------------------------------------------------------------------
-            //Match sequence
-            //--------------------------------------------------------------------
+				//Go to next element in sequence
+				SI -= LitCnt + 1;       //If nothing added to the buffer, LitCnt=-1+1=0
 
-            BufferFull = false;
+				if (BufferFull)
+				{
+					AddLitSequence();
+					if (!CloseBuffer())      //The whole literal sequence did not fit, buffer is full, close it
+						return false;
+				}
+			}
+			else
+			{
+				//--------------------------------------------------------------------
+				//Match sequence
+				//--------------------------------------------------------------------
 
-            MLen = Seq[SI + 1].Len;     //1 based
-            MOff = Seq[SI + 1].Off;     //1 based
-        //Match:
-            CalcMatchBytesAndBits(MLen, MOff);
+				BufferFull = false;
 
-            if (MatchBytes == 4)
-            {
-                //--------------------------------------------------------------------
-                //Far Long Match - 4 match bytes + 0/1 match bit
-                //--------------------------------------------------------------------
+				MLen = MA.Seq[SI + 1].Len;     //1 based
+				MOff = MA.Seq[SI + 1].Off;     //1 based
+				//Match:
+				CalcMatchBytesAndBits(MLen, MOff);
 
-                ReferenceUnderIO = 0;
+				if (MatchBytes == 4)
+				{
+					//--------------------------------------------------------------------
+					//Far Long Match - 4 match bytes + 0/1 match bit
+					//--------------------------------------------------------------------
 
-                if ((((PrgAdd + SI + MOff) % 0x10000 >= 0xD000) && ((PrgAdd + SI + MOff) % 0x10000 < 0xE000)) ||
-                    (((PrgAdd + SI + MOff - MLen + 1) % 0x10000 >= 0xD000) && ((PrgAdd + SI + MOff - MLen + 1) % 0x10000 < 0xE000)))
-                {
-                    if (((PrgAdd + SI >= 0xD000) && (PrgAdd + SI < 0xE000) && (!FileUnderIO)) ||
-                        ((PrgAdd + SI - MLen + 1 >= 0xD000) && (PrgAdd + SI - MLen + 1 < 0xE000) && (!FileUnderIO)))
-                    {
+					ReferenceUnderIO = 0;
 
-                    }
-                    else
-                    {
-                        ReferenceUnderIO = 1;
-                    }
-                }
+					if ((((PrgAdd + SI + MOff) % 0x10000 >= 0xD000) && ((PrgAdd + SI + MOff) % 0x10000 < 0xE000)) ||
+						(((PrgAdd + SI + MOff - MLen + 1) % 0x10000 >= 0xD000) && ((PrgAdd + SI + MOff - MLen + 1) % 0x10000 < 0xE000)))
+					{
+						if (((PrgAdd + SI >= 0xD000) && (PrgAdd + SI < 0xE000) && (!FileUnderIO)) ||
+							((PrgAdd + SI - MLen + 1 >= 0xD000) && (PrgAdd + SI - MLen + 1 < 0xE000) && (!FileUnderIO)))
+						{
 
-                if (SequenceFits(MatchBytes + LitCnt + 1, MatchBits + CalcLitBits(LitCnt), max(CheckIO(SI - MLen + 1, -1), ReferenceUnderIO)))
-                {
-                    AddLitSequence();
-                    //Add far long match
-                    AddFarLongMatch();
-                }
-                else
-                {
-                    MatchBytes = 3;
-                    MLen = MaxMidLen;
-                    BufferFull = true;   //Buffer if full, we will need to close it
-                    goto Check3Bytes;
+						}
+						else
+						{
+							ReferenceUnderIO = 1;
+						}
+					}
 
-                }
-            }
-            else if (MatchBytes == 3)
-            {
-                //--------------------------------------------------------------------
-                //Far Mid Match or Near Long Match - 3 match bytes + 0/1 match bit
-                //--------------------------------------------------------------------
-            Check3Bytes:
+					if (SequenceFits(MatchBytes + LitCnt + 1, MatchBits + CalcLitBits(LitCnt), max(CheckIO(SI - MLen + 1, -1), ReferenceUnderIO)))
+					{
+						AddLitSequence();
+						//Add far long match
+						AddFarLongMatch();
+					}
+					else
+					{
+						BufferFull = true;   //Buffer if full, we will need to close it
 
-                ReferenceUnderIO = 0;
+						//Default: convert Far Long to Far Mid using same offset (takes 3 bytes)
+						MLen = MaxMidLen;
 
-                if (MOff > MaxNearOffset)
-                {
-                    if ((((PrgAdd + SI + MOff) % 0x10000 >= 0xD000) && ((PrgAdd + SI + MOff) % 0x10000 < 0xE000)) ||
-                        (((PrgAdd + SI + MOff - MLen + 1) % 0x10000 >= 0xD000) && ((PrgAdd + SI + MOff - MLen + 1) % 0x10000 < 0xE000)))
-                    {
-                        if (((PrgAdd + SI >= 0xD000) && (PrgAdd + SI < 0xE000) && (!FileUnderIO)) ||
-                            ((PrgAdd + SI - MLen + 1 >= 0xD000) && (PrgAdd + SI - MLen + 1 < 0xE000) && (!FileUnderIO)))
-                        {
+						//But check if a Near Long match is available and longer (also takes 3 bytes)
+						if (MA.NL[SI] > MaxMidLen && MA.NO[SI] <= MaxNearOffset)
+						{
+							//31+ byte long Near Long Match available
+							MLen = min((int)MA.NL[SI], MaxLongLen);
+							MOff = MA.NO[SI];
+						}
 
-                        }
-                        else
-                        {
-                            ReferenceUnderIO = 1;
-                        }
-                    }
-                }
+						CalcMatchBytesAndBits(MLen, MOff);
+					}
+				}
 
-                if (SequenceFits(MatchBytes + LitCnt + 1, MatchBits + CalcLitBits(LitCnt), max(CheckIO(SI - MLen + 1, -1), ReferenceUnderIO)))
-                {
-                    AddLitSequence();
-                    //Add long match
-                    if (MOff > MaxNearOffset)
-                    {
-                        //Add far mid match
-                        AddFarMidMatch();
-                    }
-                    else
-                    {
-                        //Add near long match
-                        AddNearLongMatch();
-                    }
-                }
-                else
-                {
-                    BufferFull = true;   //Buffer if full, we will need to close it
-                    if (MOff > MaxNearOffset)
-                    {
-                        if ((SL[SI] >= NL[SI]) && (SL[SI] != 0))
-                        {
-                            MatchBytes = 1;
-                            MLen = SL[SI] < MaxShortLen ? SL[SI] : MaxShortLen; // min(SL[SI], MaxShortLen);  //SL is at least as good as NL, but uses 
-                            MOff = SO[SI];  //SL and SO array indeces are 0 based
-                            goto CheckShort;
-                        }
-                        else if (NL[SI] > 0)
-                        {
-                            MatchBytes = 2;
-                            MLen = NL[SI] < MaxMidLen ? NL[SI] : MaxMidLen; // min(NL[SI], MaxMidLen);   //NL and NO array indeces are 0 based
-                            MOff = NO[SI];
-                            goto Check2Bytes;
-                        }
-                        else
-                        {
-                            goto CheckLit;
-                        }
-                    }
-                    else
-                    {
-                        MLen = MaxMidLen;
-                        goto Check2Bytes;
-                    }
-                }
-            }
-            else if (MatchBytes == 2)
-            {
-                //--------------------------------------------------------------------
-                //Near Mid Match - 2 match bytes + 0/1 match bit
-                //--------------------------------------------------------------------
-            Check2Bytes:
-                if (SequenceFits(MatchBytes + LitCnt + 1, MatchBits + CalcLitBits(LitCnt), CheckIO(SI - MLen + 1, -1)))
-                {
-                    AddLitSequence();
-                    //Add mid match
-                    AddNearMidMatch();
-                }
-                else
-                {
-                    BufferFull = true;
-                    if (SO[SI] != 0)
-                    {
-                        MatchBytes = 1;
-                        MLen = SL[SI];   //SL and SO array indeces are 0 based
-                        MOff = SO[SI];
-                        goto CheckShort;
-                    }
-                    else
-                    {
-                        goto CheckLit;
-                    }
-                }
-            }
-            else
-            {
-                //--------------------------------------------------------------------
-                //Short Match - 1 match byte + 0/1 match bit
-                //--------------------------------------------------------------------
-            CheckShort:
-                if (SequenceFits(MatchBytes + LitCnt + 1, MatchBits + CalcLitBits(LitCnt), CheckIO(SI - MLen + 1, -1)))
-                {
-                    AddLitSequence();
-                    //Add short match
-                    AddShortMatch();
-                }
-                else
-                {
-                    //--------------------------------------------------------------------
-                    //Match does not fit, check if 1 literal byte fits
-                    //--------------------------------------------------------------------
-                    BufferFull = true;
-                CheckLit:
-                    MLen = 0;    //This is needed here for accurate Bit count calculation in sequencefits (indicates Literal, not Match)
-                    int NewLit = 1;
-                    if (SequenceFits(NewLit + LitCnt + 1, CalcLitBits(LitCnt + 1), CheckIO(SI - LitCnt, -1)))
-                    {
-                        if (LitCnt == -1)
-                        {
-                            //If no literals, current SI will be LitSI, else, do not change LitSI
-                            LitSI = SI;
+				if (MatchBytes == 3)
+				{
+					//--------------------------------------------------------------------
+					//Far Mid Match or Near Long Match - 3 match bytes + 0/1 match bit
+					//--------------------------------------------------------------------
 
-                        }
-                        LitCnt++;    //0 based, now add 1 for an additional literal (first byte of match that did not fit)
-                        SI--;         //Rest of LitCnt has been already subtracted from SI
-                    }   //Literal vs nothing
-                }   //Short match vs literal
-            }   //Long, mid, or short match
-        //Done:
-            SI -= MLen;
+					ReferenceUnderIO = 0;
 
-            if (BufferFull)
-            {
-                AddLitSequence();
-                if (!CloseBuffer())
-                    return false;
-            }
-        }   //Lit vs match
-    }
+					if (MOff > MaxNearOffset)
+					{
+						if ((((PrgAdd + SI + MOff) % 0x10000 >= 0xD000) && ((PrgAdd + SI + MOff) % 0x10000 < 0xE000)) ||
+							(((PrgAdd + SI + MOff - MLen + 1) % 0x10000 >= 0xD000) && ((PrgAdd + SI + MOff - MLen + 1) % 0x10000 < 0xE000)))
+						{
+							if (((PrgAdd + SI >= 0xD000) && (PrgAdd + SI < 0xE000) && (!FileUnderIO)) ||
+								((PrgAdd + SI - MLen + 1 >= 0xD000) && (PrgAdd + SI - MLen + 1 < 0xE000) && (!FileUnderIO)))
+							{
 
-    AddLitSequence();        //See if any remaining literals need to be added, space has been previously reserved for them
+							}
+							else
+							{
+								ReferenceUnderIO = 1;
+							}
+						}
+					}
 
-    //KARAOKE BUG - fixed in Sparkle 2.2 - making sure that the first byte of the next bundle fits in the transitional block
-    int BytesNeeded = BitsNeededForNextBundle / 8;      //6 or 7 bytes, depending on I/O status of first file in next bundle
-    int BitsNeeded = 0;                                 //DO NOT ADD A LITERAL BIT HERE - WE INCLUDE A BitPtr IN BytesNeeded 
-    if (LastBlockOfBundle)
-    {
-        LastBlockOfBundle = false;
-        TransitionalBlock = true;
-        if (!SequenceFits(BytesNeeded, BitsNeeded, 0))  //Bits=1, we need 1 literal bit MLen will be checked in SequenceFits
-        {
-            //We have miscalculated the last block of the bundle, let's recompress it the conventional way!
-            SI = StartPtr;
-            ResetBuffer();                       //Resets buffer variables
-            NextFileInBuffer = false;            //Reset Next File flag
-            TransitionalBlock = false;           //Only the first block of a bundle is a transitional block
-            FirstLitOfBlock = true;
+					if (SequenceFits(MatchBytes + LitCnt + 1, MatchBits + CalcLitBits(LitCnt), max(CheckIO(SI - MLen + 1, -1), ReferenceUnderIO)))
+					{
+						AddLitSequence();
+						//Add long match
+						if (MOff > MaxNearOffset)
+						{
+							//Add far mid match
+							AddFarMidMatch();
+						}
+						else
+						{
+							//Add near long match
+							AddNearLongMatch();
+						}
+					}
+					else
+					{
+						BufferFull = true;   //Buffer if full, we will need to close it
 
-            Buffer[BytePtr] = (PrgAdd + SI) % 256;
-            AdLoPos = BytePtr;
-            BlockUnderIO = CheckIO(SI, -1);          //Check if last byte of prg could go under IO
+						if (MOff > MaxNearOffset)
+						{
+							if ((MA.SL[SI] >= MA.NL[SI]) && (MA.SL[SI] != 0))
+							{
+								MLen = MA.SL[SI] < MaxShortLen ? MA.SL[SI] : MaxShortLen; // min(SL[SI], MaxShortLen);  //SL is at least as good as NL, but uses 
+								MOff = MA.SO[SI];  //SL and SO array indeces are 0 based, 1 match byte
+							}
+							else if (MA.NL[SI] > 0)
+							{
+								MLen = min((int)MA.NL[SI], MaxMidLen);	//NL and NO array indeces are 0 based
+								MOff = MA.NO[SI];	//2 match bytes
+							}
+							else
+							{
+								MLen = 0;		//0 match bytes, 1 literal
+							}
+						}
+						else
+						{
+							MLen = MaxMidLen;	//2 match bytes
+						}
 
-            if (BlockUnderIO == 1)
-            {
-                BytePtr--;
-            }
+						CalcMatchBytesAndBits(MLen, MOff);
 
-            Buffer[BytePtr - 1] = ((PrgAdd + SI) / 256) % 256;
-            AdHiPos = BytePtr - 1;
-            BytePtr -= 2;
-            LastByte = BytePtr;              //LastByte = the first byte of the ByteStream after and Address Bytes (253 or 252 with blockCnt)
-            CalcBestSequence(((SI > 1) ? SI : 1), ((SI - MaxNearOffset > 1) ? SI - MaxNearOffset : 1), false);
-            goto Restart;
-        }
-    }
-    return true;
+					}
+				}
+
+				if (MatchBytes == 2)
+				{
+					//--------------------------------------------------------------------
+					//Near Mid Match - 2 match bytes + 0/1 match bit
+					//--------------------------------------------------------------------
+
+					if (SequenceFits(MatchBytes + LitCnt + 1, MatchBits + CalcLitBits(LitCnt), CheckIO(SI - MLen + 1, -1)))
+					{
+						AddLitSequence();
+						//Add mid match
+						AddNearMidMatch();
+					}
+					else
+					{
+						BufferFull = true;
+						if (MA.SL[SI] > 0)
+						{
+							MLen = MA.SL[SI];	//SL and SO array indeces are 0 based
+							MOff = MA.SO[SI];	//1 match byte
+						}
+						else
+						{
+							MLen = 0;		//0 match bytes, 1 literal
+						}
+
+						CalcMatchBytesAndBits(MLen, MOff);
+					}
+				}
+
+				if (MatchBytes == 1)
+				{
+					//--------------------------------------------------------------------
+					//Short Match - 1 match byte + 0/1 match bit
+					//--------------------------------------------------------------------
+
+					if (SequenceFits(MatchBytes + LitCnt + 1, MatchBits + CalcLitBits(LitCnt), CheckIO(SI - MLen + 1, -1)))
+					{
+						AddLitSequence();
+						//Add short match
+						AddShortMatch();
+					}
+					else
+					{
+						//--------------------------------------------------------------------
+						//Match does not fit, check if 1 literal byte fits
+						//--------------------------------------------------------------------
+						BufferFull = true;
+						MLen = 0;
+						MatchBytes = 0;	//Shortcut, bypassing CalcMatchBytesAndBits
+						//CalcMatchBytesAndBits(MLen, MOff);
+					}
+				}
+
+				if (MatchBytes == 0)
+				{
+					//CheckLit:
+						//MLen = 0;    //This is needed here for accurate Bit count calculation in sequencefits (indicates Literal, not Match)
+					int NewLit = 1;
+					if (SequenceFits(NewLit + LitCnt + 1, CalcLitBits(LitCnt + 1), CheckIO(SI - LitCnt, -1)))
+					{
+						if (LitCnt == -1)
+						{
+							//If no literals, current SI will be LitSI, else, do not change LitSI
+							LitSI = SI;
+
+						}
+						LitCnt++;    //0 based, now add 1 for an additional literal (first byte of match that did not fit)
+						SI--;         //Rest of LitCnt has been already subtracted from SI
+					}
+				}
+
+				SI -= MLen;
+
+				if (BufferFull)
+				{
+					AddLitSequence();
+					if (!CloseBuffer())
+						return false;
+				}
+			}
+		}
+
+		AddLitSequence();        //See if any remaining literals need to be added, space has been previously reserved for them
+
+		//KARAOKE BUG - fixed in Sparkle 2.2 - making sure that the first byte of the next bundle fits in the transitional block
+		int BytesNeeded = BitsNeededForNextBundle / 8;      //6 or 7 bytes, depending on I/O status of first file in next bundle
+		int BitsNeeded = 0;                                 //DO NOT ADD A LITERAL BIT HERE - WE INCLUDE A BitPtr IN BytesNeeded 
+		if (LastBlockOfBundle)
+		{
+			LastBlockOfBundle = false;
+			TransitionalBlock = true;
+			if (!SequenceFits(BytesNeeded, BitsNeeded, 0))  //Bits=1, we need 1 literal bit MLen will be checked in SequenceFits
+			{
+				//We have miscalculated the last block of the bundle, let's recompress it the conventional way!
+				SI = StartPtr;
+				ResetBuffer();                       //Resets buffer variables
+				NextFileInBuffer = false;            //Reset Next File flag
+				TransitionalBlock = false;           //Only the first block of a bundle is a transitional block
+				FirstLitOfBlock = true;
+
+				Buffer[BytePtr] = (PrgAdd + SI) % 256;
+				AdLoPos = BytePtr;
+				BlockUnderIO = CheckIO(SI, -1);          //Check if last byte of prg could go under IO
+
+				if (BlockUnderIO == 1)
+				{
+					BytePtr--;
+				}
+
+				Buffer[BytePtr - 1] = ((PrgAdd + SI) / 256) % 256;
+				AdHiPos = BytePtr - 1;
+				BytePtr -= 2;
+				LastByte = BytePtr;              //LastByte = the first byte of the ByteStream after and Address Bytes (253 or 252 with blockCnt)
+				CalcBestSequence(((SI > 1) ? SI : 1), ((SI - MaxNearOffset > 1) ? SI - MaxNearOffset : 1), false, MA);
+				Restart = true;
+			}
+		}
+	}
+
+	return true;
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-void SearchVirtualFile(int PrgMaxIndex, int RefIndex, int RefMaxAddress, int RefMinAddress)
+void SearchVirtualFile(int PrgMaxIndex, int RefIndex, int RefMaxAddress, int RefMinAddress, MatchArrays& MA)
 {
     //PrgMaxIndex = relative address within Prg
     //RefMaxAddress, RefMinAddress = absolute addresses within reference file
@@ -1968,22 +2082,22 @@ void SearchVirtualFile(int PrgMaxIndex, int RefIndex, int RefMaxAddress, int Ref
             if (RefMinAddress + 1 < 0xd000)
             {
                 //Search from start to $cfff
-                FindVirtualFarMatches(RefIndex,PrgMaxIndex, 1, 0xcfff, RefMinAddress + 1);
+                FindVirtualFarMatches(RefIndex,PrgMaxIndex, 1, 0xcfff, RefMinAddress + 1, MA);
             }
             if (RefMaxAddress > 0xe000)
             {
                 //Search from $e000 to end of file
-                FindVirtualFarMatches(RefIndex, PrgMaxIndex, 1, RefMaxAddress, 0xe000 + 1);
+                FindVirtualFarMatches(RefIndex, PrgMaxIndex, 1, RefMaxAddress, 0xe000 + 1, MA);
             }
         }
         else
         {
-            FindVirtualFarMatches(RefIndex,PrgMaxIndex, 1, RefMaxAddress, RefMinAddress + 1);
+            FindVirtualFarMatches(RefIndex,PrgMaxIndex, 1, RefMaxAddress, RefMinAddress + 1, MA);
         }
     }
     else
     {
-        FindVirtualFarMatches(RefIndex,PrgMaxIndex, 1, RefMaxAddress, RefMinAddress + 1);
+        FindVirtualFarMatches(RefIndex,PrgMaxIndex, 1, RefMaxAddress, RefMinAddress + 1, MA);
     }
 }
 
@@ -2000,26 +2114,16 @@ bool PackFile(int Index) {
     PrgLen = Prgs[Index].iFileLen;
 
     Uncompressed = Prgs[Index].FileUncompressed;
+	
+	MatchArrays MA;
+	MA.Init(PrgLen);
+	MA.Seq[0].TotalBits = 10;
+	CurrentMA = &MA;
 
-    SL = new unsigned char[PrgLen] {};
-    NL = new unsigned char[PrgLen] {};
-    FL = new unsigned char[PrgLen] {};
-    FSL = new unsigned char[PrgLen] {};
-    FNL = new unsigned char[PrgLen] {};
-    FFL = new unsigned char[PrgLen] {};
-    SO = new int[PrgLen] {};
-    NO = new int[PrgLen] {};
-    FO = new int[PrgLen] {};
-    FSO = new int[PrgLen] {};
-    FNO = new int[PrgLen] {};
-    FFO = new int[PrgLen] {};
-
-    Seq = new sequence[PrgLen + 1]{};   //This is actually one element more in the array, to have starter element with 0 values
-
-    //Initialize first element of sequence - WAS Seq[1]!!!
+	//Initialize first element of sequence - WAS Seq[1]!!!
     //Seq[0].Len = 0;         //1 Literal byte, Len is 0 based
     //Seq[0].Off = 0;         //Offset = 0 -> literal sequence, Off is 1 based
-    Seq[0].TotalBits = 10;  //LitLen bit + 8 bits, DO NOT CHANGE IT TO 9!!!
+    //Seq[0].TotalBits = 10;  //LitLen bit + 8 bits, DO NOT CHANGE IT TO 9!!!
 
     //----------------------------------------------------------------------------------------------------------
     //SEARCH REFERENCE FILES FOR FAR MATCHES
@@ -2031,20 +2135,20 @@ bool PackFile(int Index) {
         for (size_t RefIndex = 0; RefIndex < VFiles.size(); RefIndex++)
         {
             ReferenceFileStart = VFiles[RefIndex].iFileAddr;
-            SearchVirtualFile(PrgLen - 1, RefIndex, ReferenceFileStart + VFiles[RefIndex].iFileLen - 1, ReferenceFileStart + 1);
+            SearchVirtualFile(PrgLen - 1, RefIndex, ReferenceFileStart + VFiles[RefIndex].iFileLen - 1, ReferenceFileStart + 1, MA);
         }
 
         for (int RefIndex = 0; RefIndex < PartialFileIndex; RefIndex++)
         {
             ReferenceFileStart = Prgs[RefIndex].iFileAddr;
-            SearchReferenceFile(PrgLen - 1, RefIndex, ReferenceFileStart + Prgs[RefIndex].iFileLen - 1, ReferenceFileStart + 1);
+            SearchReferenceFile(PrgLen - 1, RefIndex, ReferenceFileStart + Prgs[RefIndex].iFileLen - 1, ReferenceFileStart + 1, MA);
         }
 
         if (PartialFileIndex > -1)
         {
             //Search partial file from offset to end of file
             ReferenceFileStart = Prgs[PartialFileIndex].iFileAddr;
-            SearchReferenceFile(PrgLen - 1, PartialFileIndex, ReferenceFileStart + Prgs[PartialFileIndex].iFileLen - 1, ReferenceFileStart + PartialFileOffset + 1);
+            SearchReferenceFile(PrgLen - 1, PartialFileIndex, ReferenceFileStart + Prgs[PartialFileIndex].iFileLen - 1, ReferenceFileStart + PartialFileOffset + 1, MA);
         }
     }
 
@@ -2052,7 +2156,7 @@ bool PackFile(int Index) {
     //CALCULATE BEST SEQUENCE
     //----------------------------------------------------------------------------------------------------------
 
-    CalcBestSequence(PrgLen - 1, 1, true);     //SeqLowestIndex is 1 because Prg(0) is always 1 literal on its own, we need at lease 2 bytes for a match
+    CalcBestSequence(PrgLen - 1, 1, true, MA);     //SeqLowestIndex is 1 because Prg(0) is always 1 literal on its own, we need at lease 2 bytes for a match
 
     //----------------------------------------------------------------------------------------------------------
     //DETECT BUFFER STATUS AND INITIALIZE COMPRESSION
@@ -2097,31 +2201,9 @@ bool PackFile(int Index) {
     //COMPRESS FILE
     //----------------------------------------------------------------------------------------------------------
 
-    bool bSuccess = Pack();
-
-    delete[] SL;
-    delete[] SO;
-    delete[] NL;
-    delete[] NO;
-    delete[] FL;
-    delete[] FO;
-    delete[] FSL;
-    delete[] FSO;
-    delete[] FNL;
-    delete[] FNO;
-    delete[] FFL;
-    delete[] FFO;
-
-    delete[] Seq;
-
-    if (bSuccess)
-    {
-        return true;
-    }
-    else
-    {
-        return false;
-    }
+	bool bSuccess = Pack(MA);
+	CurrentMA = nullptr;
+	return bSuccess;
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------

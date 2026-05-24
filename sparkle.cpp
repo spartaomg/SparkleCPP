@@ -10,7 +10,7 @@
 //  VERSION INFO
 //----------------------------------
 
-constexpr int FullDate = 20260517;
+constexpr int FullDate = 20260524;
 
 constexpr int VersionMajor = 3;
 constexpr int VersionMinor = 4;
@@ -36,9 +36,9 @@ int NumScriptEntries = -1;
 
 const int StdSectorsPerDisk = 664;                                          //Standard disk
 const int StdTracksPerDisk = 35;
-const int StdBytesPerDisk = (StdSectorsPerDisk + 19) * 256;                 //including track 18
+const int StdBytesPerDisk = (StdSectorsPerDisk + 19) * 256;                 //Including track 18
 
-const int ExtSectorsPerDisk = StdSectorsPerDisk + 85;                       //Exnteded disk
+const int ExtSectorsPerDisk = StdSectorsPerDisk + (5 * 17);                 //Extended disk
 const int ExtTracksPerDisk = 40;
 const int ExtBytesPerDisk = StdBytesPerDisk + (85 * 256);                   //Including track 18
 
@@ -7385,7 +7385,7 @@ int wmain(int argc, wchar_t* argv[])
 	{
 
 #ifdef DEBUG
-		wstring SFN = L"c:/SparkleTestProjects/Aloftá/Parts/FástTransfer/FastTransfer.sls";
+		wstring SFN = L"c:/SparkleTestProjects/Aloftá/Main/Sparkle/Aloft.sls";
 
 		int size_needed = WideCharToMultiByte(CP_UTF8, 0, &SFN[0], (int)SFN.size(), NULL, 0, NULL, NULL);
 		string ScriptFileName(size_needed, 0);
