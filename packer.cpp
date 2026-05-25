@@ -95,10 +95,6 @@ int ReferenceUnderIO{};
 
 array<unsigned char, 256> Buffer;
 
-//int *SO, *NO, *FO, * FSO, * FNO, *FFO;
-
-//unsigned char* SL, * NL, * FL, * FSL, * FNL, * FFL;
-
 int NibblePtr, BitPos, BitsLeft;
 unsigned char LastByte;
 
@@ -122,13 +118,6 @@ bool UpdateByteStream()
         cerr << "***ABORT***\tUnable to add bundle. Disk is full!!!\n";
         return false;
     }
-
-    //memcpy(&ByteSt[(BufferCnt - 1) * 256], &Buffer[0], 256 * sizeof(Buffer[0]));
-
-    ////for (int i = 0; i < 256; i++)
-    ////{
-        ////ByteSt[((BufferCnt - 1) * 256) + i] = Buffer[i];
-    ////}
 
     //Resort blocks (00,01,02,..,ff -> 00,ff,fe,..,01)
 
@@ -201,8 +190,6 @@ void ResetBuffer(bool FirstBlock)
         BytePtr = 255;
     }
 
-
-
     //DO NOT RESET LitCnt HERE!!! It is needed for match tag check
 }
 
@@ -214,7 +201,6 @@ void AddNibble(int Bit)
     {
         NibblePtr = BytePtr--;                  //Also update BytPtr here
         Buffer[NibblePtr] = Bit;
-
     }
     else
     {
@@ -250,8 +236,6 @@ void AddBits(int Bit, unsigned char BCnt) {
                 BitsLeft = 0;
             }
         }
-        //Very first BitPtr in buffer has a 1 in BitPos=0 (Token Bit) -> Skip It!!!
-        //If (BitPtr = 0) And (BitPos = 0) Then BitPos = -1
     }
 }
 
@@ -490,7 +474,7 @@ void CalcMatchBytesAndBits(int Length, int Offset)
 void CheckLitSeq(int Pos, MatchArrays& MA)
 {
     //Continue previous Lit sequence or start new sequence
-    LitCnt = (MA.Seq[Pos].Off == 0) ?MA.Seq[Pos].Len : -1;
+    LitCnt = (MA.Seq[Pos].Off == 0) ? MA.Seq[Pos].Len : -1;
 
     //Calculate literal bits for a presumtive LitCnt+1 value
     LitBits = ((LitCnt + 1) / MaxLitPerBlock) * 13;
@@ -512,14 +496,14 @@ void CheckLitSeq(int Pos, MatchArrays& MA)
 
     //LITERALS ARE ALWAYS FOLLOWED BY MATCHES, SO TYPE SELECTOR BIT IS NOT NEEDED AFTER LITERALS AT ALL
 
-    int TotBits =MA.Seq[Pos - (LitCnt + 1)].TotalBits + LitBits + ((LitCnt + 2) * 8);
+    int TotBits = MA.Seq[Pos - (LitCnt + 1)].TotalBits + LitBits + ((LitCnt + 2) * 8);
 
     //See if total bit count is less than best version and save it to sequence at Pos+1 (position is 1 based)
-    if (TotBits <MA.Seq[Pos + 1].TotalBits)
+    if (TotBits < MA.Seq[Pos + 1].TotalBits)
     {
        MA.Seq[Pos + 1].Len = LitCnt + 1;      //LitCnt is 0 based, LitLen is 0 based
        MA.Seq[Pos + 1].Off = 0;               //An offset of 0 marks a literal sequence, match offset is 1 based
-       MA.Seq[Pos + 1].Nibbles =MA.Seq[Pos - (LitCnt + 1)].Nibbles + ((LitBits > 1) ? 1 : 0);
+       MA.Seq[Pos + 1].Nibbles = MA.Seq[Pos - (LitCnt + 1)].Nibbles + ((LitBits > 1) ? 1 : 0);
        MA.Seq[Pos + 1].TotalBits = TotBits;
     }
 }
@@ -553,23 +537,23 @@ void CheckMatchSeq(int SeqLen, int SeqOff, int Pos, MatchArrays& MA)
         }
 
         //Calculate total bit count, independently of nibble status
-        int TotBits =MA.Seq[Pos + 1 - L].TotalBits + MatchBits;
+        int TotBits = MA.Seq[Pos + 1 - L].TotalBits + MatchBits;
 
-        if (TotBits <MA.Seq[Pos + 1].TotalBits)
+        if (TotBits < MA.Seq[Pos + 1].TotalBits)
         {
             //If better, update best version
-           MA.Seq[Pos + 1].Len = L;				//MatchLen is 1 based
+           MA.Seq[Pos + 1].Len = L;					//MatchLen is 1 based
            MA.Seq[Pos + 1].Off = SeqOff;			//Off is 1 based
-           MA.Seq[Pos + 1].Nibbles =MA.Seq[Pos + 1 - L].Nibbles;
+           MA.Seq[Pos + 1].Nibbles = MA.Seq[Pos + 1 - L].Nibbles;
            MA.Seq[Pos + 1].TotalBits = TotBits;
         }
-		else if (TotBits ==MA.Seq[Pos + 1].TotalBits)
+		else if (TotBits == MA.Seq[Pos + 1].TotalBits)
 		{
-			if (L >MA.Seq[Pos + 1].Len)			//prefer the longer match (+/-shorter offset) -> faster depacking
+			if (L > MA.Seq[Pos + 1].Len)			//prefer the longer match (+/- shorter offset) -> faster depacking
 			{
 				MA.Seq[Pos + 1].Len = L;
 				MA.Seq[Pos + 1].Off = SeqOff;
-				MA.Seq[Pos + 1].Nibbles =MA.Seq[Pos + 1 - L].Nibbles;
+				MA.Seq[Pos + 1].Nibbles = MA.Seq[Pos + 1 - L].Nibbles;
 			}
 		}
     }
@@ -626,7 +610,8 @@ bool SequenceFits(int BytesToAdd, int BitsToAdd, int SequenceUnderIO) {
             }
             Buffer[AdHiPos] = 0;                            //IO Flag to previous AdHi Position
             BytePtr--;                                      //Update BytePtr to next empty position in buffer
-            //Sparkle64k BUG - Don't move BitPtr and NibblePtr if they are in their startup positions(0 or outside file address bytes)
+            
+			//Sparkle64k BUG - Don't move BitPtr and NibblePtr if they are in their startup positions (0 or outside file address bytes)
             if ((NibblePtr > 0) && (NibblePtr < AdHiPos))
             {
                 NibblePtr--;                                //Only update Nibble Pointer if it does not point to Byte(0)
@@ -651,14 +636,6 @@ bool SequenceFits(int BytesToAdd, int BitsToAdd, int SequenceUnderIO) {
 
 void FindFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex, int RefMaxAddress, int RefMinAddress, MatchArrays& MA)
 {
-    //unsigned char* Prg8 = &Prgs[CurrentFileIndex].Prg[0];
-    //unsigned char* Ref8 = &Prgs[RefIndex].Prg[0];
-    //uint16_t* Prg16 = (uint16_t*)&Prg8[0];
-    //uint16_t* Ref16 = (uint16_t*)&Ref8[0];
-
-    //bool MatchFound = false;
-
-    //cout <<"\n" <<Prgs[CurrentFileIndex].FileName << "\t" << hex << Prg8[0] << "\t" << Prg16[0] << "\t" << Prgs[RefIndex].FileName << "\t" << Ref8[0] << "\t" << Ref16[0] << "\n";
 
     if (!FileUnderIO)
     {
@@ -673,7 +650,6 @@ void FindFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex, int RefMaxAd
             {
                 //Not the entire file segment is under I/O -> only check the part that is not
                 SeqMinIndex = 0xe000 - PrgAdd;
-
             }
         }
         else if ((PrgAdd + SeqMaxIndex >= 0xd000) && (PrgAdd + SeqMaxIndex <= 0xdfff))
@@ -684,7 +660,7 @@ void FindFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex, int RefMaxAd
 
     //----------------------------------------------------------------------------------------------------------
     //FIND LONGEST SHORT AND NEAR MATCHES FOR EACH POSITION, AND FAR MATCHES WITH OFFSET < MAX. 1024
-     //----------------------------------------------------------------------------------------------------------
+    //----------------------------------------------------------------------------------------------------------
     int RefMinAddressIndex = RefMinAddress - ReferenceFileStart;
     int RefMaxAddressIndex = RefMaxAddress - ReferenceFileStart;
 
@@ -926,16 +902,19 @@ void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun, MatchAr
                     {
                         if (BestSL < (CurrentMaxL = min(MaxSL, L)))
                         {
-                            BestSL = CurrentMaxL; //If(L > MaxShortLen, MaxShortLen, L)   'Short matches cannot be longer than 4 bytes
-                            BestSO = O;                        //Keep Offset 1-based
+							if (CurrentMaxL > 1)
+							{
+								BestSL = CurrentMaxL; //If(L > MaxShortLen, MaxShortLen, L)   'Short matches cannot be longer than 4 bytes
+								BestSO = O;                        //Keep Offset 1-based
+							}
                         }
-                        if (L > MaxSL || O > MaxShortOffset)
+                        if (L > MaxSL && BestNL < (CurrentMaxL = min(L, MaxLL)))
                         {
-                            if (BestNL < (CurrentMaxL = min(L, MaxLL)))
-                            {
-                                BestNL = CurrentMaxL;
-                                BestNO = O;
-                            }
+							if (CurrentMaxL > 1)
+							{
+								BestNL = CurrentMaxL;
+								BestNO = O;
+							}
                         }
 						//If both short and long matches maxed out, we can leave the loop and go to the next Prg position
 						if ((BestNL == MaxLL) && (BestSL == MaxSL))
@@ -972,8 +951,11 @@ void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun, MatchAr
                     {
                         if (BestNL < (CurrentMaxL = min(L, MaxLL)))
                         {
-                            BestNL = CurrentMaxL;
-                            BestNO = O;
+							if (CurrentMaxL > 1)
+							{
+								BestNL = CurrentMaxL;
+								BestNO = O;
+							}
                         }
                         					
 						int PropLen = L;
@@ -1039,8 +1021,11 @@ void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun, MatchAr
                         {
                             if (BestFL < (CurrentMaxL = min(L, MaxLL)))
                             {
-                                BestFL = CurrentMaxL;
-                                BestFO = O;
+								if (CurrentMaxL > 2)
+								{
+									BestFL = CurrentMaxL;
+									BestFO = O;
+								}
                             }
 
 							int PropLen = L;
@@ -1155,12 +1140,6 @@ bool CloseBuffer() {
 
     BlockCnt++;
     BufferCnt++;
-
-    //This does not work here yet, Pack needs to be changed to a function
-    //If BufferCnt > BlocksFree Then
-    //MsgBox("Unable to add bundle to disk :(", vbOKOnly, "Not enough free space on disk")
-    //GoTo NoDisk
-    //End If
 
     if (!UpdateByteStream())
         return false;
