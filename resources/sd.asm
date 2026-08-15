@@ -613,6 +613,7 @@ CopyBAM:	lda (ZP0102),y		//4d 4e	($0101=DiskID), $102=IL3R, $103=IL2R, $104=IL1R
 	.byte	$2a					//53	TabG (ROL) - no effect, A is already stored
 			dey					//54
 			bpl CopyBAM			//55 56
+LoadStart:
 			txa					//57
 			jmp FlipRet			//58-5a	A=#$00 - Reload first directory sector
 
@@ -886,7 +887,6 @@ TrRnd:		jsr RcvByte			//OK to use stack here
 
 TrRndRet:	inx
 			beq Reset			//A=#$ff, C64 requests drive reset
-LoadStart:
 FlipRet:
 TestRet:	ldy #$00			//Needed later (for FetchBAM if this is a flip request, and FetchDir too)
 			sty	ScndBuff		//Clear Second Buffer flag, in case we prefetched the last block of the next bundle
@@ -1269,11 +1269,11 @@ LoadSector:	jsr ROMReadBlock	//Load blocks to buffers 4 ($0700), 3 ($0600), 2 ($
 			sta $1800			//0  0  0  1  0  0  0  0  CO=0, DO=0, AA=1
 								//AI|DN|DN|AA|CO|CI|DO|DI Signal C64 that the drive code has been installed
 
-			lda #$01			//Shift register disabled, Port A ($1c01) latching enabled, Port B ($1c00) latching disabled
-			sta $1c0b
+			ldx #$01			//Shift register disabled, Port A ($1c01) latching enabled, Port B ($1c00) latching disabled
+			stx $1c0b
 
-			lda #$00			//Clear VIA #2 Timer 1 low byte
-			sta $1c04
+			dex					//Clear VIA #2 Timer 1 low byte
+			stx $1c04
 
 			lda #$7f			//Disable interrupts
 			sta $180e
@@ -1285,13 +1285,11 @@ LoadSector:	jsr ROMReadBlock	//Load blocks to buffers 4 ($0700), 3 ($0600), 2 ($
 //		Copy ZP code and tables
 //--------------------------------------
 
-			ldx #$00
 ZPCopyLoop:	lda ZPCode,x		//Copy Tables C, E, F and GCR Loop from $0600 to ZP
 			sta $00,x
 			inx
 			bne ZPCopyLoop
 
-			txa					//Bundle index #$00
 			jmp LoadStart		//Load first bundle on disk (dir sector will be also fetched)
 
 InitCodeEnd:

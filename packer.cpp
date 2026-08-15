@@ -843,7 +843,7 @@ void FindMatches(int SeqHighestIndex, int SeqLowestIndex, bool FirstRun, MatchAr
     int CurrentMaxL;
     int L = 0;
 
-    for (int Pos = SeqHighestIndex; Pos >= SeqLowestIndex; Pos--)   //Pos cannot be 0, Prg(0) is always literal as it is always 1 byte left
+    for (int Pos = SeqLowestIndex; Pos <= SeqHighestIndex; Pos++)   //Pos cannot be 0, Prg(0) is always literal as it is always 1 byte left
     {
         //Offset goes from 1 to max offset (cannot be 0)
         int MaxO = min(MaxOffset, SeqHighestIndex - Pos);
@@ -1684,7 +1684,8 @@ void FindVirtualFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex,int Re
             }
         }
         
-/*        unsigned char PrgValAtPos = Prgs[CurrentFileIndex].Prg[Pos];
+		/*
+        PrgValAtPos = Prgs[CurrentFileIndex].Prg[Pos];
 
         //Offset goes from 1 to max offset (cannot be 0)
         //Match length goes from 1 to max length
@@ -1704,34 +1705,34 @@ void FindVirtualFarMatches(int RefIndex, int SeqMaxIndex, int SeqMinIndex,int Re
                         //L=MatchLength + 1 here
                         if (L > 2)
                         {
-                            if ((O - Pos + OffsetBase <= MaxShortOffset) && (FSL[Pos] < MaxSL) && (FSL[Pos] < L))
+                            if ((O - Pos + OffsetBase <= MaxShortOffset) && (MA.FSL[Pos] < MaxSL) && (MA.FSL[Pos] < L))
                             {
-                                FSL[Pos] = min(MaxSL, L); //If(L > MaxShortLen, MaxShortLen, L)   'Short matches cannot be longer than 4 bytes
-                                FSO[Pos] = O - Pos + OffsetBase;                        //Keep Offset 1-based
+                                MA.FSL[Pos] = min(MaxSL, L); //If(L > MaxShortLen, MaxShortLen, L)   'Short matches cannot be longer than 4 bytes
+								MA.FSO[Pos] = O - Pos + OffsetBase;                        //Keep Offset 1-based
                             }
-                            if ((O - Pos + OffsetBase <= MaxNearOffset) && (FNL[Pos] < L))   //Allow short (2-byte) Mid Matches
+                            if ((O - Pos + OffsetBase <= MaxNearOffset) && (MA.FNL[Pos] < L))   //Allow short (2-byte) Mid Matches
                             {
-                                FNL[Pos] = L;
-                                FNO[Pos] = O - Pos + OffsetBase;
+								MA.FNL[Pos] = L;
+								MA.FNO[Pos] = O - Pos + OffsetBase;
                             }
-                            if (((O - Pos + OffsetBase) > MaxNearOffset) && (FFL[Pos] < L))
+                            if (((O - Pos + OffsetBase) > MaxNearOffset) && (MA.FFL[Pos] < L))
                             {
-                                FFL[Pos] = L;
-                                FFO[Pos] = O - Pos + OffsetBase;
+								MA.FFL[Pos] = L;
+								MA.FFO[Pos] = O - Pos + OffsetBase;
                             }
                         }
                         break;
                     }
                 }
                 //If far matches maxed out, we can leave the loop and go to the next Prg position
-                if (FFL[Pos] == MaxLL)
+                if (MA.FFL[Pos] == MaxLL)
                 {
                     break;
                 }
             }
         }
- */
-    }
+		*/
+		}
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -2096,7 +2097,7 @@ bool PackFile(int Index) {
 	
 	MatchArrays MA;
 	MA.Init(PrgLen);
-	MA.Seq[0].TotalBits = 10;
+	MA.Seq[1].TotalBits = 10;
 	CurrentMA = &MA;
 
 	//Initialize first element of sequence - WAS Seq[1]!!!

@@ -618,29 +618,7 @@ ShortLHi:	dec ZPDst+1
 ShortMHi:	dec ZPDst+1
 			bcc ShortMCont
 
-/*
 //----------------------------
-//		IRQ INSTALLER
-//		Call: jsr $02d1
-//		X/Y=Player Hi/Lo
-//		A=Raster
-//----------------------------
-
-Sparkle_InstallIRQ:
-			sty Sparkle_IRQ_JSR+1	//Installs a subroutine vector
-			stx Sparkle_IRQ_JSR+2
-Sparkle_RestoreIRQ:
-			sta $d012				//Sets raster for IRQ
-			lda #<Sparkle_IRQ		//Installs Fallback IRQ vector
-			sta $fffe
-			lda #>Sparkle_IRQ
-			sta $ffff
-			rts						//20 bytes
-*/
-
-//----------------------------
-
-//.text "<OMG>"
 
 EndLoader:
 
@@ -658,8 +636,6 @@ EndLoader:
 .eval myFile.writeln("					//Requests a new disk & loads first bundle (A=#$80-#$fe [#$80 + disk index])")
 .eval myFile.writeln(".const Sparkle_LoadFetched	=$" + toHexString(Sparkle_LoadFetched) + "	//Loads prefetched bundle, use only after Sparkle_SendCmd (A=bundle index)")
 .eval myFile.writeln(".const Sparkle_LoadNext		=$" + toHexString(Sparkle_LoadNext) + "	//Sequential loader call, parameterless, loads next bundle in sequence")
-//.eval myFile.writeln(".const Sparkle_InstallIRQ	=$" + toHexString(Sparkle_InstallIRQ) + "	//Installs fallback IRQ (A=raster line, X/Y=subroutine/music player vector high/low bytes)") 
-//.eval myFile.writeln(".const Sparkle_RestoreIRQ	=$" + toHexString(Sparkle_RestoreIRQ) + "	//Restores fallback IRQ without changing subroutine vector (A=raster line)")
 .eval myFile.writeln(".const Sparkle_IRQ		=$" + toHexString(Sparkle_IRQ) + "	//Fallback IRQ vector")
 .eval myFile.writeln(".const Sparkle_IRQ_JSR		=$" + toHexString(Sparkle_IRQ_JSR) + "	//Fallback IRQ subroutine/music player JSR instruction")
 .eval myFile.writeln(".const Sparkle_IRQ_RTI		=$" + toHexString(Sparkle_IRQ_RTI) + "	//Fallback IRQ RTI instruction")
@@ -670,8 +646,6 @@ EndLoader:
 .print "Sparkle_LoadA:	" + toHexString(Sparkle_LoadA)
 .print "Sparkle_LoadFetched:	" + toHexString(Sparkle_LoadFetched)
 .print "Sparkle_LoadNext:	" + toHexString(Sparkle_LoadNext)
-//.print "Sparkle_InstallIRQ:	" + toHexString(Sparkle_InstallIRQ)
-//.print "Sparkle_RestoreIRQ:	" + toHexString(Sparkle_RestoreIRQ)
 .print "Sparkle_IRQ:		" + toHexString(Sparkle_IRQ)
 .print "Sparkle_IRQ_JSR:	" + toHexString(Sparkle_IRQ_JSR)
 .print "Sparkle_IRQ_RTI:	" + toHexString(Sparkle_IRQ_RTI)

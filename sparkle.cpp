@@ -10,7 +10,7 @@
 //  VERSION INFO
 //----------------------------------
 
-constexpr int FullDate = 20260524;
+constexpr int FullDate = 20260815;
 
 constexpr int VersionMajor = 3;
 constexpr int VersionMinor = 4;
@@ -365,37 +365,58 @@ string ConvertIntToHextString(const int i, const int hexlen)
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-int ConvertStringToInt(const string& s)
+bool IsNumeric(const string& s)
 {
-    return stoul(s, nullptr, 10);
-}
-
-//------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-int ConvertHexStringToInt(const string& s)
-{
-    return stoul(s, nullptr, 16);
-}
-
-//------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-string ConvertHexStringToDecimalString(const string& s)
-{
-    return to_string(ConvertHexStringToInt(s));
+	return !s.empty() && find_if(s.begin(), s.end(), [](unsigned char c) { return !isdigit(c); }) == s.end();
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 bool IsHexString(const string& s)
 {
-    return !s.empty() && all_of(s.begin(), s.end(), [](unsigned char c) { return std::isxdigit(c); });
+	return !s.empty() && all_of(s.begin(), s.end(), [](unsigned char c) { return std::isxdigit(c); });
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-bool IsNumeric(const string& s)
+int ConvertStringToInt(const string& s)
 {
-    return !s.empty() && find_if(s.begin(),s.end(), [](unsigned char c) { return !isdigit(c); }) == s.end();
+	if (IsNumeric(s))
+	{
+		return stoul(s, nullptr, 10);
+	}
+	else
+	{
+		return -1;
+	}
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+int ConvertHexStringToInt(const string& s)
+{
+	if (IsHexString(s))
+	{
+		return stoul(s, nullptr, 16);
+	}
+	else
+	{
+		return -1;
+	}
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+string ConvertHexStringToDecimalString(const string& s)
+{
+	if (IsHexString(s))
+	{
+		return to_string(ConvertHexStringToInt(s));
+	}
+	else
+	{
+		return "";
+	}
 }
 
 //------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -813,56 +834,6 @@ void InjectDirBlocks()
 }
 
 //----------------------------------------------------------------------------------------------------------------------------------------------------------
-/*
-bool StringIsNumeric(string NumericString)
-{
-    //Remove unwanted spaces
-    while (NumericString.find(" ") != string::npos)
-    {
-        int Pos = NumericString.find(" ");
-        NumericString.replace(Pos, 1, "");
-    }
-
-    if (NumericString.length() == 0)  //Handle strings with zero length
-    {
-        return false;
-    }
-
-
-    //Remove HEX prefix
-    if (NumericString.at(0) == '$')
-    {
-        NumericString.replace(0, 1, "");
-    }
-
-    string prefix = NumericString.substr(0, 2);
-
-    if ((prefix == "0x") || (prefix == "0X") || (prefix == "&h") || (prefix == "&H"))
-    {
-        NumericString.replace(0, 2, "");
-    }
-
-    //If decimal -> convert it to hex
-    if (NumericString.at(0) == '.')
-    {
-        NumericString.replace(0, 1, "");
-        if (IsNumeric(NumericString))
-        {
-            int StringToInt = ConvertStringToInt(NumericString);
-            int hexlen = 2;
-            NumericString = ConvertIntToHextString(StringToInt, hexlen);
-        }
-        else
-        {
-            return false;
-        }
-    }
-
-    return IsHexString(NumericString);
-
-}
-*/
-//----------------------------------------------------------------------------------------------------------------------------------------------------------
 
 string CreateExpressionString(int p)
 {
@@ -1153,7 +1124,7 @@ bool AddHSFile()
 
     if (bEntryHasExpression)
     {
-        ParsedEntries += "Hi-score File:\t";
+        ParsedEntries += "Hi-Score File:\t";
         for (int i = 0; i <= NumScriptEntries; i++)
         {
             ParsedEntries += "\t" + ScriptEntryArray[i];
@@ -1195,12 +1166,12 @@ bool AddHSFile()
         HSFile.clear();
         if (ReadBinaryFile(FN, HSFile) == -1)
         {
-            cerr << "***ABORT***\tUnable to open Hi-score File\n";
+            cerr << "***ABORT***\tUnable to open Hi-Score File\n";
             return false;
         }
         else if (HSFile.size() == 0)
         {
-            cerr << "***ABORT***\tHi-score File cannot be 0 bytes long\n";
+            cerr << "***ABORT***\tHi-Score File cannot be 0 bytes long\n";
             return false;
         }
 
@@ -1213,9 +1184,9 @@ bool AddHSFile()
                 FO = "00000002";                                                //Offset=2, Length=prg length-2
                 FL = ConvertIntToHextString(HSFile.size() - 2, 4);
             }
-            else                                                                //Short file without paramters -> HARD STOP
+            else                                                                //Short file without parameters -> HARD STOP
             {
-                cerr << "***ABORT***\tFile paramteres are needed for the Hi-Score File: " << FN << "\n";
+                cerr << "***ABORT***\tFile parameters are needed for the following Hi-Score File: " << FN << "\n";
                 return false;
             }
             break;
@@ -1242,63 +1213,107 @@ bool AddHSFile()
                 FAN = (size_t)(HSFile[0] + HSFile[1] * 256);
                 FA = ConvertIntToHextString(FAN, 4);
                 FO = ScriptEntryArray[2];
-                int iFON = ConvertHexStringToInt(FO) + 2 - (int)FAN;
+				int iFON = -1;
+				
+				if (IsHexString(FO))
+				{
+					iFON = ConvertHexStringToInt(FO) + 2 - (int)FAN;
+				}
+
                 if ((iFON < 0) || ((size_t)iFON > HSFile.size() - 1))
                 {
-                    cerr << "***ABORT***\tInvalid memory segment start parameter in the Hi-Score File: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                    cerr << "***ABORT***\tInvalid memory segment start parameter in the following Hi-Score File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                     return false;
                 }
-                FA = ScriptEntryArray[2];
+                
+				FA = ScriptEntryArray[2];
                 FO = ConvertIntToHextString(iFON, 4);
                 FL = ConvertIntToHextString(HSFile.size() - iFON, 4);             //Length=prg length-offset
             }
             else
             {
                 FO = ScriptEntryArray[2];                                   //Offset from script
-                FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
-                if (FON > HSFile.size() - 1)
+				
+				if (IsHexString(FO))
+				{
+					FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
+				}
+				else
+				{
+					cerr << "***ABORT***\tInvalid file offset in the following Hi-Score File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+					return false;
+				}
+				
+				if (FON > HSFile.size() - 1)
                 {
                     cerr << "***ABORT***\tInvalid file offset in the following Hi-Score File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                     return false;
                 }
-                FL = ConvertIntToHextString(HSFile.size() - FON, 4);             //Length=prg length-offset
+                
+				FL = ConvertIntToHextString(HSFile.size() - FON, 4);             //Length=prg length-offset
             }
             break;
         case 4:  //Three parameters in script
             FA = ScriptEntryArray[1];                                   //Load address from script
             FO = ScriptEntryArray[2];                                   //Offset from script
             FL = ScriptEntryArray[3];                                   //Length from script
-            if (FA == "-")
+            
+			if (FA == "-")
             {
                 //PRG file
                 FAN = (size_t)(HSFile[0] + HSFile[1] * 256);
                 FA = ConvertIntToHextString(FAN, 4);
-                int iFLN = ConvertHexStringToInt(FL) - ConvertHexStringToInt(FO) + 1;
+				int iFLN = -1;
+
+				if (IsHexString(FL) && IsHexString(FO))
+				{
+					iFLN = ConvertHexStringToInt(FL) - ConvertHexStringToInt(FO) + 1;
+				}
+
                 if (iFLN <= 0)
                 {
-                    cerr << "***ABORT***\tInvalid memory segment start and/or end parameter(s) in the Hi-Score File entry: " << ScriptEntry << "\n";
+                    cerr << "***ABORT***\tInvalid memory segment start and/or end parameter(s) in the following Hi-Score File entry: " << ScriptEntry << "\n";
                     return false;
                 }
+
                 FL = ConvertIntToHextString(iFLN, 4);
                 int iFON = ConvertHexStringToInt(FO) + 2 - (int)FAN;
-                if ((iFON < 0) || ((size_t)iFON > HSFile.size() - 1))
+            
+				if ((iFON < 0) || ((size_t)iFON > HSFile.size() - 1))
                 {
-                    cerr << "***ABORT***\tInvalid memory segment start parameter in the Hi-Score File entry: " << ScriptEntry << "\n";
+                    cerr << "***ABORT***\tInvalid memory segment start parameter in the following Hi-Score File entry: " << ScriptEntry << "\n";
                     return false;
                 }
+
                 FA = ScriptEntryArray[2];
                 FO = ConvertIntToHextString(iFON, 8);
             }
             else
             {
-                FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
+				if (IsHexString(FO))
+				{
+					FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
+
+				}
+				else
+				{
+					cerr << "***ABORT***\tInvalid file offset in the following Hi-Score File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+					return false;
+				}
+
                 if (FON > HSFile.size() - 1)
                 {
-                    cerr << "***ABORT***\tInvalid file offset in the Hi-Score File: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                    cerr << "***ABORT***\tInvalid file offset in the following Hi-Score File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                     return false;
                 }
             }
         }
+
+		if (!IsHexString(FA) || !IsHexString(FO) || !IsHexString(FL))
+		{
+			cerr << "***ABORT***\tInvalid file parameter(s) in the following Hi-Score File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+			return false;
+		}
 
         FAN = ConvertHexStringToInt(FA);
         FON = ConvertHexStringToInt(FO);
@@ -1307,7 +1322,7 @@ bool AddHSFile()
         //Make sure file offset is within the file
         if (FON > HSFile.size())
         {
-            cerr << "***ABORT***\tInvalid hi-score file offset!\n";
+            cerr << "***ABORT***\tInvalid Hi-Score File offset!\n";
             return false;
         }
 
@@ -1315,22 +1330,22 @@ bool AddHSFile()
         if ((FON + FLN > HSFile.size()) || (FLN == 0))
         {
             //FLN = HSFile.size() - FON;
-            cerr << "***ABORT***\tInvalid hi-score file length!\n";
+            cerr << "***ABORT***\tInvalid Hi-Score File length!\n";
             return false;
         }
 
         //Round UP to nearest $100, at least $100 but not more than $0f00 bytes
         if (FLN % 0x100 != 0)
         {
-            cerr << "***ABORT***\tHi-score file must be rounded up to the nearest $100 bytes!\n";
+            cerr << "***ABORT***\tHi-Score File must be rounded up to the nearest $100 bytes!\n";
             return false;
             //FLN += 0x100;
         }
 
-        //Make sure hi-score file doesn't overlap with the loader
+        //Make sure hi-Score file doesn't overlap with the loader
         if ((FAN < 0x400) && (FAN + FLN >= 0x160))
         {
-            cerr << "***ABORT***\tHi-score file overlaps with the loader in the RAM!\n";
+            cerr << "***ABORT***\tHi-Score file overlaps with the loader in the RAM!\n";
             return false;
         }
 
@@ -1338,7 +1353,7 @@ bool AddHSFile()
         if (FAN + FLN > 0x10000)
         {
             //FLN = (0x10000 - FAN);// & 0xf00;
-            cerr << "***ABORT***\tHi-score file is too big!\n";
+            cerr << "***ABORT***\tHi-Score file is too big!\n";
             return false;
         }
 
@@ -1372,6 +1387,12 @@ bool AddHSFile()
             FO = ScriptEntryArray[2];                                   //Offset from script
             FL = ScriptEntryArray[3];                                   //Length from script
 
+			if (!IsHexString(FA) || !IsHexString(FO) || !IsHexString(FL))
+			{
+				cerr << "***ABORT***\tInvalid file parameter(s) in the following Hi-Score File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+				return false;
+			}
+
             FAN = ConvertHexStringToInt(FA);
             FON = ConvertHexStringToInt(FO);
             FLN = ConvertHexStringToInt(FL);
@@ -1379,7 +1400,7 @@ bool AddHSFile()
             //Make sure file offset is within the file
             //if (FON > HSFile.size())
             //{
-            //    cerr << "***ABORT***\tInvalid hi-score file offset!\n";
+            //    cerr << "***ABORT***\tInvalid hi-Score file offset!\n";
             //    return false;
             //}
 
@@ -1387,22 +1408,22 @@ bool AddHSFile()
             //if ((FON + FLN > HSFile.size()) || (FLN == 0))
             //{
             //    //FLN = HSFile.size() - FON;
-            //    cerr << "***ABORT***\tInvalid hi-score file length!\n";
+            //    cerr << "***ABORT***\tInvalid hi-Score file length!\n";
             //    return false;
             //}
 
             //Round UP to nearest $100, at least $100 but not more than $0f00 bytes
             if (FLN % 0x100 != 0)
             {
-                cerr << "***ABORT***\tHi-score file must be rounded up to the nearest $100 bytes!\n";
+                cerr << "***ABORT***\tHi-Score file must be rounded up to the nearest $100 bytes!\n";
                 return false;
                 //FLN += 0x100;
             }
 
-            //Make sure hi-score file doesn't overlap with the loader
+            //Make sure hi-Score file doesn't overlap with the loader
             //if ((FAN < 0x400) && (FAN + FLN >= 0x160))
             //{
-            //    cerr << "***ABORT***\tHi-score file overlaps with the loader in the RAM!\n";
+            //    cerr << "***ABORT***\tHi-Score file overlaps with the loader in the RAM!\n";
             //    return false;
             //}
 
@@ -1410,7 +1431,7 @@ bool AddHSFile()
             if (FAN + FLN > 0x10000)
             {
                 //FLN = (0x10000 - FAN);// & 0xf00;
-                cerr << "***ABORT***\tHi-score file is too big!\n";
+                cerr << "***ABORT***\tHi-Score file is too big!\n";
                 return false;
             }
 
@@ -2653,9 +2674,9 @@ bool AddVirtualFile()
                 FO = "00000002";                                        //Offset=2, Length=prg length-2
                 FL = ConvertIntToHextString(P.size() - 2, 4);
             }
-            else                                                        //Short file without paramters -> HARD STOP
+            else                                                        //Short file without parameters -> HARD STOP
             {
-                cerr << "***ABORT***\tFile parameteres are needed for the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                cerr << "***ABORT***\tFile parameters are needed for the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                 return false;
             }
             break;
@@ -2682,7 +2703,13 @@ bool AddVirtualFile()
                 FAN = (size_t)(P[0] + P[1] * 256);
                 FA = ConvertIntToHextString(FAN, 4);
                 FO = ScriptEntryArray[2];
-                int iFON = ConvertHexStringToInt(FO) + 2 - (int)FAN;
+				int iFON = -1;
+				
+				if (IsHexString(FO))
+				{
+					iFON = ConvertHexStringToInt(FO) + 2 - (int)FAN;
+				}
+
                 if ((iFON < 0) || ((size_t)iFON > P.size() - 1))
                 {
                     cerr << "***ABORT***\tInvalid memory segment start parameter in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
@@ -2695,7 +2722,16 @@ bool AddVirtualFile()
             else
             {
                 FO = ScriptEntryArray[2];                                   //Offset from script
-                FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
+				if (IsHexString(FO))
+				{
+					FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
+				}
+				else
+				{
+					cerr << "***ABORT***\tInvalid file offset in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+					return false;
+				}
+
                 if (FON > P.size() - 1)
                 {
                     cerr << "***ABORT***\tInvalid file offset in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
@@ -2713,8 +2749,14 @@ bool AddVirtualFile()
                 //PRG file
                 FAN = (size_t)(P[0] + P[1] * 256);
                 FA = ConvertIntToHextString(FAN, 4);
-                int iFLN = ConvertHexStringToInt(FL) - ConvertHexStringToInt(FO) + 1;
-                if (iFLN <= 0)
+				int iFLN = -1;
+				
+				if (IsHexString(FL) && IsHexString(FO))
+				{
+					iFLN = ConvertHexStringToInt(FL) - ConvertHexStringToInt(FO) + 1;
+				}
+
+				if (iFLN <= 0)
                 {
                     cerr << "***ABORT***\tInvalid memory segment start and/or end parameter(s) in the following Mem entry: " << ScriptEntry << "\n";
                     return false;
@@ -2731,14 +2773,30 @@ bool AddVirtualFile()
             }
             else
             {
-                FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
-                if (FON > P.size() - 1)
+				if (IsHexString(FO))
+				{
+					FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
+
+				}
+				else
+				{
+					cerr << "***ABORT***\tInvalid file offset in the follwing Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+					return false;
+				}
+				
+				if (FON > P.size() - 1)
                 {
                     cerr << "***ABORT***\tInvalid file offset in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                     return false;
                 }
             }
         }
+
+		if (!IsHexString(FA) || !IsHexString(FO) || !IsHexString(FL))
+		{
+			cerr << "***ABORT***\tInvalid file parameter(s) in the following Mem entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+			return false;
+		}
 
         FAN = ConvertHexStringToInt(FA);
         FON = ConvertHexStringToInt(FO);
@@ -2917,9 +2975,9 @@ bool AddFile()
                 FO = "00000002";                                        //Offset=2, Length=prg length-2
                 FL = ConvertIntToHextString(P.size() - 2, 4);
             }
-            else                                                        //Short file without paramters -> HARD STOP
+            else                                                        //Short file without parameters -> HARD STOP
             {
-                cerr << "***ABORT***\tFile parameteres are needed for the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+                cerr << "***ABORT***\tFile parameters are needed for the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                 return false;
             }
             break;
@@ -2946,10 +3004,16 @@ bool AddFile()
                 FAN = (size_t)(P[0] + P[1] * 256);
                 FA = ConvertIntToHextString(FAN, 4);
                 FO = ScriptEntryArray[2];
-                int iFON = ConvertHexStringToInt(FO) + 2 - (int)FAN;
+				int iFON = -1;
+				
+				if (IsHexString(FO))
+				{
+					iFON = ConvertHexStringToInt(FO) + 2 - (int)FAN;
+				}
+
                 if ((iFON < 0) || ((size_t)iFON > P.size() - 1))
                 {
-                    cerr << "***ABORT***\tInvalid memory segment start parameter in the following File entry: " << ScriptEntry << "\n";
+                    cerr << "***ABORT***\tInvalid memory segment start parameter in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                     return false;
                 }
                 FA = ScriptEntryArray[2];
@@ -2959,10 +3023,20 @@ bool AddFile()
             else
             {
                 FO = ScriptEntryArray[2];                                   //Offset from script
-                FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
-                if (FON > P.size() - 1)
+
+				if (IsHexString(FO))
+				{
+					FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
+				}
+				else
+				{
+					cerr << "***ABORT***\tInvalid file offset in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+					return false;
+				}
+
+				if (FON > P.size() - 1)
                 {
-                    cerr << "***ABORT***\tInvalid file offset in the following File entry: " << ScriptEntry << "\n";
+                    cerr << "***ABORT***\tInvalid file offset in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                     return false;
                 }
                 FL = ConvertIntToHextString(P.size() - FON, 4);             //Length=prg length-offset
@@ -2977,17 +3051,23 @@ bool AddFile()
                 //PRG file
                 FAN = (size_t)(P[0] + P[1] * 256);
                 FA = ConvertIntToHextString(FAN, 4);
-                int iFLN = ConvertHexStringToInt(FL) - ConvertHexStringToInt(FO) + 1;
-                if (iFLN <= 0)
+				int iFLN = -1;
+				
+				if (IsHexString(FL) && IsHexString(FO))
+				{
+					iFLN = ConvertHexStringToInt(FL) - ConvertHexStringToInt(FO) + 1;
+				}
+
+				if (iFLN <= 0)
                 {
-                    cerr << "***ABORT***\tInvalid memory segment start and/or end parameter(s) in the following File entry: " << ScriptEntry << "\n";
+                    cerr << "***ABORT***\tInvalid memory segment start and/or end parameter(s) in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                     return false;
                 }
                 FL = ConvertIntToHextString(iFLN, 4);
                 int iFON = ConvertHexStringToInt(FO) + 2 - (int)FAN;
                 if ((iFON < 0) || ((size_t)iFON > P.size() - 1))
                 {
-                    cerr << "***ABORT***\tInvalid memory segment start parameter in the following File entry: " << ScriptEntry << "\n";
+                    cerr << "***ABORT***\tInvalid memory segment start parameter in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                     return false;
                 }
                 FA = ScriptEntryArray[2];
@@ -2995,14 +3075,29 @@ bool AddFile()
             }
             else
             {
-                FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
-                if (FON > P.size() - 1)
+				if (IsHexString(FO))
+				{
+					FON = ConvertHexStringToInt(FO);                            //Make sure offset is valid
+				}
+				else
+				{
+					cerr << "***ABORT***\tInvalid file offset in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+					return false;
+				}
+
+				if (FON > P.size() - 1)
                 {
-                    cerr << "***ABORT***\tInvalid file offset in the following File entry: " << ScriptEntry << "\n";
+                    cerr << "***ABORT***\tInvalid file offset in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
                     return false;
                 }
             }
         }
+
+		if (!IsHexString(FA) || !IsHexString(FO) || !IsHexString(FL))
+		{
+			cerr << "***ABORT***\tInvalid file parameter(s) in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
+			return false;
+		}
 
         FAN = ConvertHexStringToInt(FA);
         FON = ConvertHexStringToInt(FO);
@@ -3011,20 +3106,20 @@ bool AddFile()
         //File length cannot be 0 bytes
         if (FLN == 0)
         {
-            cerr << "***ABORT***\tInvalid file length in the following File entry: " << ScriptEntry << "\n";
+            cerr << "***ABORT***\tInvalid file length in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
             return false;
         }
         //Make sure file length is not longer than actual file
         if(FON + FLN > P.size())
         {
-            cerr << "***ABORT***\tInvalid file length in the following File entry: " << ScriptEntry << "\n";
+            cerr << "***ABORT***\tInvalid file length in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
             return false;
         }
 
         //Make sure file address+length<=&H10000
         if (FAN + FLN > 0x10000)
         {
-            cerr << "***ABORT***\tInvalid file address and/or length in the following File entry: " << ScriptEntry << "\n";
+            cerr << "***ABORT***\tInvalid file address and/or length in the following File entry: " << ScriptEntryType << "\t" << ScriptEntry << "\n";
             return false;
         }
 
@@ -3724,9 +3819,19 @@ void ImportDirArtFromCArray()
 
     //DirTrack = 18;
     //DirSector = 1;
+	int RowLen = 0;
+	int RowCnt = 0;
 
-    int RowLen = min(ConvertStringToInt(sRowLen),16);
-    int RowCnt = min(ConvertStringToInt(sRowCnt),48);
+	if (IsNumeric(sRowCnt) && IsNumeric(sRowLen))
+	{
+		RowLen = min(ConvertStringToInt(sRowLen), 16);
+		RowCnt = min(ConvertStringToInt(sRowCnt), 48);
+	}
+	else
+	{
+		cerr << "***INFO***\tInvalid row length and/or row count in the following DirArt file: " << DirArtName << "\nThe disk is built without DirArt.\n";
+		return;
+	}
 
     size_t First = DA.find("{");
     //size_t Last = DA.find("}");
@@ -5013,8 +5118,17 @@ bool InjectCustomCodePlugin(int PluginIdx)
     CustomCodeSize = sc_size;
 
 	//WE ALSO NEED TO UPDATE ZP OFFSET IN THE CUSTOM PLUGIN CODE!!!
+	unsigned char ZP = 2;
 
-	unsigned char ZP = ConvertHexStringToInt(LoaderZP);
+	if (IsHexString(LoaderZP))
+	{
+		ZP = ConvertHexStringToInt(LoaderZP);
+	}
+	else
+	{
+		cerr << "***ABORT***\tInvalid ZP value: " << LoaderZP << "\n";
+		return false;
+	}
 
 	if (ZP != 2)
 	{
@@ -5270,7 +5384,17 @@ bool InjectSaverPlugin(int PluginIdx)
     //WE ALSO NEED TO UPDATE ZP OFFSET IN THE SAVER CODE!!!
 
     //Convert LoaderZP to byte - it has already been validated in UpdateZP
-    unsigned char ZP = ConvertHexStringToInt(LoaderZP);
+	unsigned char ZP = 2;
+
+	if (IsHexString(LoaderZP))
+	{
+		ZP = ConvertHexStringToInt(LoaderZP);
+	}
+	else
+	{
+		cerr << "***ABORT***\tInvalid ZP value: " << LoaderZP << "\n";
+		return false;
+	}
 
     if (ZP != 2)
     {
@@ -5475,9 +5599,9 @@ bool InjectSaverPlugin(int PluginIdx)
     }
 
 #ifdef HEXBUNDLEIDX
-    cout << "Hi-score File bundle #$" << ((BundleNo + HSFileIdx) < 16 ? "0" : "") << hex << (BundleNo + HSFileIdx) << dec << "...\t\t    ->   " << (HSBlocks < 10 ? " " : "") << HSBlocks << " block" << ((HSBlocks == 1) ? " \t\t\t" : "s\t\t\t");
+    cout << "Hi-Score File bundle #$" << ((BundleNo + HSFileIdx) < 16 ? "0" : "") << hex << (BundleNo + HSFileIdx) << dec << "...\t\t    ->   " << (HSBlocks < 10 ? " " : "") << HSBlocks << " block" << ((HSBlocks == 1) ? " \t\t\t" : "s\t\t\t");
 #else
-    cout << "Hi-score File bundle #" << (BundleNo + HSFileIdx) << "...\t\t    ->   " << (HSBlocks < 10 ? " " : "") << HSBlocks << " block" << ((HSBlocks == 1) ? " \t\t\t" : "s\t\t\t");
+    cout << "Hi-Score File bundle #" << (BundleNo + HSFileIdx) << "...\t\t    ->   " << (HSBlocks < 10 ? " " : "") << HSBlocks << " block" << ((HSBlocks == 1) ? " \t\t\t" : "s\t\t\t");
 #endif // HEXBUNDLEIDX
 
     cout << ((FirstT < 10) ? "0" : "") << FirstT << ":" << ((FirstS < 10) ? "0" : "") << FirstS << " - " << ((LastT < 10) ? "0" : "") << LastT << ":" << ((LastS < 10) ? "0" : "") << LastS << strDirIndex << "\n";
@@ -6009,12 +6133,28 @@ bool InjectLoader(unsigned char T, unsigned char S, unsigned char IL)
 
     if (!DemoStart.empty())							//Check if we have a Demo Start Address
     {
-        B = ConvertHexStringToInt(DemoStart);
+		if (IsHexString(DemoStart))
+		{
+			B = ConvertHexStringToInt(DemoStart);
+		}
+		else
+		{
+			cerr << "***ABORT***\tInvalid Demo Start address!\n";
+			return false;
+		}
     }
     else if (!FirstFileStart.empty())				//No Demo Start Address, check if we have the first file's start address
     {
-        B = ConvertHexStringToInt(FirstFileStart);
-    }
+		if (IsHexString(FirstFileStart))
+		{
+			B = ConvertHexStringToInt(FirstFileStart);
+		}
+		else
+		{
+			cerr << "***ABORT***\tInvalid First File Start address!\n";
+			return false;
+		}
+	}
     else
     {
         cerr << "***ABORT***\tStart address is missing!\n";
