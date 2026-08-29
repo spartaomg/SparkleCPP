@@ -942,9 +942,9 @@ GotoTrack:	iny
 
 NewDiskID:	sta NextID			//Next Disk's ID for flip detection - we store DiskID x 2 and NextID x 2
 
-//----------------------------------------------
+//--------------------------------------
 //		Fetching BAM OR Dir Block
-//----------------------------------------------
+//--------------------------------------
 
 FetchBAM:	tya					//Y=#$00
 FetchDir:	jsr ClearList		//C=1 after this
@@ -966,10 +966,10 @@ SeqLoad:	ldy BlockCtr		//End of Disk? BlockCtr can only be 0 here if the last NB
 			tay					//A=#$00 here -> Y=#$00
 			lda SCtr			//Skip track change if either of these is true: (1) SCtr > 0 OR
 			ora ScndBuff		//(2) SCtr = 0 but we have the last block of a bundle in the second buffer
-			bne StartTr
+			bne StartTrf
 
 			lda NBC				//Very last sector of the disk? NBC can only be 0 here if the last block of the final bundle was on this track and it happens to be a full track
-			beq StartTr			//Yes, skip track change, finish transfer
+			beq StartTrf		//Yes, skip track change, finish transfer
 
 //--------------------------------------
 //		Prepare track change
@@ -1084,7 +1084,7 @@ GCRLoopPatch:
 
 //--------------------------------------
 
-StartTr:	ldy #$00			//transfer loop counter
+StartTrf:	ldy #$00			//transfer loop counter
 			ldx #Msk			//bit mask for SAX = $ef
 			lda #ready			//A=#$08, ATN=0, AA not needed
 TrSeq:		sta $1800			//sta (ZP1800),y if needed
@@ -1092,7 +1092,7 @@ TrSeq:		sta $1800			//sta (ZP1800),y if needed
 //--------------------------------------
 //		Transfer loop
 //--------------------------------------
-								//			Spartan Loop:		Entry:
+								//				Spartan Loop:	Entry:
 Loop:		lda $0100,y			//03-06			20-23			00-03
 			bit Rts: $1860		//07-10			24-27			04-07
 			bmi *-3				//11 12			28 29			08 09
@@ -1166,9 +1166,7 @@ TrSeqRet:	lda #(busy | $01)	//19,20			Use #busy + 1 here (AA + DI = $11) for SAX
 
 UpdateBCtr:	lda NBC				//New Block Count
 			sta BlockCtr
-			bne ChkWCtr			//A = Block Count
-
-JmpCATN:	jmp CheckATN		//No more blocks to fetch in sequence, wait for next loader call
+			beq JmpCATN			//No more blocks to fetch in sequence, wait for next loader call
 								//If next loader call is sequential -> will go to BAM for flip check/reset
 								//If next loader call is random -> will load requested file/flip disk/reset
 
@@ -1181,7 +1179,7 @@ ChkWCtr:	lda WantedCtr		//If we just updated BlockCtr then WantedCtr will be 0
 			bcc CheckBCtr		//If we do not have the last block stored then check Bundle counter
 								//Last block of Bundle stored, so transfer it
 			inc Loop+2			//Modify transfer loop to transfer data from secondary buffer ($0100 -> $0200)
-			bne JmpCATN
+JmpCATN:	jmp CheckATN
 
 //--------------------------------------
 //		Build wanted list		//A=#$00, X=#$ef here
@@ -1209,7 +1207,7 @@ EndOfDriveCode:
 		}
 }
 
-//----------------------------------------------------------
+//--------------------------------------
 
 *=$2800 "Installer"
 
@@ -1301,11 +1299,11 @@ InitCodeEnd:
 CD:
 }
 
-//-----------------------------------------------------------------
+//--------------------------------------
 //
-//			ZP TABS AND CONSTANTS
+//		ZP TABS AND CONSTANTS
 //
-//-----------------------------------------------------------------
+//--------------------------------------
 
 *=$2700 "ZP Tabs and GCR Loop"
 .pseudopc $00 {
@@ -1330,6 +1328,7 @@ GCRLoop:
 //--------------------------------------
 
 //------------------------------------------------------------------------------------------------------
+
 								//						Cycles							Address
 								//						Zone 3	Zone 2	Zone 1	Zone 0
 Mod2:		//bne Mod2b			//										--		85
@@ -1407,6 +1406,7 @@ tH:			eor TabH,x			//10001011,000HHHHH		106		114		124		132		bf-c1
 								//Max. RPM:				314.5	318.1	316.9	320.0
 								
 //------------------------------------------------------------------------------------------------------
+
 								//						Zone 3	Zone 2	Zone 1	Zone 0
 			bvc *				//						00-01							cd ce
 								//					   [00-25	00-27	00-29	00-31]
