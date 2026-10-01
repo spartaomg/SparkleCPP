@@ -10,7 +10,7 @@
 //  VERSION INFO
 //----------------------------------
 
-constexpr int FullDate = 20260829;
+constexpr int FullDate = 20261001;
 
 constexpr int VersionMajor = 3;
 constexpr int VersionMinor = 4;
@@ -5347,31 +5347,33 @@ bool InjectSaverPlugin(int PluginIdx)
     }
 
     int HSBlocks = 0;
-    int HSL = HSLength;
+    int HSLn = HSLength;
 
     if (SaverSupportsIO)
     {
-        HSL -= 0xf7;
+        HSLn -= 0xf7;
     }
     else
     {
-        HSL -= 0xf8;
+        HSLn -= 0xf8;
     }
     HSBlocks++;
 
-    while (HSL > 0)
+    while (HSLn > 0)
     {
         if (SaverSupportsIO)
         {
-            HSL -= 0xfa;
+            HSLn -= 0xfa;
         }
         else
         {
-            HSL -= 0xfb;
+            HSLn -= 0xfb;
         }
         HSBlocks++;
     }
-    
+	
+	HSLn = HSLength;				//HSLn is no longer needed, reuse it to store original HSLength for total block count calculation
+
     BlocksUsedByPlugin = HSBlocks + 2;
 
     if (BlocksFree < BlocksUsedByPlugin)
@@ -5811,7 +5813,7 @@ bool InjectSaverPlugin(int PluginIdx)
 
     BufferCnt += BlocksUsedByPlugin;
 
-    TotalOrigSize += 2 + (HSLength / 256);
+    TotalOrigSize += 2 + (HSLn / 256);
     TotalCompSize += BlocksUsedByPlugin;
 
     return true;

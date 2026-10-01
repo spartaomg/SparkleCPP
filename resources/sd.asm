@@ -729,13 +729,26 @@ ToBplFetch:	bpl BplFetch
 //--------------------------------------
 //		Got Data
 //--------------------------------------
-//04e6
+//04df
 DT:
 Data:		ldx cT
 			cpx #$12
 			bcs SkipCSLoop
-
-			ldy #$7e			//CSLoop takes 851 cycles (33 bytes passing under R/W head in zone 3)
+/*
+			ldy #$54			//736 cycles
+CSLoop:		eor $01aa,y
+			eor $01ab,y
+			eor $0156,y
+			eor $0157,y
+			eor $0102,y
+			eor $0103,y
+			dey
+			dey
+			dey
+			dey
+			bne CSLoop
+*/
+			ldy #$7e			//CSLoop takes 856 cycles (33 bytes passing under R/W head in zone 3)
 			bne CSLoopEntry
 CSLoop:		eor $0102,y
 			eor $0103,y
