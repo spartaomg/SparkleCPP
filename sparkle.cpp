@@ -10,7 +10,7 @@
 //  VERSION INFO
 //----------------------------------
 
-constexpr int FullDate = 20261001;
+constexpr int FullDate = 20261005;
 
 constexpr int VersionMajor = 3;
 constexpr int VersionMinor = 4;
@@ -5450,11 +5450,11 @@ bool InjectSaverPlugin(int PluginIdx)
     SaveCode[0x10] = (HSAddress - 1) / 0x100;           //High byte of the address of the last byte of the Hi-Score file
 
     int j = 255;
-    while (SaveCode[j--] != 0x81)                       //Find AdLo in SaveCode (byte before 0x81
+    while (SaveCode[j--] != 0x81)                       //Find AdLo in SaveCode (byte before 0x81)
     {
     }
 
-    SaveCode[j] = (HSAddress - 1) & 0xff;                //Low byte of the address of the last byte of the Hi-Score file
+    SaveCode[j] = (HSAddress - 1) & 0xff;				//Low byte of the address of the last byte of the Hi-Score file
     
     //Calculate sector pointer on disk
     int SctPtr = BufferCnt; //SectorsPerDisk - BlocksUsedByPlugin;

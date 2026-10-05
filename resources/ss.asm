@@ -55,7 +55,7 @@
 //.const Bits		=$04
 
 .const sendbyte		=$18				//AO=1, CO=1, DO=0 on C64 -> $1800=$94
-.const c64busy		=$f8				//DO NOT CHANGE IT TO #$FF!!!
+.const c64busy		=$38
 
 .var FirstLit		=$f7				//First block's literal count
 .var NextLit		=$fa				//All other blocks' literal count
@@ -186,9 +186,9 @@ LitLoop:
 			tay
 			dey
 			lda #<EoB
-			bne *+4
-ZeroLoop:	lda #$00
-			jsr Send
+			//bne *+4
+ZeroLoop:	//lda #$00
+			jsr Send					//A=0 after Send loop
 			dey
 			bne ZeroLoop
 			lda #<NextBCt				//Closing byte = block count = $00 EOR-transformed
@@ -244,8 +244,8 @@ Send:		sta Bits
 			bne !-						//3
 										//18 cycles/bit - drive loop needs 17 cycles/bit (should work for both PAL and NTSC)
 								
-			lda #c64busy				//2	(A=#$f8) worst case, last bit is read by the drive on the first cycle of LDA
-			sta $dd00					//4	Bus lock
+			axs #$100-c64busy			//2
+			stx $dd00					//4	Bus lock
 
 			rts							//6
 
