@@ -5461,7 +5461,7 @@ bool InjectSaverPlugin(int PluginIdx)
 			CmpDone = true;
 		}
 
-		if (SaveCode[i] == OPC_ADC_IMM && SaveCode[i] == 0)
+		if (SaveCode[i] == OPC_ADC_IMM && SaveCode[i + 1] == 0)
 		{
 			SaveCode[i + 1] = (HSAddress - 1) / 0x100;			//High byte of the address of the last byte of the Hi-Score file
 			AdcDone = true;
@@ -7556,7 +7556,7 @@ int wmain(int argc, wchar_t* argv[])
 	{
 
 #ifdef DEBUG
-		wstring SFN = L"c:/SparkleTestProjects/Aloftá/Main/Sparkle/Aloft.sls";
+		wstring SFN = L"c:/PropaTest/Issues/Issue36/Sparkle/Magazine.sls";
 
 		int size_needed = WideCharToMultiByte(CP_UTF8, 0, &SFN[0], (int)SFN.size(), NULL, 0, NULL, NULL);
 		string ScriptFileName(size_needed, 0);
