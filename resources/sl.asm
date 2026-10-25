@@ -287,7 +287,7 @@ Sparkle_IRQ_RTI:
 //----------------------------
 
 Sparkle_SendCmd:
-			sta Bits				//Store Bundle Number on ZP
+			sta Bits				//Store Bundle Index on ZP
 			jsr Set01				//$dd00=#$3b, $1800=#$95, Bus Lock, A=#$35
 SS_Send:	ldx #sendbyte			//CO=1, AO=1 => C64 is ready to send a byte, X=#$18
 			stx $dd00				//Signal to Drive that we want to send Bundle Index
@@ -301,7 +301,7 @@ BitSLoop:	adc #$e7				//2 A=#$35+#$e7+C=#$1c/#$1d A&X=#$18 and C=1 after additio
 			eor #$10				//2 A=#$18 in first pass (CO=1, AO=1) reads #$85 on $1800 - no change, first pass falls through
 			ror Bits				//5 C=1 in first pass, C=0 in all other passes before ROR
 			bne BitSLoop			//3
-									//18 cycles/bit - drive loop needs 17 cycles/bit (should work for both PAL and NTSC)
+									//18 cycles/bit - drive loop needs 17 cycles/bit (works for both PAL and NTSC)
 
 BusLock:	lda #busy				//2 (A=#$f8) worst case, last bit is read by the drive on the first cycle of LDA
 			sta $dd00				//4 Bus lock

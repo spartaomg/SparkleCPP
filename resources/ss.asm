@@ -86,11 +86,11 @@ SLSaveStart:
 
 			cmp #$00					//Max. value determined by default hi-score file in script
 			bcc *+4						//Abort saving if file size is outside range
-			lda #$00
+			anc #$00					//A=$00, C=0
 			sta ByteCnt+1				//HiByte of total bytes to be sent, ByteCnt = #$00 by default
 			tax
 			beq ToSS		
-			clc
+			//clc						//C=0 here
 AddrHi:		adc #$00
 			sta AdHi
 
@@ -127,7 +127,7 @@ SendNextBlock:
 
 HdrCtr:		ldy #BHdrEnd-BlockHdr-1
 HdrLoop:	lda BlockHdr,y
-			jsr Send
+			jsr Send					//Returns with C=0, A=$00, X=$38
 			dey
 			bpl HdrLoop
 
@@ -136,8 +136,8 @@ HdrLoop:	lda BlockHdr,y
 //----------------------------------------
 
 			lda AdLo					//AdLo and AdHi are part of the Block Header
-			clc							//Only update them once the Block Header is sent!!!
-			sbc LitCnt
+			//clc						//Only update them once the Block Header is sent!!!
+			sbc LitCnt					//+Carry
 			sta AdLo
 			sta ZP
 			lda AdHi
@@ -168,7 +168,7 @@ LitLoop:
 			{
 			inc $01				
 			}							//Restore $01 to #$35 for transfer
-			jsr Send
+			jsr Send					//Returns with C=0, A=$00, X=$38
 			dey
 			bne LitLoop
 
@@ -179,16 +179,14 @@ LitLoop:
 			lda HdrCtr+1				//#$07 vs #$05
 			cmp #<BHdrLong-BlockHdr-1
 			bne SkipZeros				//#$05? - this is needed - in the case of the first block, addition's result is #$fe
-			sec							//+1 C=1 anyway?, SEC not needed here???
-			adc LitCnt					//=LitCnt-1
+			//sec						//+1 C=1 anyway, SEC not needed here
+			adc LitCnt					//=LitCnt-1 + C=1
 			eor #$ff
 			beq SkipZeros
 			tay
 			dey
 			lda #<EoB
-			//bne *+4
-ZeroLoop:	//lda #$00
-			jsr Send					//A=0 after Send loop
+ZeroLoop:	jsr Send					//Returns with C=0, A=$00, X=$38
 			dey
 			bne ZeroLoop
 			lda #<NextBCt				//Closing byte = block count = $00 EOR-transformed
@@ -204,7 +202,7 @@ SkipZeros:	lda #BHdrLong-BlockHdr-1
 			cmp #<FirstLit				//First block? (sending #$f8 literals)
 			bne SkipBCnt
 BlockCnt:	lda #$77					//=#$01 EOR-tranformed, minimum block count
-			jsr Send
+			jsr Send					//Returns with C=0, A=$00, X=$38
 			lda #<NextLit				//Update LitCnt
 			sta LitCnt
 SkipBCnt:
@@ -242,12 +240,12 @@ Send:		sta Bits
 			eor #$10					//2	A=#$18 in first pass (CO=1, AO=1) reads #$85 on $1800 - no change, first pass falls through
 			ror Bits					//5	C=1 in first pass before ROR, C=0 in all other passes
 			bne !-						//3
-										//18 cycles/bit - drive loop needs 17 cycles/bit (should work for both PAL and NTSC)
+										//18 cycles/bit - drive loop needs 17 cycles/bit (works for both PAL and NTSC)
 								
 			axs #$100-c64busy			//2
 			stx $dd00					//4	Bus lock
 
-			rts							//6
+			rts							//6	A=$00, X=$38, C=0 here
 
 BlockHdr:
 LitCnt:
@@ -419,16 +417,16 @@ RcvCheck:	jsr NewByte					//More blocks to write?
 //		Receive a byte
 //--------------------------------------
 
-NewByte:	ldx #$94					//Make sure C64 is ready to send (%10010100)
-			cpx $1800
+NewByte:	ldy #$94					//Make sure C64 is ready to send (%10010100)
+			cpy $1800
 			bne *-3
 
 			lda #$80					//$dd00=#$9b, $1800=#$94
 			ldx #busy					//=#$10 (AA=1, CO=0, DO=0)
 			jsr RcvByte					//OK to use stack here
 
-			ldx #$95					//Wait for C64 to signal transfer complete (%10010101)
-			cpx $1800
+			ldy #$95					//Wait for C64 to signal transfer complete (%10010101)
+			cpy $1800
 			bne *-3
 			rts
 

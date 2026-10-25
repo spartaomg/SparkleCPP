@@ -10,7 +10,7 @@
 //  VERSION INFO
 //----------------------------------
 
-constexpr int FullDate = 20261005;
+constexpr int FullDate = 20261025;
 
 constexpr int VersionMajor = 3;
 constexpr int VersionMinor = 4;
@@ -5446,8 +5446,37 @@ bool InjectSaverPlugin(int PluginIdx)
 		}
 	}
 
-    SaveCode[0x03] = (HSLength / 0x100) + 1;            //We are comparing with max block count + 1
-    SaveCode[0x10] = (HSAddress - 1) / 0x100;           //High byte of the address of the last byte of the Hi-Score file
+	unsigned char OPC_ADC_IMM = 0x69;
+	unsigned char OPC_CMP_IMM = 0xc9;
+	bool CmpDone = false;
+	bool AdcDone = false;
+
+	int i = 2;
+
+	while (i < SaveCodeSize - 1 && (!CmpDone || !AdcDone))
+	{
+		if (SaveCode[i] == OPC_CMP_IMM && SaveCode[i + 1] == 0)
+		{
+			SaveCode[i + 1] = (HSLength / 0x100) + 1;			//We are comparing with max block count + 1
+			CmpDone = true;
+		}
+
+		if (SaveCode[i] == OPC_ADC_IMM && SaveCode[i] == 0)
+		{
+			SaveCode[i + 1] = (HSAddress - 1) / 0x100;			//High byte of the address of the last byte of the Hi-Score file
+			AdcDone = true;
+		}
+		i++;
+	}
+
+	if (!CmpDone || !AdcDone)
+	{
+		cerr << "***ABORT***\tSaver Plugin could not be updated with the Hi-Score File's size and/or address (CMP #$00 and/or ADC #$00 not found)!\n";
+		return false;
+	}
+
+	// SaveCode[0x03] = (HSLength / 0x100) + 1;            //We are comparing with max block count + 1
+	// SaveCode[0x10] = (HSAddress - 1) / 0x100;           //High byte of the address of the last byte of the Hi-Score file
 
     int j = 255;
     while (SaveCode[j--] != 0x81)                       //Find AdLo in SaveCode (byte before 0x81)
