@@ -71,6 +71,8 @@ const unsigned char EndOfBundleTag = 0x00;
 //const unsigned char EndOfBlockTag = 0x00;         //UNUSED
 const unsigned char NextFileTag = 0x80;
 
+const unsigned char TokenBit = 0x80;
+
 const int MaxLitsPerNibble = 16;
 
 int MatchBytes = 0;
@@ -176,7 +178,7 @@ void ResetBuffer(bool FirstBlock)
         BytePtr = 255;
         Buffer[BytePtr--] = 0xfe;
         BitPtr = 254;
-        Buffer[BitPtr] = 0x01;
+        Buffer[BitPtr] = TokenBit;
         BitsLeft = 7;
         NibblePtr = 0;
         BytePtr--;
@@ -184,7 +186,7 @@ void ResetBuffer(bool FirstBlock)
     else
     {
         BitPtr = 0;
-        Buffer[BitPtr] = 0x01;
+        Buffer[BitPtr] = TokenBit;
         BitsLeft = 7;
         NibblePtr = 0;
         BytePtr = 255;
@@ -221,16 +223,16 @@ void AddBits(int Bit, unsigned char BCnt) {
             BitsLeft = 8;
             BitPtr = BytePtr--;     //New BitPtr pos and BytePtr pos
         }
-        if ((Bit & (1 << i)) != 0)
+		if ((Bit & (1 << i)) != 0)
         {
-            Buffer[BitPtr] |= (1 << BitPos);
+            Buffer[BitPtr] |= (1 << (7-BitPos));
         }
 
         BitPos--;
         BitsLeft--;
         if (BitPos == 0)
         {
-            if (Buffer[BitPtr] % 2 == 1)
+            if (Buffer[BitPtr] >= TokenBit)
             {
                 BitPos = -1;
                 BitsLeft = 0;
@@ -1208,7 +1210,7 @@ bool CloseBuffer() {
     if ((LastFileOfBundle) && (!NewBlock))
     {
         int BitsNeeded = BitsLeftInBundle + BitsNeededForNextBundle + ((MLen == 0) ? 0 : 1) + 8;
-        int BitsAvailable = ((LastByte - 1) * 8) + BitPos;
+        int BitsAvailable = ((LastByte - 1) * 8) + BitsLeft;	//WAS: + BitPos;
         
         //if (BitsLeftInBundle + BitsNeededForNextBundle + ((MLen == 0) ? 0 : 1) + 8 <= ((LastByte - 1) * 8))
         if (BitsNeeded <= BitsAvailable)
@@ -1438,7 +1440,7 @@ void StartNextBundle(bool LastBundleOnDisk)
     Buffer[BytePtr--] = NearLongMatchTag;   //Then add New File Match Tag
     Buffer[BytePtr--] = EndOfBundleTag;
     BitPtr = BytePtr--;
-    Buffer[BitPtr] = 0x01;
+    Buffer[BitPtr] = TokenBit;
 
     BitPos = 7;
     BitsLeft = 7;

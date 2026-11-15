@@ -10,7 +10,7 @@
 //  VERSION INFO
 //----------------------------------
 
-constexpr int FullDate = 20261025;
+constexpr int FullDate = 20261115;
 
 constexpr int VersionMajor = 3;
 constexpr int VersionMinor = 4;
@@ -762,10 +762,16 @@ void InjectDirBlocks()
         DirBlocks[3] = 0xfe;
         
         //Fill the whole directory with Bundle #0's values
-        for (int i = 4; i < 512; i++)
-        {
-            DirBlocks[i] = DirBlocks[i - 4];
-        }
+        //for (int i = 4; i < 512; i++)
+        //{
+        //    DirBlocks[i] = DirBlocks[i - 4];
+        //}
+
+		//Fill the whole directory with 0s
+		for (int i = 4; i < 512; i++)
+		{
+			DirBlocks[i] = EORtransform(0);	//Unused dir entries are zeroed out
+		}
 
         //Overwrite directory entries if an alternative DirEntry index was assigned
         for (int i = 1; i < MaxAltDirEntries; i++)
@@ -783,23 +789,33 @@ void InjectDirBlocks()
     }
     else
     {
-        if (BundleNo >= 0)
-        {
-            for (int i = BundleNo + 1; i < 128; i++)
-            {
-                if (DirBlocks[(i * 4) + 3] == 0)
-                {
-                    DirBlocks[(i * 4) + 3] = DirBlocks[(BundleNo * 4) + 3];
-                    DirPtr[i] = DirPtr[BundleNo];
-                }
-            }
-        }
+        //if (BundleNo >= 0)
+        //{
+        //    for (int i = BundleNo + 1; i < 128; i++)
+        //    {
+        //        if (DirBlocks[(i * 4) + 3] == 0)
+        //        {
+        //            DirBlocks[(i * 4) + 3] = DirBlocks[(BundleNo * 4) + 3];
+        //            DirPtr[i] = DirPtr[BundleNo];
+        //        }
+        //    }
+        //}
 
         for (int i = 0; i < 128; i++)
         {
-            DirBlocks[i * 4] = EORtransform(TabT[DirPtr[i]] + AltDirPlugin[i]);
-            DirBlocks[(i * 4) + 1] = EORtransform(TabStartS[TabT[DirPtr[i]]]);
-            DirBlocks[(i * 4) + 2] = EORtransform(TabSCnt[DirPtr[i]]);
+			if (DirBlocks[(i * 4) + 3] != 0)
+			{
+				DirBlocks[i * 4] = EORtransform(TabT[DirPtr[i]] + AltDirPlugin[i]);
+				DirBlocks[(i * 4) + 1] = EORtransform(TabStartS[TabT[DirPtr[i]]]);
+				DirBlocks[(i * 4) + 2] = EORtransform(TabSCnt[DirPtr[i]]);
+			}
+			else
+			{
+				DirBlocks[(i * 4) + 0] = EORtransform(0); //Unused dir entries are zeroed out
+				DirBlocks[(i * 4) + 1] = EORtransform(0);
+				DirBlocks[(i * 4) + 2] = EORtransform(0);
+				DirBlocks[(i * 4) + 3] = EORtransform(0);
+			}
         }
     }
 
@@ -5066,10 +5082,10 @@ bool InjectTestPlugin(int PlgIdx)
     DeleteBit(CT, CS);
 
     //Add plugin to directory
-    Disk[Track[18] + (18 * 256) + 8] = EORtransform(CT+0x80);         //DirBlocks(0) = EORtransform(Track) = 35/40 + plugin flag bit (1 block)
-    Disk[Track[18] + (18 * 256) + 7] = EORtransform(TabStartS[CT]);   //DirBlocks(1) = EORtransform(Sector) = First sector of Track(35) (not first sector of file!!!)
-    Disk[Track[18] + (18 * 256) + 6] = EORtransform(TabSCnt[SctPtr]); //DirBlocks(2) = EORtransform(Remaining sectors on track)
-    Disk[Track[18] + (18 * 256) + 5] = 0xfe;                                //DirBlocks(3) = BitPtr
+    Disk[Track[18] + (18 * 256) + 8] = EORtransform(CT+0x80);			//DirBlocks(0) = EORtransform(Track) = 35/40 + plugin flag bit (1 block)
+    Disk[Track[18] + (18 * 256) + 7] = EORtransform(TabStartS[CT]);		//DirBlocks(1) = EORtransform(Sector) = First sector of Track(35) (not first sector of file!!!)
+    Disk[Track[18] + (18 * 256) + 6] = EORtransform(TabSCnt[SctPtr]);	//DirBlocks(2) = EORtransform(Remaining sectors on track)
+    Disk[Track[18] + (18 * 256) + 5] = 0xfe;							//DirBlocks(3) = BitPtr
 
     return true;
 
@@ -6027,20 +6043,20 @@ bool InjectDriveCode(unsigned char& idcSideID, char& idcFileCnt, unsigned char& 
         CS++;
     }
 
-    //Add SideID
-    Disk[BAM + 255] = EORtransform((idcSideID * 2) % 256);
-
     //Add Custom Interleave Info and Next Side ID
-    Disk[BAM + 254] = EORtransform(256 - IL3);
-    Disk[BAM + 253] = EORtransform(256 - IL2);
-    Disk[BAM + 252] = EORtransform(256 - IL1);
-    Disk[BAM + 251] = EORtransform(idcNextID);
-    Disk[BAM + 250] = EORtransform(256 - IL0);
+    Disk[BAM + 255] = EORtransform(256 - IL3);							//$0101
+    Disk[BAM + 254] = EORtransform(256 - IL2);							//$0102
+    Disk[BAM + 253] = EORtransform(256 - IL1);							//$0103
+    Disk[BAM + 252] = EORtransform(idcNextID);							//$0104
+    Disk[BAM + 251] = EORtransform(256 - IL0);							//$0105
 
-    //Also add Product ID to BAM, EOR-transformed
-    Disk[BAM + 249] = EORtransform((ProductID / 0x10000) & 0xff);
-    Disk[BAM + 248] = EORtransform((ProductID / 0x100) & 0xff);
-    Disk[BAM + 247] = EORtransform(ProductID & 0xff);
+	//Add SideID
+	Disk[BAM + 250] = EORtransform((idcSideID * 2) % 256);				//$0106
+	
+	//Also add Product ID to BAM, EOR-transformed
+	Disk[BAM + 249] = EORtransform((ProductID / 0x10000) & 0xff);		//$0107
+    Disk[BAM + 248] = EORtransform((ProductID / 0x100) & 0xff);			//$0108
+    Disk[BAM + 247] = EORtransform(ProductID & 0xff);					//$0109
 
     return true;
 
@@ -7556,7 +7572,7 @@ int wmain(int argc, wchar_t* argv[])
 	{
 
 #ifdef DEBUG
-		wstring SFN = L"c:/PropaTest/Issues/Issue36/Sparkle/Magazine.sls";
+		wstring SFN = L"c:/SparkleTestProjects/MementoMori/6502/Main/MementoMori.sls";
 
 		int size_needed = WideCharToMultiByte(CP_UTF8, 0, &SFN[0], (int)SFN.size(), NULL, 0, NULL, NULL);
 		string ScriptFileName(size_needed, 0);

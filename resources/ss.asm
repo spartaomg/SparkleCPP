@@ -422,13 +422,12 @@ NewByte:	ldy #$94					//Make sure C64 is ready to send (%10010100)
 			bne *-3
 
 			lda #$80					//$dd00=#$9b, $1800=#$94
-			ldx #busy					//=#$10 (AA=1, CO=0, DO=0)
-			jsr RcvByte					//OK to use stack here
+			jmp RcvByte					//OK to use stack here
 
-			ldy #$95					//Wait for C64 to signal transfer complete (%10010101)
-			cpy $1800
-			bne *-3
-			rts
+			//ldy #$95					//Wait for C64 to signal transfer complete (%10010101)
+			//cpy $1800
+			//bne *-3
+			//rts
 
 //--------------------------------------
 //		Convert 260 bytes to GCR codes

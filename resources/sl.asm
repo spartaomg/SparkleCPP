@@ -8,7 +8,7 @@
 .label ZPDst		=$02		//$02/$03
 .label Bits			=$04
 
-.const busy			=$f8		//DO NOT CHANGE IT TO #$FF!!!
+.const busy			=$f8		//DO NOT CHANGE IT TO #$38!!!
 .const ready		=$08		//AO=1, CO=0, DO=0 on C64 -> $1800=#90
 .label sendbyte		=$18		//AO-1, CO=1, DO=0 on C64 -> $1800=$94
 .const drivebusy	=$12		//AA=1, CO=0, DO=1 on Drive
@@ -267,12 +267,13 @@ Sparkle_IRQ:
 			tya
 			pha
 			lda $01
-			pha
+			pha		
 
-			jsr Set01
+			lda #$35
+			sta $01
 			inc $d019
 Sparkle_IRQ_JSR:
-			jsr Done				//Music player or IRQ subroutine, installer @ $02d1
+			jsr Delay				//Music player or IRQ subroutine
 
 			pla
 			sta $01
@@ -288,25 +289,22 @@ Sparkle_IRQ_RTI:
 
 Sparkle_SendCmd:
 			sta Bits				//Store Bundle Index on ZP
-			jsr Set01				//$dd00=#$3b, $1800=#$95, Bus Lock, A=#$35
+			lda #$35
+			sta $01					//$dd00=#$3b, $1800=#$95, Bus Lock, A=#$a5
 SS_Send:	ldx #sendbyte			//CO=1, AO=1 => C64 is ready to send a byte, X=#$18
 			stx $dd00				//Signal to Drive that we want to send Bundle Index
 			bit $dd00				//$dd00=#$9b, $1800=#$94
 			bmi *-3					//Wait for Drive response ($1800->00 => $dd00=#$1b, $1800=#$85)
 
 									//Sending bits via AO, flipping CO to signal new bit, C can be anything at start
-BitSLoop:	adc #$e7				//2 A=#$35+#$e7+C=#$1c/#$1d A&X=#$18 and C=1 after addition in first pass, C=0 in all other passes
+BitSLoop:	adc #$e7				//2 A=#$a5+#$77+C=#$1c/#$1d A&X=#$18 and C=1 after addition in first pass, C=0 in all other passes
 			sax $dd00				//4 subsequent passes: A&X=#$00/#$08/#$10/#$18 and C=0
 			and #$10				//2 Clear AO
 			eor #$10				//2 A=#$18 in first pass (CO=1, AO=1) reads #$85 on $1800 - no change, first pass falls through
 			ror Bits				//5 C=1 in first pass, C=0 in all other passes before ROR
 			bne BitSLoop			//3
 									//18 cycles/bit - drive loop needs 17 cycles/bit (works for both PAL and NTSC)
-
-BusLock:	lda #busy				//2 (A=#$f8) worst case, last bit is read by the drive on the first cycle of LDA
-			sta $dd00				//4 Bus lock
-
-			rts						//6
+			beq BusLock
 
 //----------------------------
 
@@ -316,15 +314,15 @@ Sparkle_LoadA:
 //----------------------------
 
 Sparkle_LoadFetched:
-			jsr Set01				//17
-			ldx #$00				//2
-			ldy #ready				//2 Y=#$08, X=#$00
-			sty $dd00				//4 Clear CO and DO to signal Ready-To-Receive
+			jsr Set01				//Also locks bus
+			ldx #$01				//Start with X=#$01 to compensate for first DEX in RcvLoop
+			ldy #ready				//Y=#$08
+			sty $dd00				//Clear CO and DO to signal Ready-To-Receive
 			bit $dd00				//Wait for Drive
-			bvs *-3					//$dd00=#$cx - drive is busy, $0x - drive is ready	00,01	(BMI would also work)
-			stx $dd00				//Release ATN										02-05
-			inx						//To compensate for first DEX in loop
-			jsr Set01				//Waste a few cycles... (drive takes 16 cycles)		06-28 (minimum needed here is 06-15, 10 cycles, including INX!!!)
+			bvs *-3					//$dd00=#$cx - drive is busy, $0x - drive is ready, $8x - load error
+			bmi LoadError			//Set Carry, lock bus, return with $01 = #$35
+			sax $dd00				//Release ATN ($dd00 = #$f8 & #$01 = #$00)
+			jsr Delay				//Waste a few cycles... (drive takes 14 cycles)		00-11
 
 //-------------------------------------
 //
@@ -333,7 +331,7 @@ Sparkle_LoadFetched:
 //-------------------------------------
 
 RcvLoop:
-Read1:		lda $dd00				//4		W1-W2 = 18 cycles							25-28
+Read1:		lda $dd00				//4		W1-W2 = 18 cycles							12-15
 			sty $dd00				//4 8	Y=#$08 -> ATN=1
 			lsr						//2 10
 			lsr						//2 12
@@ -390,13 +388,18 @@ LongMatch:	lsr
 //----------------------------
 //		END OF BUNDLE
 //----------------------------
-
 EndOfBundle:
-Delay:		dex						//Or finish bundle (A=#$00) - Also used as Delay for LoadFetched and Set01
-			stx Buffer+$ff			//This write doesn't make any difference in Delay, but used in EndOfBundle
+			dex						//Or finish bundle (A=#$00)
+			stx Buffer+$ff			//Clear Carry, lock bus, return with $01 = #$35
+
+LoadError:	asl						//A=#$00 -> C=0 -> OK, A=#$f8 -> C=1 -> Error
+
 Set01:		lda #$35
 			sta $01
-Done:		rts
+
+BusLock:	lda #busy				//A=#$f8, DO NOT CHANGE IT TO LDX!!! (X is used at NextFile)
+			sta $dd00				//4 Bus lock
+Delay:		rts						//6
 
 //----------------------------
 //		SPARTAN STEP DELAY
@@ -408,9 +411,6 @@ SpSDelay:	lda #<RcvLoop-<ChgJmp	//2 20 Restore Receive loop
 			eor #<$100-Sp			//2 28 Invert byte counter (EOR #$AE)
 			sta SpComp+1			//4 32 SpComp+1=(#$AF <-> #$01)
 			bpl RcvLoop				//3 (35) (Drive loop takes 34 cycles)
-
-			lda #busy				//Bus lock
-			sta $dd00
 
 //------------------------------------------------------------
 //		BLOCK STRUCTURE FOR DEPACKER
@@ -424,37 +424,32 @@ SpSDelay:	lda #<RcvLoop-<ChgJmp	//2 20 Restore Receive loop
 //------------------------------------------------------------
 
 Sparkle_LoadNext:					//Entry point for next bundle in block
-			ldx #$ff
-			stx MidLitSeq+1
-
-			inx
+			lax #$00
+			tay
 GetBits:	lda Buffer,x			//First bitstream value
 			bne StoreBits
 			ldx Buffer+$ff			//=LastX
 			bne GetBits				//BRA
 StoreBits:	sta Bits				//Store it on ZP for faster processing
+			sta MidLitSeq+1			//A>#$80
+			sty Buffer				//Reset first byte of buffer
 
-NextFile:	dex						//Entry point for next file in block, C must be 0 here for subsequent files
+NextFile:	jsr Set01				//Also locks the bus
+
+			dex						//Entry point for next file in block
 			lda Buffer,x			//Lo Byte of Dest Address
 			sta ZPDst
 
-			ldy #$35				//Default value for $01, IO=on
 			dex
 			lda Buffer,x			//Hi Byte vs IO Flag=#$00
 			bne SkipIO
 			dex
 			lda Buffer,x			//This version can also load to zeropage!!!
 			beq SkipIO				//We are loading to ZP -> do not turn off IO!!!
-			dey						//Y=#$34, turn IO off
-
+			dec $01					//Turn IO off
 SkipIO:		sta ZPDst+1				//Hi Byte of Dest Address
-			sty $01					//Update $01
 
 			dex
-
-			ldy #$00				//Needed for Literals
-			sty Buffer
-
 			jmp LitCheck
 
 //----------------------------
@@ -476,6 +471,12 @@ SkipIO:		sta ZPDst+1				//Hi Byte of Dest Address
 //	L - length
 //	o - Offset LO
 //	H - Offset HI
+//
+//----------------------------
+
+MidMHi:		dec ZPDst+1
+			sec
+			bcs MidMCont
 
 //----------------------------
 //		MID MATCH
@@ -492,9 +493,9 @@ LongConv:	tay						//Mid Match Length=#$02-#$1f, Long Match Length=#$20-#$ff (bo
 			eor #$ff
 			adc ZPDst				//C=1 here, add +1, as Mid and Long Matches are 1-based, Y will not be increased
 			sta ZPDst
-			bcs MidMCont			//This could be branched off to save 1 cycle here, would need 2 more free bytes...
-			dec ZPDst+1
-			sec
+			bcc MidMHi				//This could be branched off to save 1 cycle here, would need 2 more free bytes...
+			//dec ZPDst+1
+			//sec
 MidMCont:	dex
 			adc Buffer,x			//Match Offset=$00-$ff+(C=1)=$01-$100
 			sta MatchCopy+1			//MatchCopy+1=ZP+(Buffer)+(C=1)
@@ -506,7 +507,7 @@ MatchHi:	lda #$00				//=#$00 vs. OffsetHi
 //----------------------------
 
 NextBit:	lda Buffer,x			//C=1, Z=1, Bits=#$00, token bit in C, update Bits
-			rol
+			ror
 			sta Bits
 
 LongLit:	dex						//Saves 1 byte and adds 2 cycles per LongLit sequence, C=0 for LongLit
@@ -564,7 +565,7 @@ MatchCopy:	lda $10ad,y				//Y=#$02-#$04 (short) vs #$02-#$1f (mid) vs #$20-#$ff 
 //		BITCHECK					//Y=#$00 here
 //----------------------------
 
-BitCheck:	asl Bits
+BitCheck:	lsr Bits
 			bcc LitCheck			//C=0, literals
 			bne Match				//C=1, Z=0, this is a match (control bits: 1)
 
@@ -572,13 +573,13 @@ BitCheck:	asl Bits
 
 			lda Buffer,x			//C=1, Z=1, Bits=#$00, token bit in C, update Bits
 			dex
-			rol
+			ror
 			sta Bits
 			bcs Match
 
 //----------------------------
 
-LitCheck:	asl Bits
+LitCheck:	lsr Bits
 			bcc ShortLit			//C=0, we have 1 literal (control bits: 00)
 			beq NextBit				//C=1, Z=1, this is the token bit in C (Bits=#$00), get next bit stream byte
 
@@ -586,7 +587,7 @@ LitCheck:	asl Bits
 //		LITERALS 2-16
 //----------------------------
 
-MidLitSeq:	ldy #$f8				//C=1, more than 1 literal (control bits: 01)
+MidLitSeq:	ldy #$a5				//C=1, more than 1 literal (control bits: 01)
 			bpl SkipML
 			ldy Buffer,x
 			tya
