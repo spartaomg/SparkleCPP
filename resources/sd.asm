@@ -321,13 +321,8 @@
 .label ZP0106		=$73		//$73/$74 = $0106
 .label ZP01ff		=$78		//$78/$79 = $01ff
 .label ZP02ff		=$7a		//$7a/$7b = $02ff
-.label ZPBAMPID		=ZP0106		//$57/$58 = $0107
+.label ZPBAMPID		=ZP0106		//$73/$74 = $0106
 .label ZPTabDm2		=ZP02ff		//$7a/$7b = $02ff = TabD-2
-
-//BAM constants:
-.label BAM_DiskID	=$0101
-.label BAM_NextID	=$0105
-.label BAM_ProdID	=$0107
 
 //Other constants:
 .label SF			=$0139		//SS drive code Fetch vector
@@ -467,7 +462,7 @@ CorrTrack:	ldy #$02			//92 93
 			rol StepDir			//a4 a5	StepDir: #$01 -> #$03 Only store stepper direction DOWN/OUTWARD here
 SkipStepDn:	asl					//a6
 			tay					//a7
-			nop $80				//a8 a9	Skipping TabD value $80 (OPC_NOP_IMM)
+			nop $80				//a8 a9	Skipping TabD value $80 (OPC_NOP_IMM) (nop #$80 would be $80 $80)
 
 			jsr StepTmr			//aa-ac	Move head to track, store Spartan bitrate value, restore requested track in cT, calculate SCtr without storing it
 
@@ -600,7 +595,7 @@ FlipDtct:	cmp (ZPBAMPID),y	//38 39	$0106-$0109 - BAM: DiskID + ProdID[0-2]
 			bne ProdIDLoop		//3f 40
 			sty DirSector		//41 42
 CopyBAM:	lda (ZP0101),y		//43 44	$0101-$0105 - BAM: IL0, IL1, IL2, NextID, IL3
-			sta (ZPILTab),y		//45 46	$60-$03
+			sta (ZPILTab),y		//45 46	$60-$64
 			dey					//47
 			bpl CopyBAM			//48 49
 LoadStart:	txa					//4a
@@ -728,7 +723,7 @@ BRTCorr:	ldy #$02			//Max. number of consecutive read errors reached or sync tim
 			ldx #<vT0			//wrap around -> reset virtual track number to 35 and...
 			adc #$03			//...step one halftrack down (halftracks are handled from Sync code)
 !:			stx vT
-			ora #$0c			//Keep motor running and LED on
+			//ora #$0c			//Keep motor running and LED on -> moved to BitRate to keep EOR checksum calf on one page in GotData
 			jsr BitRate			//Update bitrate here using the virtual track number, adjust GCR loop and sector chain builder, and save Spartan step value
 
 			ldx #<ErV			//Reset error counter (42 consecutive sector read errors)
@@ -749,7 +744,7 @@ Data:		ldx cT
 
 			ldy #$7e			//856 cycles (33 bytes passing under R/W head in zone 3), 22 bytes
 			bne CSLoopEntry	
-CSLoop:		eor $0102,y			//887 cycles ATM due to page crossing (34 bytes passing), 22 bytes (1 byte over page)
+CSLoop:		eor $0102,y
 			eor $0103,y
 			dey
 			dey
@@ -1027,7 +1022,7 @@ StepTmr:	lda #$98
 			sta $1c05
 
 Seek:		lda $1c00
-			and #$1b
+			and #$1b			//00011011
 			clc
 			adc StepDir			//#$03 for stepping down, #$01 for stepping up
 			ora #$04			//motor ON
@@ -1054,7 +1049,9 @@ StoreTrack:	stx cT
 //		Set Bitrate
 //--------------------------------------
 
-BitRate:	lsr SubSct+1		//SubSct = 0 for tracks 18+		
+BitRate:	ora #$0c			//Make sure motor is running and LED is on (moved here from BRTCorr to keep EOR checksum calc on one page in GotData, otherwise redundant here)
+			
+			lsr SubSct+1		//SubSct = 0 for tracks 18+		
 			ldy #$11			//Sector count=17
 			cpx #$1f			//Tracks 31-40, speed zone 0
 			bcs RateDone		//Bitrate=%00

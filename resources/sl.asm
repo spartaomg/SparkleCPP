@@ -467,7 +467,7 @@ SkipIO:		sta ZPDst+1				//Hi Byte of Dest Address
 //	END OF BUNDLE:				   00000000 10000100	(USE 00001000 instead??? far mid length of $02 is not used)
 //														(far match check would take 4 more cycles...)
 //														Not worth it - would save max 64 bytes per disk side...
-//														...and lose 4 cycles per far match (thousands per disk side)
+//														...and lose 4 cycles per far match (potentially hundreds per disk side)
 //	L - length
 //	o - Offset LO
 //	H - Offset HI
@@ -493,9 +493,7 @@ LongConv:	tay						//Mid Match Length=#$02-#$1f, Long Match Length=#$20-#$ff (bo
 			eor #$ff
 			adc ZPDst				//C=1 here, add +1, as Mid and Long Matches are 1-based, Y will not be increased
 			sta ZPDst
-			bcc MidMHi				//This could be branched off to save 1 cycle here, would need 2 more free bytes...
-			//dec ZPDst+1
-			//sec
+			bcc MidMHi
 MidMCont:	dex
 			adc Buffer,x			//Match Offset=$00-$ff+(C=1)=$01-$100
 			sta MatchCopy+1			//MatchCopy+1=ZP+(Buffer)+(C=1)
