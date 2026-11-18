@@ -186,6 +186,18 @@
 //		  Sparkle will create a "track mismatch" condition to activate track correction if track change is needed
 //		- re-added optimized checksum verification for zone 3
 //
+//	v24	- loader returns with C=1 after indexed loader calls if the requested bundle or disk side was not foud
+//		  the same happens with the next sequential loader call after the last bundle was loaded from a disk
+//		  requires a loop with branch on C=1 for new disk side requests
+//		- lots of C64 resident and drive code optimizations to free enough memory for this update while keeping every feature
+//		- reversed bitstream read direction (bit 0 first instead of bit 7 first)
+//		- updated BAM disk info section: BAM_DiskID moved between IL0R and BAM_ProdID[0]
+//		- drive waits for bus lock on the C64 after receiving a byte to avoid early drive reset while waiting for the next disk side
+//		  a long interrupt on the C64 could delay locking the bus significantly
+//		  and this may result in the drive code reaching CheckATN too soon where ATN=0 would trigger a drive reset
+//		- minor depacker optimization in the C64 resident code to save a cycle in the majority of mid matches
+//		- to be released with Sparkle 3.5
+//
 //----------------------------------------------------------------------------------------
 //	Memory Layout
 //
@@ -200,17 +212,17 @@
 //
 //	Layout at Start
 //
-//	0300	05ff	Code + GCR tables			blocks 0-2
-//	0600	0781	Installer					block 4
-//	0700	06ff	ZP GCR tables and GCR loop	block 3
+//	0300	06ff	Code + GCR tables			blocks 0-3
+//	0700	07ff	ZP GCR tables and GCR loop	block 4
+//	0600	0667	Installer
 //
 //	Layout in PRG
 //
 //	2300	23f1	GCR tables					block 0
 //	2411	2472	GCR table					block 1
-//	2300	26ff	Drive Code					blocks 0-3 3 -> block 5
+//	2300	26ff	Drive Code					blocks 0-3
 //	2700	27ff	ZP GCR tables and GCR loop	block 4
-//	2800	28xx	Installer					block 	   5 -> block 3
+//	2800	28xx	Installer
 //
 //----------------------------------------------------------------------------------------
 //	Track 18
@@ -231,9 +243,9 @@
 //	18:00:$fc	$0104	BAM_NextID	(will be copied to $23 after flip, $ff if no more flips)
 //	18:00:$fb	$0105	IL0R		(will be copied to $24)
 //	18:00:$fa	$0106	BAM_DiskID	(for flip detection, compare to NextID @ $23 on ZP)
-//	18:00:$f9	$0107	BAM_ProdID (0)
-//	18:00:$f8	$0108	BAM_ProdID (1)
-//	18:00:$f7	$0109	BAM_ProdID (2)
+//	18:00:$f9	$0107	BAM_ProdID[0]
+//	18:00:$f8	$0108	BAM_ProdID[1]
+//	18:00:$f7	$0109	BAM_ProdID[2]
 //
 //----------------------------------------------------------------------------------------
 //	Directory Structure
@@ -252,11 +264,11 @@
 
 .label CSV			=$07		//Checksum Verification Counter Default Value (3 1-bits, 3 data blocks to be verified)
 
-.const vTStep		=$07					//Distance between virtual track values
-.const vT3			=$0e					//Virtual track value in speed zone 3 (14)
-.const vT0			=vT3 + (3 * vTStep)		//Virtual track value in speed zone 0 (35)
-.label ErV			=vT0+vTStep				//42 missed consecutive sectors, 2 full rotations in zone 3
-											//Also serves to reset vT to vT0 + vTStep
+.const vTStep		=$07		//Distance between virtual track values
+.const vT3			=vTStep * 2	//Virtual track value in speed zone 3 (14)
+.const vT0			=vTStep * 5	//Virtual track value in speed zone 0 (35)
+.label ErV			=vTStep * 6	//42 missed consecutive sectors, 2 full rotations in zone 3
+								//Also serves to reset vT to vT0 + vTStep
 
 .label SpVal		=$52		//Spartan Stepping constant (=82*72=5904=$1710=$17 bycles delay)
 
@@ -294,7 +306,7 @@
 .label DirSector	=$5e		//Initial value=XX4 (value != #$10 && value != #$11)
 .label ILTab		=$60		//Inverted Custom Interleave Table ($60-$64)
 .label NextID		=$63		//Next Side's ID - will be updated from 18:00:$fd of next side
-.label vT			=$66		//Start value: 44 ($2c) -> 36 -> 28 -> 20 -> 12 -> 36
+.label vT			=$66		//Start value: 42 ($2a) -> 35 -> 28 -> 21 -> 14 -> 35
 
 .label Plugin		=$76		//Determines whether fetched block is a plugin, stored as bits 6-7 of the track number in the internal directory 
 
@@ -331,9 +343,8 @@
 .label InitCodeLoc	=$0146		//$0146 - $01b9 ($74 bytes) are not used by the drive - we copy our init code here
 .label ZPCode		=$0700		//ZP code is initially loaded to $0700-$07ff
 
-.label OPC_ALR		=$4b
+.const OPC_ALR		=$4b
 .const OPC_BNE		=$d0
-.const OPC_NOP_ABS	=$0c
 
 .const Msk			=$ef		//bit mask value in X for SAX in the transfer loop
 
@@ -723,7 +734,6 @@ BRTCorr:	ldy #$02			//Max. number of consecutive read errors reached or sync tim
 			ldx #<vT0			//wrap around -> reset virtual track number to 35 and...
 			adc #$03			//...step one halftrack down (halftracks are handled from Sync code)
 !:			stx vT
-			//ora #$0c			//Keep motor running and LED on -> moved to BitRate to keep EOR checksum calf on one page in GotData
 			jsr BitRate			//Update bitrate here using the virtual track number, adjust GCR loop and sector chain builder, and save Spartan step value
 
 			ldx #<ErV			//Reset error counter (42 consecutive sector read errors)
@@ -1022,7 +1032,7 @@ StepTmr:	lda #$98
 			sta $1c05
 
 Seek:		lda $1c00
-			and #$1b			//00011011
+			and #$1b
 			clc
 			adc StepDir			//#$03 for stepping down, #$01 for stepping up
 			ora #$04			//motor ON
@@ -1162,7 +1172,7 @@ ChkPt:		bpl Loop			//17-19
 			}
 
 //--------------------------------------
-TrSeqRet:	lda #(busy | $01)	//lda (ZP1800),y		<- saves 1 byte
+TrSeqRet:	lda #(busy | $01)	//lda (ZP1800),y <- saves 1 byte
 			bit $1800			//bmi *-2
 			bmi *-3				//lda #(busy | $01)
 			sax Loop+2
@@ -1297,7 +1307,7 @@ LoadSector:	jsr ROMReadBlock	//Load blocks to buffers 4 ($0700), 3 ($0600), 2 ($
 //		Copy ZP code and tables
 //--------------------------------------
 
-ZPCopyLoop:	lda ZPCode,x		//Copy Tables C, E, F and GCR Loop from $0600 to ZP
+ZPCopyLoop:	lda ZPCode,x		//Copy Tables C, E, F and GCR Loop from $0700 to ZP
 			sta $00,x
 			inx
 			bne ZPCopyLoop
